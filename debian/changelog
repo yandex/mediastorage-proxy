@@ -1,0 +1,13 @@
+mediastorage-proxy (0.1) UNRELEASED; urgency=low
+
+  * Initial release.
+  * Provides handlers:
+  * - upload
+  * - get
+  * - delete
+  * - download-info and download_info
+  * - stat-log and stat_log
+  * - ping and stat
+  * Uses mastermind to determined groups
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 24 Jul 2013 19:50:19 +0400

@@ -1,0 +1,22 @@
+Source: mediastorage-proxy
+Section: net
+Priority: optional
+Maintainer: Artem Sokolov <derikon@yandex-team.ru>
+Build-Depends: debhelper (>=5),
+ cmake (>= 2.6),
+ cdbs,
+ libthevoid-dev,
+ libmastermind-dev (>= 2.0),
+ elliptics-dev (>= 2.24), elliptics-dev (<< 2.25),
+ libboost-dev
+Standards-Version: 3.9.1
+
+Package: mediastorage-proxy
+Architecture: any
+Depends: ${shlibs:Depends} 
+Description: Proxy with elliptics support based on thevoid
+
+Package: mediastorage-proxy-dbg
+Architecture: any
+Depends: mediastorage-proxy (= ${Source-Version})
+Description: Proxy with elliptics support based on thevoid (debug symbols)

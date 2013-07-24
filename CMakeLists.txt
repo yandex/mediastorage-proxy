@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6)
-set(TARGET thevoid_elliptics)
+set(TARGET mediastorage-proxy)
 
 set(CMAKE_CXX_FLAGS "-O0 -Wall -pedantic -std=c++0x")
 
@@ -19,3 +19,5 @@ include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
 add_executable(${TARGET} ${SOURCE})
 
 target_link_libraries(${TARGET} ${REQUIRED_LIBRARIES})
+
+install(TARGETS ${TARGET} DESTINATION bin/)
