@@ -7,6 +7,7 @@ set(REQUIRED_LIBRARIES
 	thevoid
 	elliptics_cpp
 	mastermind
+	boost_system
 	)
 
 set(SOURCE
