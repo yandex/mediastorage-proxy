@@ -8,6 +8,7 @@ set(REQUIRED_LIBRARIES
 	elliptics_cpp
 	mastermind
 	boost_system
+	swarm
 	)
 
 set(SOURCE

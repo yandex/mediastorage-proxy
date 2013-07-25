@@ -9,6 +9,7 @@ Build-Depends: debhelper (>=5),
  libmastermind-dev (>= 2.0),
  elliptics-dev (>= 2.24), elliptics-dev (<< 2.25),
  libboost-system-dev,
+ libswarm1,
  libboost-dev
 Standards-Version: 3.9.1
 
