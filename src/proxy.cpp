@@ -76,12 +76,6 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 		throw std::runtime_error(err);
 	}
 
-	if (config.HasMember("groups") == false) {
-		const char *err = "You should set a list of groups";
-		std::clog << err << std::endl;
-		throw std::runtime_error(err);
-	}
-
 	{
 		auto &conf_remotes = config["remotes"];
 		for (auto it = conf_remotes.Begin(); it != conf_remotes.End(); ++it) {
@@ -100,15 +94,6 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 	}
 
 	ioremap::elliptics::session session(node);
-
-	/*{
-		auto &conf_groups = config["groups"];
-		std::vector<int> groups;
-		std::transform(conf_groups.Begin(), conf_groups.End(),
-			std::back_inserter(groups),
-			std::bind(&rapidjson::Value::GetInt, std::placeholders::_1));
-		session.set_groups(groups);
-	}*/
 
 	{
 		const std::string &scn = get_string(config, "success-copies-num", "quorum");
