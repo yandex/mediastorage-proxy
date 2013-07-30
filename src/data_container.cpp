@@ -1,4 +1,4 @@
-#include "elliptics-fastcgi/data_container.hpp"
+#include "data_container.hpp"
 
 namespace elliptics {
 ioremap::elliptics::data_pointer data_container_t::pack(const data_container_t &ds) {
