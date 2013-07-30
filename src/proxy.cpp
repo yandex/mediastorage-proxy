@@ -1,7 +1,8 @@
 #include "proxy.hpp"
 #include "lookup_result.hpp"
+#include "data_container.hpp"
 
-#include <swarm/network_query_list.h>
+#include <swarm/network_url.h>
 
 #include <stdexcept>
 #include <iterator>
@@ -16,6 +17,16 @@
 #include <iostream>
 
 namespace {
+
+enum tag_user_flags {
+	UF_EMBEDS = 1
+};
+
+template <typename T>
+T get_arg(const ioremap::swarm::network_query_list &query_list, const std::string &name, const T &default_value = T()) {
+	auto &&arg = query_list.try_item(name);
+	return arg ? boost::lexical_cast<T>(*arg) : default_value;
+}
 
 int get_int(const rapidjson::Value &config, const char *name, int def_val = 0) {
 	return config.HasMember(name) ? config[name].GetInt() : def_val;
@@ -168,6 +179,32 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	dnet_dump_id_len_raw(id.id, DNET_ID_SIZE, str);
 	return std::string(str);
 }
+
+ioremap::elliptics::async_write_result write(
+	  ioremap::elliptics::session &session
+	, const ioremap::elliptics::key &key
+	, const ioremap::elliptics::data_pointer &data
+	, const ioremap::swarm::network_query_list &query_list
+	) {
+	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
+    if (auto &&arg = query_list.try_item("prepare")) {
+        size_t size = boost::lexical_cast<uint64_t>(*arg);
+		std::clog << "write prepare: offset=" << offset << "; size=" << size << "; data-size=" << data.size() << std::endl;
+        return session.write_prepare(key, data, offset, size);
+    } else if (auto &&arg = query_list.try_item("commit")) {
+        size_t size = boost::lexical_cast<uint64_t>(*arg);
+		std::clog << "write commit: offset=" << offset << "; size=" << size << "; data-size=" << data.size() << std::endl;
+        return session.write_commit(key, data, offset, size);
+    } else if (query_list.has_item("plain_write") || query_list.has_item("plain-write")) {
+		std::clog << "write plain: offset=" << offset << "; data-size=" << data.size() << std::endl;
+        return session.write_plain(key, data, offset);
+    } else {
+		// TODO: add chunk write
+		std::clog << "write simple: offset=" << offset << "; chunk=" << 0 << std::endl;
+        return session.write_data(key, data, offset, 0 /*m_data->m_chunk_size*/);
+    }
+}
+
 } // namespace
 
 namespace elliptics {
@@ -197,43 +234,72 @@ bool proxy::initialize(const rapidjson::Value &config) {
 void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		std::clog << "Upload request" << std::endl;
-		
-		auto session = get_server()->get_session();
-		session.set_groups(get_server()->groups_for_upload());
 
-		if (session.state_num() < get_server()->die_limit()) {
+		m_session = get_server()->get_session();
+		m_session->set_groups(get_server()->groups_for_upload());
+		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
+
+		if (m_session->state_num() < get_server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
 		}
 
-		auto content(
-			ioremap::elliptics::data_pointer::copy(
-				boost::asio::buffer_cast<const void *>(buffer)
-				, boost::asio::buffer_size(buffer)
-			));
+		auto data = std::string(
+			boost::asio::buffer_cast<const char *>(buffer)
+			, boost::asio::buffer_size(buffer)
+			);
+		elliptics::data_container_t dc(data);
 
-		auto key = get_key(req);
-		auto awr = session.write_data(key, content, 0);
-		auto wrs = awr.get();
+		if (query_list.has_item("embed") || query_list.has_item("embed_timestamp")) {
+			timespec timestamp;
+			timestamp.tv_sec = get_arg<uint64_t>(query_list, "timestamp", 0);
+			timestamp.tv_nsec = 0;
+			dc.set<elliptics::DNET_FCGI_EMBED_TIMESTAMP>(timestamp);
+		}
 
+		if (dc.embeds_count() != 0) {
+			m_session->set_user_flags(m_session->get_user_flags() | UF_EMBEDS);
+		}
+
+		m_content = elliptics::data_container_t::pack(dc);
+
+		m_key = get_key(req);
+		auto awr = write(*m_session, m_key, m_content, query_list);
+
+		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	
+	} catch (std::exception &ex) {
+		std::clog << "Upload request error: " << ex.what() << std::endl;
+		send_reply(500);
+	} catch (...) {
+		std::clog << "Upload request error: unknown" << std::endl;
+		send_reply(500);
+	}
+}
+
+void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
+	try {
+		if (error) {
+			send_reply(500);
+			return;
+		}
 		std::ostringstream oss;
 
 		oss 
 			<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-			<< "<post obj=\"" << key.remote() << "\" id=\""
-			<< id_str(key, session)
-			<< "\" crc=\"" << id_str(ioremap::elliptics::key(content.to_string()), session)
-			<< "\" groups=\"" << wrs.size()
-			<< "\" size=\"" << content.size()
+			<< "<post obj=\"" << m_key.remote() << "\" id=\""
+			<< id_str(m_key, *m_session)
+			<< "\" groups=\"" << swr.size()
+			<< "\" size=\"" << m_content.size()
 			<< "\" key=\"/";
 		{
-			auto groups = session.get_groups();
+			auto groups = m_session->get_groups();
 			auto git = std::min_element(groups.begin(), groups.end());
 			oss << *git;
 		}
-		oss << '/' << key.remote() << "\">\n";
+		oss << '/' << m_key.remote() << "\">\n";
 
 		size_t written = 0;
-		for (auto it = wrs.begin(); it != wrs.end(); ++it) {
+		for (auto it = swr.begin(); it != swr.end(); ++it) {
 			auto pl = get_server()->parse_lookup(*it);
 			if (pl.status() == 0)
 				written += 1;
@@ -265,15 +331,58 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 void proxy::req_get::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		std::clog << "Get request" << std::endl;
-		get_server()->prepare_session(req);
-		auto session = get_server()->get_session();
+		auto &&prep_session = get_server()->prepare_session(req);
+		auto &&session = prep_session.first;
+		m_query_list.set_query(ioremap::swarm::network_url(req.get_url()).query());
 
-		auto key = get_key(req);
-		auto arr = session.read_data(key, 0, 0);
-		auto content = arr.get_one().file();
+		auto &&key = prep_session.second;
+		auto offset = get_arg<uint64_t>(m_query_list, "offset", 0);
+		auto size = get_arg<uint64_t>(m_query_list, "size", 0);
+		auto arr = session.read_data(key, offset, size);
 
-		auto res_str = content.to_string();
+		arr.connect(std::bind(&req_get::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2, req.try_header("If-Modified-Since")));
+	} catch (const std::exception &ex) {
+		std::clog << "Get request error: " << ex.what() << std::endl;
+		send_reply(500);
+	} catch (...) {
+		std::clog << "Get request error: unknown" << std::endl;
+		send_reply(500);
+	}
+}
+
+void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error, const boost::optional<std::string> &if_modified_since) {
+	try {
+		if (error) {
+			send_reply(error.code() == -ENOENT ? 404 : 500);
+			return;
+		}
+		auto &&rr = srr.front();
+		bool embeded = m_query_list.has_item("embed") || m_query_list.has_item("embed_timestamp");
+		if (rr.io_attribute()->user_flags & UF_EMBEDS) {
+			embeded = true;
+		}
+
+		auto dc = elliptics::data_container_t::unpack(rr.file(), embeded);
+		
+		auto ts = dc.get<elliptics::DNET_FCGI_EMBED_TIMESTAMP>();
+
 		ioremap::swarm::network_reply reply;
+		if (ts) {
+			char ts_str[128] = {0};
+			time_t timestamp = (time_t)(ts->tv_sec);
+			struct tm tmp;
+			strftime(ts_str, sizeof (ts_str), "%a, %d %b %Y %T %Z", gmtime_r(&timestamp, &tmp));
+			
+			if (if_modified_since) {
+				if (*if_modified_since == ts_str) {
+					send_reply(304);
+					return;
+				}
+			}
+			reply.set_header("Last-Modified", ts_str);
+		}
+
+		auto res_str = dc.data.to_string();
 		reply.set_code(200);
 		reply.set_content_length(res_str.size());
 		reply.set_content_type("text/plain");
@@ -468,14 +577,9 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	auto g = url.substr(bg, eg - bg);
 	auto filename = url.substr(bf, ef - bf);
 	auto group = boost::lexical_cast<int>(g);
-	throw std::runtime_error("temp exception");
 
 	session.set_groups(m_mastermind->get_symmetric_groups(group));
-	///
-	//auto begin = scriptname.find('/', 1) + 1;
-	//auto end = scriptname.find('?', begin);
-	//return scriptname.substr(begin, end - begin);
-	///
+
 	return std::make_pair(session, ioremap::elliptics::key(filename));;
 }
 
