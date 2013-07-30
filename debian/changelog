@@ -1,3 +1,12 @@
+mediastorage-proxy (0.2) lucid; urgency=low
+
+  * Added prepare-prain_write-commit write
+  * Added support of smart embeds
+  * These handlers work asynchronously
+  * Added build dependence of msgpack
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 30 Jul 2013 21:19:15 +0400
+
 mediastorage-proxy (0.1) UNRELEASED; urgency=low
 
   * Initial release.
