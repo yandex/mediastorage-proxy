@@ -49,8 +49,8 @@ ioremap::elliptics::file_logger generate_logger(const rapidjson::Value &config) 
 
 		if (log.HasMember("path"))
 			log_path = log["path"].GetString();
-		if (log.HasMember("mask"))
-			log_mask = log["mask"].GetInt();
+		if (log.HasMember("level"))
+			log_mask = log["level"].GetInt();
 	}
 
 	return ioremap::elliptics::file_logger(log_path.c_str(), log_mask);
@@ -78,9 +78,6 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 	const auto &logger = generate_logger(config);
 	auto node = generate_node(config, logger);
 
-	int base_port = get_int(config, "base-port", 1024);
-	int addresses_family = get_int(config, "addresses_family", 2);
-
 	if (config.HasMember("remotes") == false) {
 		const char *err = "You should set a list of remote addresses";
 		std::clog << err << std::endl;
@@ -92,13 +89,10 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 		for (auto it = conf_remotes.Begin(); it != conf_remotes.End(); ++it) {
 			const std::string &host = it->GetString();
 			try {
-				node.add_remote(host.c_str(), base_port, addresses_family);
+				node.add_remote(host.c_str());
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
-				oss
-					<< "Can\'t connect to remote node " << host << ':'
-					<< base_port << ':' << addresses_family << " : "
-					<< ex.what();
+				oss << "Can\'t connect to remote node " << host << " : " << ex.what();
 				std::clog << oss.str() << std::endl;
 			}
 		}
@@ -138,22 +132,17 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 	
 	const auto &mastermind = config["mastermind"];
 
-	if (mastermind.HasMember("ip") == false) {
+	if (mastermind.HasMember("host") == false) {
 		const char *err = "You should set an ip address in mastermind settings";
 		std::clog << err << std::endl;
 		throw std::runtime_error(err);
 	}
 
-	if (mastermind.HasMember("port") == false) {
-		const char *err = "You should set a port in mastermind settings";
-		std::clog << err << std::endl;
-		throw std::runtime_error(err);
-	}
+	auto ip = mastermind["host"].GetString();
+	auto port = get_int(mastermind, "port", 10053);
+	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
 
-	auto ip = mastermind["ip"].GetString();
-	auto port = mastermind["port"].GetInt();
-
-	return std::make_shared<elliptics::mastermind_t>(ip, port);
+	return std::make_shared<elliptics::mastermind_t>(ip, port, group_info_update_period);
 }
 
 std::string get_filename(const ioremap::swarm::network_request &req) {
@@ -216,7 +205,13 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	m_die_limit = get_int(config, "die-limit", 1);
 	m_eblob_style_path = get_bool(config, "eblob_style_path", true);
 	m_base_port = get_int(config, "base_port", 1024);
-	m_groups_count = get_int(config, "groups_count", 3);
+
+	if (config.HasMember("groups-count") == false) {
+		const char *err = "You should set a groups count in application settings";
+		std::clog << err << std::endl;
+		throw std::runtime_error(err);
+	}
+	m_groups_count = config[ "groups-count"].GetInt();
 
 	on_prefix<req_upload>("/upload/");
 	on_prefix<req_get>("/get/");
