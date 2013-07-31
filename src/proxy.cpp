@@ -399,8 +399,8 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		std::clog << "Delete request" << std::endl;
-		get_server()->prepare_session(req);
-		auto session = get_server()->get_session();
+		auto &&prep_session = get_server()->prepare_session(req);
+		auto &&session = prep_session.first;
 
 		if (session.state_num() < get_server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
@@ -408,8 +408,8 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 
 		session.set_filter(ioremap::elliptics::filters::all);
 
-		auto key = get_key(req);
-		session.remove(key).wait();
+		auto &&key = prep_session.second;
+		session.remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
 		std::clog << "Delete request error: " << ex.what() << std::endl;
 		send_reply(500);
@@ -417,6 +417,15 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 		std::clog << "Delete request error: unknown" << std::endl;
 		send_reply(500);
 	}
+}
+
+void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
+	(void)srr;
+	if (error) {
+		send_reply(error.code() == -ENOENT ? 404 : 500);
+		return;
+	}
+	send_reply(200);
 }
 
 void proxy::req_download_info::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {

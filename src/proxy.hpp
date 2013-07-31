@@ -50,6 +50,7 @@ public:
 		, public std::enable_shared_from_this<req_delete>
 	{
 		void on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer);
+		void on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error);
 	};
 
 	struct req_download_info
