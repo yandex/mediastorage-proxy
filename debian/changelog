@@ -1,3 +1,12 @@
+mediastorage-proxy (0.3) lucid; urgency=low
+
+  * `Delete`, `Download-info` and `Stat-log` handlers now work asynchronously
+  * Fixed dispatch of ping and stat-log handlers
+  * Empty list of groups is considered as mistake of user
+  * Error-message is printed to log when error occurs in elliptcis session
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 31 Jul 2013 15:23:48 +0400
+
 mediastorage-proxy (0.2) lucid; urgency=low
 
   * Added prepare-prain_write-commit write
