@@ -223,10 +223,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on_prefix<req_delete>("/delete/");
 	on_prefix<req_download_info>("/download_info/");
 	on_prefix<req_download_info>("/download-info/");
-	on_prefix<req_stat_log>("/stat-log/");
-	on_prefix<req_stat_log>("/stat_log/");
-	on_prefix<req_ping>("/ping/");
-	on_prefix<req_ping>("/stat/");
+	on<req_stat_log>("/stat-log/");
+	on<req_stat_log>("/stat_log/");
+	on<req_ping>("/ping");
+	on<req_ping>("/stat");
 
 	return true;
 }
@@ -518,7 +518,6 @@ void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, con
 	try {
 		std::clog << "Ping request" << std::endl;
 		int code = 200;
-		get_server()->prepare_session(req);
 		auto session = get_server()->get_session();
 		if (session.state_num() < get_server()->die_limit()) {
 			code = 500;
