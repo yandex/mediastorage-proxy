@@ -223,8 +223,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on_prefix<req_delete>("/delete/");
 	on_prefix<req_download_info>("/download_info/");
 	on_prefix<req_download_info>("/download-info/");
-	on<req_stat_log>("/stat-log/");
-	on<req_stat_log>("/stat_log/");
+	on<req_stat_log>("/stat-log");
+	on<req_stat_log>("/stat_log");
 	on<req_ping>("/ping");
 	on<req_ping>("/stat");
 
@@ -279,6 +279,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
 	try {
 		if (error) {
+			std::clog << error.message() << std::endl;
 			send_reply(500);
 			return;
 		}
@@ -359,6 +360,7 @@ void proxy::req_get::on_request(const ioremap::swarm::network_request &req, cons
 void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error, const boost::optional<std::string> &if_modified_since) {
 	try {
 		if (error) {
+			std::clog << error.message() << std::endl;
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -433,6 +435,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
 	(void)srr;
 	if (error) {
+		std::clog << error.message() << std::endl;
 		send_reply(error.code() == -ENOENT ? 404 : 500);
 		return;
 	}
@@ -468,6 +471,7 @@ void proxy::req_download_info::on_request(const ioremap::swarm::network_request 
 void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	try {
 		if (error) {
+			std::clog << error.message() << std::endl;
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -535,10 +539,27 @@ void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, con
 void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		std::clog << "Stat log request" << std::endl;
-		get_server()->prepare_session(req);
 		auto session = get_server()->get_session();
 
-		auto srs = session.stat_log().get();
+		auto asr = session.stat_log();
+
+		asr.connect(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	} catch (const std::exception &ex) {
+		std::clog << "Stat log request error: " << ex.what() << std::endl;
+		send_reply(500);
+	} catch (...) {
+		std::clog << "Stat log request error: unknown" << std::endl;
+		send_reply(500);
+	}
+}
+
+void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
+	try {
+		if (error) {
+			std::clog << error.message() << std::endl;
+			send_reply(500);
+			return;
+		}
 
 		char id_str[DNET_ID_SIZE * 2 + 1];
 		char addr_str[128];
@@ -547,7 +568,7 @@ void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req,
 		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
 		oss << "<data>\n";
 
-		for (auto it = srs.begin(); it != srs.end(); ++it) {
+		for (auto it = ssr.begin(); it != ssr.end(); ++it) {
 			const ioremap::elliptics::stat_result_entry &data = *it;
 			struct dnet_addr *addr = data.address();
 			struct dnet_cmd *cmd = data.command();
@@ -579,7 +600,7 @@ void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req,
 		const std::string &body = oss.str();
 		ioremap::swarm::network_reply reply;
 		reply.set_code(200);
-		reply.set_content_type("text/plaint");
+		reply.set_content_type("text/xml");
 		reply.set_content_length(body.size());
 		send_reply(reply, body);
 	} catch (const std::exception &ex) {
