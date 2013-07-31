@@ -1,3 +1,15 @@
+mediastorage-proxy (0.4) lucid; urgency=low
+
+  * Uses `log.level` instead of `log.mask`
+  * Removed `addresses_family`
+  *	Remotes list consists of 'host:port:family' instead of only 'host'
+  *	Uses `mastermind.host` instead of `mastermind.ip`
+  *	Added `mastermind.group-info-update-period`
+  *	Uses `groups-count` instead of `groups_count`
+  * Project requires libmastermind-dev >= 4.0
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 31 Jul 2013 16:26:44 +0400
+
 mediastorage-proxy (0.3) lucid; urgency=low
 
   * `Delete`, `Download-info` and `Stat-log` handlers now work asynchronously
