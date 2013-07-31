@@ -333,6 +333,12 @@ void proxy::req_get::on_request(const ioremap::swarm::network_request &req, cons
 		std::clog << "Get request" << std::endl;
 		auto &&prep_session = get_server()->prepare_session(req);
 		auto &&session = prep_session.first;
+
+		if (session.get_groups().empty()) {
+			send_reply(404);
+			return;
+		}
+
 		m_query_list.set_query(ioremap::swarm::network_url(req.get_url()).query());
 
 		auto &&key = prep_session.second;
@@ -402,6 +408,11 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 		auto &&prep_session = get_server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
+		if (session.get_groups().empty()) {
+			send_reply(404);
+			return;
+		}
+
 		if (session.state_num() < get_server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
 		}
@@ -431,15 +442,37 @@ void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result
 void proxy::req_download_info::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		std::clog << "Download info request" << std::endl;
-		get_server()->prepare_session(req);
-		auto session = get_server()->get_session();
+		auto &&prep_session = get_server()->prepare_session(req);
+		auto &&session = prep_session.first;
+
+		if (session.get_groups().empty()) {
+			send_reply(404);
+			return;
+		}
+
 		session.set_filter(ioremap::elliptics::filters::all);
 
-		auto key = get_key(req);
+		auto &&key = prep_session.second;
 		auto alr = session.lookup(key);
-		auto lrs = alr.get();
 
-		for (auto it = lrs.begin(); it != lrs.end(); ++it) {
+		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	} catch (const std::exception &ex) {
+		std::clog << "Download info request error: " << ex.what() << std::endl;
+		send_reply(500);
+	} catch (...) {
+		std::clog << "Download info request error: unknown" << std::endl;
+		send_reply(500);
+	}
+}
+
+void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
+	try {
+		if (error) {
+			send_reply(error.code() == -ENOENT ? 404 : 500);
+			return;
+		}
+
+		for (auto it = slr.begin(); it != slr.end(); ++it) {
 			if (!it->error()) {
 				std::stringstream oss;
 				oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
@@ -585,9 +618,13 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	auto ef = url.find('?', bf);
 	auto g = url.substr(bg, eg - bg);
 	auto filename = url.substr(bf, ef - bf);
-	auto group = boost::lexical_cast<int>(g);
 
-	session.set_groups(m_mastermind->get_symmetric_groups(group));
+	try {
+		auto group = boost::lexical_cast<int>(g);
+		session.set_groups(m_mastermind->get_symmetric_groups(group));
+	} catch (...) {
+		std::clog << "Cannot to determine groups" << std::endl;
+	}
 
 	return std::make_pair(session, ioremap::elliptics::key(filename));;
 }
