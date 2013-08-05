@@ -1,3 +1,9 @@
+mediastorage-proxy (0.5) lucid; urgency=low
+
+  * Added ubic start script
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 05 Aug 2013 13:07:19 +0400
+
 mediastorage-proxy (0.4) lucid; urgency=low
 
   * Uses `log.level` instead of `log.mask`
