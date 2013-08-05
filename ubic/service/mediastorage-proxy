@@ -1,0 +1,3 @@
+use Ubic::Service::SimpleDaemon;
+
+return Ubic::Service::SimpleDaemon->new({ bin => "/usr/bin/mediastorage-proxy -c /etc/elliptics/mediastorage-proxy.conf" });

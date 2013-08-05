@@ -1,1 +1,3 @@
 usr/bin/mediastorage-proxy
+etc/init.d/mediastorage-proxy
+etc/ubic/service/mediastorage-proxy
