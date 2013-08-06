@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 set(TARGET mediastorage-proxy)
 
-set(CMAKE_CXX_FLAGS "-O0 -Wall -pedantic -std=c++0x -g")
+set(CMAKE_CXX_FLAGS "-Wall -pedantic -std=c++0x")
 
 set(REQUIRED_LIBRARIES
 	thevoid
