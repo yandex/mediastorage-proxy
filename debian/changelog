@@ -1,3 +1,10 @@
+mediastorage-proxy (0.6) lucid; urgency=low
+
+  * Added logger
+  * Removed -O0 and -g flags from CMAKE_CXX_FLAGS
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 05 Aug 2013 21:15:40 +0400
+
 mediastorage-proxy (0.5) lucid; urgency=low
 
   * Added ubic start script
