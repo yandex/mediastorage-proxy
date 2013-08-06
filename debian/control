@@ -6,7 +6,7 @@ Build-Depends: debhelper (>=5),
  cmake (>= 2.6),
  cdbs,
  libthevoid-dev,
- libmastermind-dev (>= 4.0),
+ libmastermind-dev (>= 5.0),
  elliptics-dev (>= 2.24), elliptics-dev (<< 2.25),
  cocaine-framework-native (>= 0.10.6.1),
  cocaine-framework-native-dev (>= 0.10.6.1),
@@ -20,7 +20,7 @@ Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends} 
+Depends: ${shlibs:Depends}, libthevoid1 (>= 0.5.4.0), libswarm1 (>= 0.5.4.0)
 Description: Proxy with elliptics support based on thevoid
 
 Package: mediastorage-proxy-dbg
