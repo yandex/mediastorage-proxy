@@ -82,9 +82,11 @@ protected:
 	int die_limit() const;
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::network_request &req);
 	std::vector<int> groups_for_upload();
+	ioremap::swarm::logger &logger();
 
 private:
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
+	boost::optional<ioremap::swarm::logger> m_logger;
 	int m_die_limit;
 	bool m_eblob_style_path;
 	int m_base_port;

@@ -1,8 +1,10 @@
 #include "proxy.hpp"
 #include "lookup_result.hpp"
 #include "data_container.hpp"
+#include "loggers.hpp"
 
 #include <swarm/network_url.h>
+#include <swarm/logger.h>
 
 #include <stdexcept>
 #include <iterator>
@@ -40,7 +42,7 @@ std::string get_string(const rapidjson::Value &config, const char *name, const s
 	return config.HasMember(name) ? config[name].GetString() : def_val;
 }
 
-ioremap::elliptics::file_logger generate_logger(const rapidjson::Value &config) {
+ioremap::swarm::logger generate_logger(const rapidjson::Value &config) {
 	std::string log_path("/dev/stderr");
 	int log_mask(DNET_LOG_INFO | DNET_LOG_ERROR);
 
@@ -53,10 +55,10 @@ ioremap::elliptics::file_logger generate_logger(const rapidjson::Value &config) 
 			log_mask = log["level"].GetInt();
 	}
 
-	return ioremap::elliptics::file_logger(log_path.c_str(), log_mask);
+	return ioremap::swarm::logger(log_path.c_str(), log_mask);
 }
 
-ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ioremap::elliptics::file_logger &logger) {
+ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ioremap::elliptics::logger &logger) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -74,13 +76,11 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ior
 	return ioremap::elliptics::node(logger, dnet_conf);
 }
 
-ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
-	const auto &logger = generate_logger(config);
-	auto node = generate_node(config, logger);
+ioremap::elliptics::session generate_session(const rapidjson::Value &config, ioremap::swarm::logger &logger) {
+	auto node = generate_node(config, elliptics_logger_t(logger));
 
 	if (config.HasMember("remotes") == false) {
 		const char *err = "You should set a list of remote addresses";
-		std::clog << err << std::endl;
 		throw std::runtime_error(err);
 	}
 
@@ -93,7 +93,7 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Can\'t connect to remote node " << host << " : " << ex.what();
-				std::clog << oss.str() << std::endl;
+				logger.log(DNET_LOG_INFO, "%s", oss.str().c_str());
 			}
 		}
 	}
@@ -113,7 +113,6 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 			std::ostringstream oss;
 			oss << "Unknown type of success-copies-num \'" << scn << "\'. Allowed types: any, quorum, all.";
 			const std::string &str = oss.str();
-			std::clog << str.c_str() << std::endl;
 			throw std::runtime_error(str);
 		}
 	}
@@ -123,10 +122,9 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config) {
 	return session;
 }
 
-std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Value &config) {
+std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Value &config, const cocaine_logger_t &logger) {
 	if (config.HasMember("mastermind") == false) {
 		const char *err = "You should set settings for mastermind";
-		std::clog << err << std::endl;
 		throw std::runtime_error(err);
 	}
 	
@@ -134,7 +132,6 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 
 	if (mastermind.HasMember("host") == false) {
 		const char *err = "You should set an ip address in mastermind settings";
-		std::clog << err << std::endl;
 		throw std::runtime_error(err);
 	}
 
@@ -142,7 +139,7 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 	auto port = get_int(mastermind, "port", 10053);
 	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
 
-	return std::make_shared<elliptics::mastermind_t>(ip, port, group_info_update_period);
+	return std::make_shared<elliptics::mastermind_t>(ip, port, std::make_shared<cocaine_logger_t>(logger), group_info_update_period);
 }
 
 std::string get_filename(const ioremap::swarm::network_request &req) {
@@ -178,18 +175,14 @@ ioremap::elliptics::async_write_result write(
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
     if (auto &&arg = query_list.try_item("prepare")) {
         size_t size = boost::lexical_cast<uint64_t>(*arg);
-		std::clog << "write prepare: offset=" << offset << "; size=" << size << "; data-size=" << data.size() << std::endl;
         return session.write_prepare(key, data, offset, size);
     } else if (auto &&arg = query_list.try_item("commit")) {
         size_t size = boost::lexical_cast<uint64_t>(*arg);
-		std::clog << "write commit: offset=" << offset << "; size=" << size << "; data-size=" << data.size() << std::endl;
         return session.write_commit(key, data, offset, size);
     } else if (query_list.has_item("plain_write") || query_list.has_item("plain-write")) {
-		std::clog << "write plain: offset=" << offset << "; data-size=" << data.size() << std::endl;
         return session.write_plain(key, data, offset);
     } else {
 		// TODO: add chunk write
-		std::clog << "write simple: offset=" << offset << "; chunk=" << 0 << std::endl;
         return session.write_data(key, data, offset, 0 /*m_data->m_chunk_size*/);
     }
 }
@@ -199,19 +192,27 @@ ioremap::elliptics::async_write_result write(
 namespace elliptics {
 
 bool proxy::initialize(const rapidjson::Value &config) {
-	m_elliptics_session.reset(generate_session(config));
-	m_mastermind = generate_mastermind(config);
+	try {
+		m_logger.reset(generate_logger(config));
+		m_elliptics_session.reset(generate_session(config, *m_logger));
+		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_logger));
 
-	m_die_limit = get_int(config, "die-limit", 1);
-	m_eblob_style_path = get_bool(config, "eblob_style_path", true);
-	m_base_port = get_int(config, "base_port", 1024);
+		m_die_limit = get_int(config, "die-limit", 1);
+		m_eblob_style_path = get_bool(config, "eblob_style_path", true);
+		m_base_port = get_int(config, "base_port", 1024);
 
-	if (config.HasMember("groups-count") == false) {
-		const char *err = "You should set a groups count in application settings";
-		std::clog << err << std::endl;
-		throw std::runtime_error(err);
+		if (config.HasMember("groups-count") == false) {
+			const char *err = "You should set a groups count in application settings";
+			throw std::runtime_error(err);
+		}
+		m_groups_count = config[ "groups-count"].GetInt();
+	} catch(const std::exception &ex) {
+		if (m_logger) {
+			m_logger->log(ioremap::swarm::LOG_ERROR, "%s", ex.what());
+		} else {
+			std::cerr << ex.what() << std::endl;
+		}
 	}
-	m_groups_count = config[ "groups-count"].GetInt();
 
 	on_prefix<req_upload>("/upload/");
 	on_prefix<req_get>("/get/");
@@ -228,8 +229,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Upload request" << std::endl;
-
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare to handle request");
 		m_session = get_server()->get_session();
 		m_session->set_groups(get_server()->groups_for_upload());
 		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
@@ -258,23 +258,25 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 		m_content = elliptics::data_container_t::pack(dc);
 
 		m_key = get_key(req);
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: writing content");
 		auto awr = write(*m_session, m_key, m_content, query_list);
 
 		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	
 	} catch (std::exception &ex) {
-		std::clog << "Upload request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Upload request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
 	try {
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare response");
 		if (error) {
-			std::clog << error.message() << std::endl;
+			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -313,20 +315,21 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		reply.set_code(200);
 		reply.set_content_length(res_str.size());
 		reply.set_content_type("text/plain");
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: sending response");
 		send_reply(reply, res_str);
 
 	} catch (std::exception &ex) {
-		std::clog << "Upload request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Upload request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_get::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Get request" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: prepare to handle request");
 		auto &&prep_session = get_server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -340,22 +343,24 @@ void proxy::req_get::on_request(const ioremap::swarm::network_request &req, cons
 		auto &&key = prep_session.second;
 		auto offset = get_arg<uint64_t>(m_query_list, "offset", 0);
 		auto size = get_arg<uint64_t>(m_query_list, "size", 0);
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: reading data");
 		auto arr = session.read_data(key, offset, size);
 
 		arr.connect(std::bind(&req_get::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2, req.try_header("If-Modified-Since")));
 	} catch (const std::exception &ex) {
-		std::clog << "Get request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Get request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error, const boost::optional<std::string> &if_modified_since) {
 	try {
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: prepare response");
 		if (error) {
-			std::clog << error.message() << std::endl;
+			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -389,19 +394,20 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 		reply.set_code(200);
 		reply.set_content_length(res_str.size());
 		reply.set_content_type("text/plain");
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: sending response");
 		send_reply(reply, res_str);
 	} catch (const std::exception &ex) {
-		std::clog << "Get request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Get request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get finish error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Delete request" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: prepare to handle request");
 		auto &&prep_session = get_server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -417,12 +423,13 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 		session.set_filter(ioremap::elliptics::filters::all);
 
 		auto &&key = prep_session.second;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: removing data");
 		session.remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		std::clog << "Delete request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Delete request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Delete request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Delete request error: unknown");
 		send_reply(500);
 	}
 }
@@ -430,16 +437,17 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
 	(void)srr;
 	if (error) {
-		std::clog << error.message() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
 		send_reply(error.code() == -ENOENT ? 404 : 500);
 		return;
 	}
+	get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: sending reply");
 	send_reply(200);
 }
 
 void proxy::req_download_info::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Download info request" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: prepare to handle request");
 		auto &&prep_session = get_server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -451,22 +459,24 @@ void proxy::req_download_info::on_request(const ioremap::swarm::network_request 
 		session.set_filter(ioremap::elliptics::filters::all);
 
 		auto &&key = prep_session.second;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: looking up");
 		auto alr = session.lookup(key);
 
 		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		std::clog << "Download info request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Download info request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	try {
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: prepare response");
 		if (error) {
-			std::clog << error.message() << std::endl;
+			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -503,19 +513,20 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				return;
 			}
 		}
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: sending response");
 		send_reply(503);  
 	} catch (const std::exception &ex) {
-		std::clog << "Download info request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Download info request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info finish error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Ping request" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Ping: handle request");
 		int code = 200;
 		auto session = get_server()->get_session();
 		if (session.state_num() < get_server()->die_limit()) {
@@ -523,35 +534,37 @@ void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, con
 		}
 		send_reply(code);
 	} catch (const std::exception &ex) {
-		std::clog << "Ping request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Ping request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Ping request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Ping request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		std::clog << "Stat log request" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: prepare to handle request");
 		auto session = get_server()->get_session();
 
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: process \'stat_log\'");
 		auto asr = session.stat_log();
 
 		asr.connect(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		std::clog << "Stat log request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Stat log request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
 	try {
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: prepare response");
 		if (error) {
-			std::clog << error.message() << std::endl;
+			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -597,12 +610,13 @@ void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result
 		reply.set_code(200);
 		reply.set_content_type("text/xml");
 		reply.set_content_length(body.size());
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: sending response");
 		send_reply(reply, body);
 	} catch (const std::exception &ex) {
-		std::clog << "Stat log request error: " << ex.what() << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		std::clog << "Stat log request error: unknown" << std::endl;
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log finish error: unknown");
 		send_reply(500);
 	}
 }
@@ -638,10 +652,29 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		auto group = boost::lexical_cast<int>(g);
 		session.set_groups(m_mastermind->get_symmetric_groups(group));
 	} catch (...) {
-		std::clog << "Cannot to determine groups" << std::endl;
+		logger().log(ioremap::swarm::LOG_ERROR, "Cannot to determine groups");
+	}
+
+	if (m_logger->get_level() >= ioremap::swarm::LOG_INFO) {
+		std::ostringstream oss;
+
+		auto groups = session.get_groups();
+		oss << "Fetched groups for request: [";
+		for (auto it = groups.begin(); it != groups.end(); ++it) {
+			if (it != groups.begin())
+				oss << ", ";
+			oss << *it;
+		}
+		oss << "]";
+
+		m_logger->log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
 	}
 
 	return std::make_pair(session, ioremap::elliptics::key(filename));;
+}
+
+ioremap::swarm::logger &proxy::logger() {
+	return *m_logger;
 }
 
 } // namespace elliptics
