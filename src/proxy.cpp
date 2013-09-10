@@ -117,7 +117,7 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config, ior
 		}
 	}
 
-	session.set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(session));
+	session.set_error_handler(ioremap::elliptics::error_handlers::none);
 
 	return session;
 }
@@ -172,6 +172,7 @@ ioremap::elliptics::async_write_result write(
 	, const ioremap::elliptics::data_pointer &data
 	, const ioremap::swarm::network_query_list &query_list
 	) {
+	session.set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(session));
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
     if (auto &&arg = query_list.try_item("prepare")) {
         size_t size = boost::lexical_cast<uint64_t>(*arg);
