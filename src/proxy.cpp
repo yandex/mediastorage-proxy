@@ -199,6 +199,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		m_die_limit = get_int(config, "die-limit", 1);
 		m_eblob_style_path = get_bool(config, "eblob_style_path", true);
+		m_direction_bit_num = get_int(config, "direction_bit_num", 16);
 		m_base_port = get_int(config, "base_port", 1024);
 
 		if (config.HasMember("groups-count") == false) {
@@ -626,7 +627,7 @@ ioremap::elliptics::session proxy::get_session() {
 }
 
 elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry) {
-	return elliptics::lookup_result(entry, m_eblob_style_path, m_base_port);
+	return elliptics::lookup_result(entry, m_eblob_style_path, m_base_port, m_direction_bit_num);
 }
 
 int proxy::die_limit() const {

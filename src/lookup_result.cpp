@@ -4,15 +4,33 @@
 
 #include <sstream>
 
+#include <boost/lexical_cast.hpp>
+
 #include <sys/socket.h>
 #include <netdb.h>
 
+namespace {
+
+static inline char*
+file_backend_get_dir(const unsigned char *id, uint64_t bit_num, char *dst) {
+	char *res = dnet_dump_id_len_raw(id, (bit_num + 7) / 8, dst);
+
+	if (res) {
+		res[bit_num / 4] = '\0';
+	}
+
+	return res;
+}
+
+} // namespace
+
 namespace elliptics {
 
-lookup_result::lookup_result(const ioremap::elliptics::lookup_result_entry &entry, bool eblob_style_path, int base_port)
+lookup_result::lookup_result(const ioremap::elliptics::lookup_result_entry &entry, bool eblob_style_path, int base_port, int directory_bit_num)
 	: m_entry(entry)
 	, m_eblob_style_path(eblob_style_path)
 	, m_base_port(base_port)
+	, m_directory_bit_num(directory_bit_num)
 {
 }
 
@@ -80,9 +98,15 @@ const std::string &lookup_result::path() const
 				<< ':' << info->size;
 			m_path.reset(oss.str());
 		} else {
-			//struct dnet_id id;
-			//elliptics_node_->transform(key.filename(), id);
-			//result.path = "/" + boost::lexical_cast<std::string>(port - base_port_) + '/' + hex_dir + '/' + id;
+			char id[2 * DNET_ID_SIZE + 1];
+			char hex_dir[2 * DNET_ID_SIZE + 1];
+
+			dnet_dump_id_len_raw(m_entry.command()->id.id, DNET_ID_SIZE, id);
+			file_backend_get_dir(m_entry.command()->id.id, m_directory_bit_num, hex_dir);
+
+			std::ostringstream oss;
+			oss << '/' << boost::lexical_cast<std::string>(port() - m_base_port) << '/' << hex_dir << '/' << id;
+			m_path.reset(oss.str());
 		}
 	}
 

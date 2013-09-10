@@ -10,7 +10,7 @@ namespace elliptics {
 
 class lookup_result {
 public:
-	lookup_result(const ioremap::elliptics::lookup_result_entry &entry, bool eblob_style_path, int base_port);
+	lookup_result(const ioremap::elliptics::lookup_result_entry &entry, bool eblob_style_path, int base_port, int directory_bit_num);
 
 	const std::string &host() const;
 	uint16_t port() const;
@@ -24,6 +24,7 @@ private:
 	ioremap::elliptics::lookup_result_entry m_entry;
 	bool m_eblob_style_path;
 	int m_base_port;
+	int m_directory_bit_num;
 
 	mutable boost::optional<std::string> m_host;
 	mutable boost::optional<uint16_t> m_port;

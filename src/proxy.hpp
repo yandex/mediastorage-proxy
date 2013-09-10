@@ -89,6 +89,7 @@ private:
 	boost::optional<ioremap::swarm::logger> m_logger;
 	int m_die_limit;
 	bool m_eblob_style_path;
+	int m_direction_bit_num;
 	int m_base_port;
 	int m_groups_count;
 	std::shared_ptr<elliptics::mastermind_t> m_mastermind;
