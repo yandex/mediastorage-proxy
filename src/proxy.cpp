@@ -13,6 +13,7 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <utility>
 
 #include <boost/lexical_cast.hpp>
 
@@ -142,15 +143,30 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 	return std::make_shared<elliptics::mastermind_t>(ip, port, std::make_shared<cocaine_logger_t>(logger), group_info_update_period);
 }
 
-std::string get_filename(const ioremap::swarm::network_request &req) {
+std::pair<std::string, std::string> get_filename(const ioremap::swarm::network_request &req) {
 	auto scriptname = req.get_url();
 	auto begin = scriptname.find('/', 1) + 1;
 	auto end = scriptname.find('?', begin);
-	return scriptname.substr(begin, end - begin);
+	auto filename = scriptname.substr(begin, end - begin);
+
+	auto namespace_end = begin - 1;
+	auto namespace_beg = scriptname.find('-');
+	std::string str_namespace;
+
+	if (namespace_beg == std::string::npos) {
+		str_namespace = "default";
+	} else {
+		namespace_beg += 1;
+		if (namespace_beg < namespace_end) {
+			str_namespace = scriptname.substr(namespace_beg, namespace_end - namespace_beg);
+		}
+	}
+	return std::make_pair(filename, str_namespace);
 }
 
-ioremap::elliptics::key get_key(const ioremap::swarm::network_request &req) {
-	return ioremap::elliptics::key(get_filename(req));
+std::pair<ioremap::elliptics::key, std::string> get_file_info(const ioremap::swarm::network_request &req) {
+	auto p = get_filename(req);
+	return std::make_pair(ioremap::elliptics::key(p.first), p.second);
 }
 
 std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess) {
@@ -216,7 +232,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 	}
 
-	on_prefix<req_upload>("/upload/");
+	on_prefix<req_upload>("/upload");
 	on_prefix<req_get>("/get/");
 	on_prefix<req_delete>("/delete/");
 	on_prefix<req_download_info>("/download_info/");
@@ -233,7 +249,15 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 	try {
 		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare to handle request");
 		m_session = get_server()->get_session();
-		m_session->set_groups(get_server()->groups_for_upload());
+		auto file_info = get_file_info(req);
+		m_key = file_info.first;
+		if (file_info.second.empty()) {
+			get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: Cannot determine a namespace");
+			send_reply(400);
+			return;
+		}
+
+		m_session->set_groups(get_server()->groups_for_upload(file_info.second));
 		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
 
 		if (m_session->state_num() < get_server()->die_limit()) {
@@ -259,7 +283,6 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 
 		m_content = elliptics::data_container_t::pack(dc);
 
-		m_key = get_key(req);
 		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: writing content");
 		auto awr = write(*m_session, m_key, m_content, query_list);
 
@@ -635,8 +658,8 @@ int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload() {
-	return m_mastermind->get_metabalancer_groups(m_groups_count);
+std::vector<int> proxy::groups_for_upload(const std::string &name_space) {
+	return m_mastermind->get_metabalancer_groups(m_groups_count, name_space);
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::network_request &req) {

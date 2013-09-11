@@ -81,7 +81,7 @@ protected:
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
 	int die_limit() const;
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::network_request &req);
-	std::vector<int> groups_for_upload();
+	std::vector<int> groups_for_upload(const std::string &name_space);
 	ioremap::swarm::logger &logger();
 
 private:
