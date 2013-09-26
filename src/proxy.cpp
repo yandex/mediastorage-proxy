@@ -673,9 +673,17 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	auto g = url.substr(bg, eg - bg);
 	auto filename = url.substr(bf, ef - bf);
 
+
+
 	try {
 		auto group = boost::lexical_cast<int>(g);
-		session.set_groups(m_mastermind->get_symmetric_groups(group));
+		std::vector<int> vec_groups1;
+		std::vector<int> vec_groups2;
+		vec_groups1.swap(m_mastermind->get_symmetric_groups(group));
+		vec_groups2.swap(m_mastermind->get_cache_groups(filename));
+		vec_groups1.reserve(vec_groups2.size());
+		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
+		session.set_groups(vec_groups1);
 	} catch (...) {
 		logger().log(ioremap::swarm::LOG_ERROR, "Cannot to determine groups");
 	}
@@ -693,6 +701,7 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		oss << "]";
 
 		m_logger->log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
+		m_logger->log(ioremap::swarm::LOG_INFO, "filename: %s", filename.c_str());
 	}
 
 	return std::make_pair(session, ioremap::elliptics::key(filename));;
