@@ -679,8 +679,8 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		auto group = boost::lexical_cast<int>(g);
 		std::vector<int> vec_groups1;
 		std::vector<int> vec_groups2;
-		vec_groups1.swap(m_mastermind->get_symmetric_groups(group));
-		vec_groups2.swap(m_mastermind->get_cache_groups(filename));
+		m_mastermind->get_symmetric_groups(group).swap(vec_groups1);
+		m_mastermind->get_cache_groups(filename).swap(vec_groups2);
 		vec_groups1.reserve(vec_groups2.size());
 		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
 		session.set_groups(vec_groups1);
