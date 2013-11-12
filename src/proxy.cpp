@@ -131,16 +131,32 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 	
 	const auto &mastermind = config["mastermind"];
 
-	if (mastermind.HasMember("host") == false) {
-		const char *err = "You should set an ip address in mastermind settings";
-		throw std::runtime_error(err);
+	if (mastermind.HasMember("nodes") == false) {
+		throw std::runtime_error("You should set at least one node to connect to mastermind");
 	}
 
-	auto ip = mastermind["host"].GetString();
-	auto port = get_int(mastermind, "port", 10053);
+	const auto &nodes = mastermind["nodes"];
+
+	elliptics::mastermind_t::remotes_t remotes;
+	auto sp_lg = std::make_shared<cocaine_logger_t>(logger);
+
+	for (auto it = nodes.Begin(); it != nodes.End(); ++it) {
+		const auto &node = *it;
+
+		if (node.HasMember("host") == false) {
+			//this->logger()->(ioremap::swarm::LOG_INFO, "You should set a host address in each node of mastermind settings");
+			COCAINE_LOG_INFO(sp_lg, "You should set a host address in each node of mastermind settings");
+			continue;
+		}
+
+		auto host = node["host"].GetString();
+		auto port = get_int(node, "port", 10053);
+		remotes.emplace_back(host, port);
+	}
+
 	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
 
-	return std::make_shared<elliptics::mastermind_t>(ip, port, std::make_shared<cocaine_logger_t>(logger), group_info_update_period);
+	return std::make_shared<elliptics::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::network_request &req) {
