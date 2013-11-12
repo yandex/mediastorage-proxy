@@ -233,9 +233,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
 
 		m_die_limit = get_int(config, "die-limit", 1);
-		m_eblob_style_path = get_bool(config, "eblob_style_path", true);
-		m_direction_bit_num = get_int(config, "direction_bit_num", 16);
-		m_base_port = get_int(config, "base_port", 1024);
+		m_eblob_style_path = get_bool(config, "eblob-style-path", true);
+		m_direction_bit_num = get_int(config, "direction-bit-num", 16);
+		m_base_port = get_int(config, "base-port", 1024);
 
 		if (config.HasMember("groups-count") == false) {
 			const char *err = "You should set a groups count in application settings";
