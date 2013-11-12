@@ -86,7 +86,9 @@ protected:
 
 private:
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
-	boost::optional<ioremap::swarm::logger> m_logger;
+	boost::optional<ioremap::swarm::logger> m_elliptics_logger;
+	boost::optional<ioremap::swarm::logger> m_proxy_logger;
+	boost::optional<ioremap::swarm::logger> m_mastermind_logger;
 	int m_die_limit;
 	bool m_eblob_style_path;
 	int m_direction_bit_num;

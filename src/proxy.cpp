@@ -43,12 +43,12 @@ std::string get_string(const rapidjson::Value &config, const char *name, const s
 	return config.HasMember(name) ? config[name].GetString() : def_val;
 }
 
-ioremap::swarm::logger generate_logger(const rapidjson::Value &config) {
+ioremap::swarm::logger generate_logger(const rapidjson::Value &config, const std::string &name) {
 	std::string log_path("/dev/stderr");
 	int log_mask(DNET_LOG_INFO | DNET_LOG_ERROR);
 
-	if (config.HasMember("log")) {
-		const auto &log = config["log"];
+	if (config.HasMember((name + "-log").c_str())) {
+		const auto &log = config[(name + "-log").c_str()];
 
 		if (log.HasMember("path"))
 			log_path = log["path"].GetString();
@@ -226,9 +226,11 @@ namespace elliptics {
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
-		m_logger.reset(generate_logger(config));
-		m_elliptics_session.reset(generate_session(config, *m_logger));
-		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_logger));
+		m_proxy_logger.reset(generate_logger(config, "proxy"));
+		m_elliptics_logger.reset(generate_logger(config, "elliptics"));
+		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
+		m_elliptics_session.reset(generate_session(config, *m_elliptics_logger));
+		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
 
 		m_die_limit = get_int(config, "die-limit", 1);
 		m_eblob_style_path = get_bool(config, "eblob_style_path", true);
@@ -241,8 +243,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 		m_groups_count = config[ "groups-count"].GetInt();
 	} catch(const std::exception &ex) {
-		if (m_logger) {
-			m_logger->log(ioremap::swarm::LOG_ERROR, "%s", ex.what());
+		if (m_proxy_logger) {
+			m_proxy_logger->log(ioremap::swarm::LOG_ERROR, "%s", ex.what());
 		} else {
 			std::cerr << ex.what() << std::endl;
 		}
@@ -704,7 +706,7 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		logger().log(ioremap::swarm::LOG_ERROR, "Cannot to determine groups");
 	}
 
-	if (m_logger->get_level() >= ioremap::swarm::LOG_INFO) {
+	if (m_proxy_logger->get_level() >= ioremap::swarm::LOG_INFO) {
 		std::ostringstream oss;
 
 		auto groups = session.get_groups();
@@ -716,15 +718,15 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		}
 		oss << "]";
 
-		m_logger->log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
-		m_logger->log(ioremap::swarm::LOG_INFO, "filename: %s", filename.c_str());
+		m_proxy_logger->log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
+		m_proxy_logger->log(ioremap::swarm::LOG_INFO, "filename: %s", filename.c_str());
 	}
 
 	return std::make_pair(session, ioremap::elliptics::key(filename));;
 }
 
 ioremap::swarm::logger &proxy::logger() {
-	return *m_logger;
+	return *m_proxy_logger;
 }
 
 } // namespace elliptics
