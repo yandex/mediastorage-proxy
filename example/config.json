@@ -1,0 +1,64 @@
+{
+	"endpoints": [
+		"unix:/tmp/thevoid/mediastorage-proxy.sock",
+		"0.0.0.0:8082"
+	],
+	"backlog": 128,
+	"threads": 2,
+	"buffer_size": 65536,
+	"daemon": {
+		"monitor-port": 20001
+	},
+	"application" : {
+		"elliptics-log" : {
+			"path" : "/tmp/log/mediastorage/elliptics.log",
+			"level" : 2
+		},
+		"proxy-log" : {
+			"path" : "/tmp/log/mediastorage/proxy.log",
+			"level" : 2
+		},
+		"mastermind-log" : {
+			"path" : "/tmp/log/mediastorage/mastermind.log",
+			"level" : 2
+		},
+		"timeouts" : {
+			"wait" : 5,
+			"check" : 60
+		},
+		"cfg-flags" : 4,
+		"remotes" : [
+			"elliptics-storage1.net:1025:2",
+			"elliptics-storage2.net:1025:2",
+			"slliptics-storage3.net:1025:2",
+			"elliptics-storage4.net:1025:2"
+		],
+		"mastermind" : {
+			"nodes" : [
+				{
+					"host" : "cocaine-runtime1.net",
+					"port" : 10053
+				},
+				{
+					"host" : "cocaine-runtime2.net",
+					"port" : 10053
+				}
+			],
+			"group-info-update-period" : 10
+		},
+		"die-limit" : 1,
+		"eblob-style-path" : true,
+		"direction-bit-num" : 16,
+		"base-port" : 1024,
+		"namespaces" : {
+			"default" : {
+				"groups-count" : 2,
+				"success-copies-num" : "any"
+			},
+			"some" : {
+				"groups-count" : 2,
+				"success-copies-num" : "all"
+			}
+		}
+	}
+}
