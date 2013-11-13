@@ -101,23 +101,6 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config, ior
 
 	ioremap::elliptics::session session(node);
 
-	{
-		const std::string &scn = get_string(config, "success-copies-num", "quorum");
-
-		if (scn == "all") {
-			session.set_checker(ioremap::elliptics::checkers::all);
-		} else if (scn == "quorum") {
-			session.set_checker(ioremap::elliptics::checkers::quorum);
-		} else if (scn == "any"){
-			session.set_checker(ioremap::elliptics::checkers::at_least_one);
-		} else {
-			std::ostringstream oss;
-			oss << "Unknown type of success-copies-num \'" << scn << "\'. Allowed types: any, quorum, all.";
-			const std::string &str = oss.str();
-			throw std::runtime_error(str);
-		}
-	}
-
 	session.set_error_handler(ioremap::elliptics::error_handlers::none);
 
 	return session;
@@ -159,6 +142,53 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 	return std::make_shared<elliptics::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
+std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjson::Value &config) {
+	if (config.HasMember("namespaces") == false) {
+		throw std::runtime_error("You should set a dict of namespaces");
+	}
+
+	const auto &namespaces = config["namespaces"];
+
+	std::map<std::string, elliptics::namespace_t> res;
+
+	for (auto it = namespaces.MemberBegin(); it != namespaces.MemberEnd(); ++it) {
+		const auto &name = it->name;
+		const auto &value = it->value;
+
+		elliptics::namespace_t item;
+		item.name = name.GetString();
+
+		if (value.HasMember("groups-count") == false) {
+			std::ostringstream oss;
+			oss << "Missing \'groups-count\' in \'" << item.name << "\' namespace";
+			throw std::runtime_error(oss.str());
+		}
+		if (value.HasMember("success-copies-num") == false) {
+			std::ostringstream oss;
+			oss << "Missing \'success-copies-num\' in \'" << item.name << "\' namespace";
+			throw std::runtime_error(oss.str());
+		}
+		item.groups_count = value["groups-count"].GetInt();
+		const std::string &scn = value["success-copies-num"].GetString();
+
+		if (scn == "all") {
+			item.result_checker = ioremap::elliptics::checkers::all;
+		} else if (scn == "quorum") {
+			item.result_checker = ioremap::elliptics::checkers::quorum;
+		} else if (scn == "any"){
+			item.result_checker = ioremap::elliptics::checkers::at_least_one;
+		} else {
+			std::ostringstream oss;
+			oss << "Unknown type of success-copies-num \'" << scn << "\' in \'" << item.name << "\' namespace. Allowed types: any, quorum, all.";
+			throw std::runtime_error(oss.str());
+		}
+
+		res.insert(std::map<std::string, elliptics::namespace_t>::value_type(item.name, item));
+	}
+
+	return res;
+}
+
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::network_request &req) {
 	auto scriptname = req.get_url();
 	auto begin = scriptname.find('/', 1) + 1;
@@ -178,11 +208,6 @@ std::pair<std::string, std::string> get_filename(const ioremap::swarm::network_r
 		}
 	}
 	return std::make_pair(filename, str_namespace);
-}
-
-std::pair<ioremap::elliptics::key, std::string> get_file_info(const ioremap::swarm::network_request &req) {
-	auto p = get_filename(req);
-	return std::make_pair(ioremap::elliptics::key(p.first), p.second);
 }
 
 std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess) {
@@ -231,17 +256,13 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
 		m_elliptics_session.reset(generate_session(config, *m_elliptics_logger));
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
+		m_namespaces = generate_namespaces(config);
 
 		m_die_limit = get_int(config, "die-limit", 1);
 		m_eblob_style_path = get_bool(config, "eblob-style-path", true);
 		m_direction_bit_num = get_int(config, "direction-bit-num", 16);
 		m_base_port = get_int(config, "base-port", 1024);
 
-		if (config.HasMember("groups-count") == false) {
-			const char *err = "You should set a groups count in application settings";
-			throw std::runtime_error(err);
-		}
-		m_groups_count = config[ "groups-count"].GetInt();
 	} catch(const std::exception &ex) {
 		if (m_proxy_logger) {
 			m_proxy_logger->log(ioremap::swarm::LOG_ERROR, "%s", ex.what());
@@ -267,13 +288,14 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 	try {
 		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare to handle request");
 		m_session = get_server()->get_session();
-		auto file_info = get_file_info(req);
-		m_key = file_info.first;
-		if (file_info.second.empty()) {
+		auto file_info = get_server()->get_file_info(req);
+		if (file_info.second.name.empty()) {
 			get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: Cannot determine a namespace");
 			send_reply(400);
 			return;
 		}
+		m_key = file_info.first;
+		m_session->set_checker(file_info.second.result_checker);
 
 		m_session->set_groups(get_server()->groups_for_upload(file_info.second));
 		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
@@ -676,8 +698,14 @@ int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload(const std::string &name_space) {
-	return m_mastermind->get_metabalancer_groups(m_groups_count, name_space);
+std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_space) {
+	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name);
+}
+
+std::pair<ioremap::elliptics::key, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::network_request &req) {
+	auto p = get_filename(req);
+	auto it = m_namespaces.find(p.second);
+	return std::make_pair(ioremap::elliptics::key(p.first), (it != m_namespaces.end() ? it->second : elliptics::namespace_t()));
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::network_request &req) {

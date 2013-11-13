@@ -13,8 +13,15 @@
 
 #include <memory>
 #include <utility>
+#include <map>
 
 namespace elliptics {
+
+struct namespace_t {
+	std::string name;
+	int groups_count;
+	ioremap::elliptics::result_checker result_checker;
+};
 
 class proxy : public ioremap::thevoid::server<proxy>
 {
@@ -80,8 +87,9 @@ protected:
 	ioremap::elliptics::session get_session();
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
 	int die_limit() const;
+	std::pair<ioremap::elliptics::key, elliptics::namespace_t> get_file_info(const ioremap::swarm::network_request &req);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::network_request &req);
-	std::vector<int> groups_for_upload(const std::string &name_space);
+	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space);
 	ioremap::swarm::logger &logger();
 
 private:
@@ -95,6 +103,7 @@ private:
 	int m_base_port;
 	int m_groups_count;
 	std::shared_ptr<elliptics::mastermind_t> m_mastermind;
+	std::map<std::string, namespace_t> m_namespaces;
 };
 
 } // namespace elliptics
