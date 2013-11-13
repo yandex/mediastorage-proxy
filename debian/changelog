@@ -1,3 +1,15 @@
+mediastorage-proxy (0.9) lucid; urgency=low
+
+  * Added support for cached groups of mastermind
+  * Added support for mastermind remote list
+  * Split general logger to proxy, mastermind and elliptics loggers
+  * Replaced '_' to '-' in config for uniformity
+  * Each namespace has own settings
+  * Changed dependence of libmastermind to >= 6.4
+  * Fixed precise build
+
+ --   <derikon@derikon.dev.yandex.net>  Wed, 13 Nov 2013 22:22:37 +0400
+
 mediastorage-proxy (0.8) lucid; urgency=low
 
   * Added support for namespaces of mastermind
