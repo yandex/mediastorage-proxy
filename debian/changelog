@@ -1,3 +1,9 @@
+mediastorage-proxy (0.10) lucid; urgency=low
+
+  * Added log for upload handle
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 21 Nov 2013 17:43:31 +0400
+
 mediastorage-proxy (0.9) lucid; urgency=low
 
   * Added support for cached groups of mastermind
