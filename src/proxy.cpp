@@ -286,7 +286,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare to handle request");
+		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: handle request: %s", req.get_url().c_str());
 		m_session = get_server()->get_session();
 		auto file_info = get_server()->get_file_info(req);
 		if (file_info.second.name.empty()) {
@@ -323,7 +323,23 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 
 		m_content = elliptics::data_container_t::pack(dc);
 
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: writing content");
+		if (get_server()->logger().get_level() >= ioremap::swarm::LOG_INFO) {
+			std::ostringstream oss;
+
+			auto groups = m_session->get_groups();
+			oss << "Upload: writing content by key=" << m_key.to_string() << " into groups=[";
+
+			for (auto it = groups.begin(); it != groups.end(); ++it) {
+				if (it != groups.begin())
+					oss << ", ";
+				oss << *it;
+			}
+
+			oss << ']';
+
+			get_server()->logger().log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
+		}
+
 		auto awr = write(*m_session, m_key, m_content, query_list);
 
 		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
