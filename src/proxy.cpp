@@ -360,10 +360,10 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	
 	} catch (std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request error: %s", ex.what());
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request ERROR: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request error: unknown");
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request ERROR: unknown");
 		send_reply(500);
 	}
 }
@@ -372,7 +372,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 	try {
 		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare response");
 		if (error) {
-			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
+			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: %s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -418,10 +418,10 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		send_reply(reply, res_str);
 
 	} catch (std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish error: %s", ex.what());
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish error: unknown");
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: unknown");
 		send_reply(500);
 	}
 }
