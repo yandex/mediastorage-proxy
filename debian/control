@@ -18,6 +18,7 @@ Build-Depends: debhelper (>=5),
  libcocaine-dev (<< 0.11),
  libboost-system-dev,
  libswarm1,
+ libswarm-dev,
  libboost-dev,
  libmsgpack-dev
 Standards-Version: 3.9.1
