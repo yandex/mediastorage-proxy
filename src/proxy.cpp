@@ -280,13 +280,28 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_stat_log>("/stat_log");
 	on<req_ping>("/ping");
 	on<req_ping>("/stat");
+	on<req_cache>("/cache");
 
 	return true;
 }
 
 void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: handle request: %s", req.get_url().c_str());
+		m_beg_time = std::chrono::system_clock::now();
+		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: handle request: %s; body size: %d", 
+			req.get_url().c_str()
+			, static_cast<int>(boost::asio::buffer_size(buffer))
+			);
+		if (get_server()->logger().get_level() >= ioremap::swarm::LOG_DEBUG) {
+			std::ostringstream oss;
+			const auto &headers = req.get_headers();
+			oss << "Headers:" << std::endl;
+			for (auto it = headers.begin(); it != headers.end(); ++it) {
+				oss << it->first << ": " << it->second << std::endl;
+			}
+			get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "%s", oss.str().c_str());
+		}
+
 		m_session = get_server()->get_session();
 		auto file_info = get_server()->get_file_info(req);
 		if (file_info.second.name.empty()) {
@@ -396,7 +411,10 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		reply.set_code(200);
 		reply.set_content_length(res_str.size());
 		reply.set_content_type("text/plain");
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: sending response");
+		auto end_time = std::chrono::system_clock::now();
+		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: done; status code: 200; spent time: %d",
+			static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count())
+		);
 		send_reply(reply, res_str);
 
 	} catch (std::exception &ex) {
@@ -623,6 +641,52 @@ void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, con
 	}
 }
 
+void proxy::req_cache::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+	try {
+		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Cache: handle request: %s", req.get_url().c_str());
+		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
+
+		bool g = false;
+
+		std::ostringstream oss;
+		oss << '{' << std::endl;
+		if (query_list.has_item("group-weights")) {
+			oss << "\"group-weights\" : " << get_server()->mastermind()->json_group_weights();
+			g = true;
+		}
+		if (query_list.has_item("symmetric-groups")) {
+			if (g) oss << ',' << std::endl;
+			oss << "\"symmetric-groups\" : " << get_server()->mastermind()->json_symmetric_groups();
+			g = true;
+		}
+		if (query_list.has_item("bad-groups")) {
+			if (g) oss << ',' << std::endl;
+			oss << "\"bad-groups\" : " << get_server()->mastermind()->json_bad_groups();
+			g = true;
+		}
+		if (query_list.has_item("cache-groups")) {
+			if (g) oss << ',' << std::endl;
+			oss << "\"cache-groups\" : " << get_server()->mastermind()->json_cache_groups();
+			g = true;
+		}
+		if (g) oss << std::endl;
+		oss << '}' << std::endl;
+		auto res_str = oss.str();
+		ioremap::swarm::network_reply reply;
+		reply.set_code(200);
+		reply.set_content_length(res_str.size());
+		reply.set_content_type("text/plain");
+		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Cache: sending response");
+		send_reply(reply, res_str);
+	} catch (const std::exception &ex) {
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Cache request error: %s", ex.what());
+		send_reply(500);
+	} catch (...) {
+		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Cache request error: unknown");
+		send_reply(500);
+	}
+}
+
 void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: prepare to handle request");
@@ -771,6 +835,10 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 
 ioremap::swarm::logger &proxy::logger() {
 	return *m_proxy_logger;
+}
+
+std::shared_ptr<elliptics::mastermind_t> &proxy::mastermind() {
+	return m_mastermind;
 }
 
 } // namespace elliptics

@@ -14,6 +14,7 @@
 #include <memory>
 #include <utility>
 #include <map>
+#include <chrono>
 
 namespace elliptics {
 
@@ -40,6 +41,7 @@ public:
 		boost::optional<ioremap::elliptics::session> m_session;
 		ioremap::elliptics::key m_key;
 		ioremap::elliptics::data_pointer m_content;
+		std::chrono::system_clock::time_point m_beg_time;
 	};
 
 	struct req_get
@@ -83,6 +85,13 @@ public:
 		void on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error);
 	};
 
+	struct req_cache
+		: public ioremap::thevoid::simple_request_stream<proxy>
+		, public std::enable_shared_from_this<req_cache>
+	{
+		void on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer);
+	};
+
 protected:
 	ioremap::elliptics::session get_session();
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
@@ -91,6 +100,7 @@ protected:
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::network_request &req);
 	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space);
 	ioremap::swarm::logger &logger();
+	std::shared_ptr<elliptics::mastermind_t> &mastermind();
 
 private:
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
