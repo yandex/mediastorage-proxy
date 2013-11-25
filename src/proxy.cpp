@@ -371,8 +371,49 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req, cons
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Upload: prepare response");
+
+		std::vector<int> good_groups;
+		for (auto it = swr.begin(); it != swr.end(); ++it) {
+			good_groups.push_back(it->command()->id.group_id);
+		}
+
 		if (error) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s", error.message().c_str());
+			std::vector<int> all_groups = m_session->get_groups();
+			std::vector<int> bad_groups;
+			std::sort(all_groups.begin(), all_groups.end());
+			std::sort(good_groups.begin(), good_groups.end());
+			{
+				std::ostringstream oss;
+				oss << "good groups: [";
+				for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
+					if (it != good_groups.begin()) oss << ", ";
+					oss << *it;
+				}
+				oss << "]; all groups: [";
+				for (auto it = all_groups.begin(); it != all_groups.end(); ++it) {
+					if (it != all_groups.begin()) oss << ", ";
+					oss << *it;
+				}
+				oss << "]";
+				server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", oss.str().c_str());
+			}
+			std::set_difference(
+				all_groups.begin(), all_groups.end(),
+				good_groups.begin(), good_groups.end(),
+				std::back_inserter(bad_groups));
+			std::ostringstream oss;
+			oss << "wrote into groups: [";
+			for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
+				if (it != good_groups.begin()) oss << ", ";
+				oss << *it;
+			}
+			oss << "]; cannot write into: [";
+			for (auto it = bad_groups.begin(); it != bad_groups.end(); ++it) {
+				if (it != bad_groups.begin()) oss << ", ";
+				oss << *it;
+			}
+			oss << ']';
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s; %s", error.message().c_str(), oss.str().c_str());
 			send_reply(500);
 			return;
 		}
@@ -414,9 +455,19 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		headers.set_content_type("text/plain");
 		reply.set_headers(headers);
 		auto end_time = std::chrono::system_clock::now();
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: done; status code: 200; spent time: %d",
-			static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count())
-		);
+		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+			std::ostringstream oss;
+			oss
+				<< "Upload: done; status code: 200; spent time: "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count()
+				<< "; wrote into groups: [";
+			for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
+				if (it != good_groups.begin()) oss << ", ";
+				oss << *it;
+			}
+			oss << ']';
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		}
 		send_reply(reply, res_str);
 
 	} catch (std::exception &ex) {
