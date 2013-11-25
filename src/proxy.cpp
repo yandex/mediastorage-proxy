@@ -430,7 +430,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: prepare to handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", req.url().to_string().c_str());
 		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -510,7 +510,7 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 
 void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: prepare to handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().to_string().c_str());
 		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -550,7 +550,7 @@ void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result
 
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: prepare to handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().to_string().c_str());
 		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
@@ -631,7 +631,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping: handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().to_string().c_str());
 		int code = 200;
 		auto session = server()->get_session();
 		if (session.state_num() < server()->die_limit()) {
@@ -697,7 +697,7 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 
 void proxy::req_stat_log::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: prepare to handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().to_string().c_str());
 		auto session = server()->get_session();
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
