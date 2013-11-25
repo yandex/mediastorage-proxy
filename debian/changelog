@@ -1,3 +1,11 @@
+mediastorage-proxy (0.13) lucid; urgency=low
+
+  * Using thevoid and swarm >= 0.6
+  * Logs request-url for each request
+  * Improved log info for update handler: logs good and bad groups
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 25 Nov 2013 15:24:54 +0400
+
 mediastorage-proxy (0.12) lucid; urgency=low
 
   * Added word `ERROR` before reply 500 to easy grep
