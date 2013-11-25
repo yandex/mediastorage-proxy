@@ -468,7 +468,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			oss << ']';
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 		}
-		send_reply(reply, res_str);
+		send_reply(std::move(reply), res_str);
 
 	} catch (std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s", ex.what());
@@ -549,7 +549,7 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 		headers.set_content_type("text/plain");
 		reply.set_headers(headers);
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: sending response");
-		send_reply(reply, res_str);
+		send_reply(std::move(reply), res_str);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get finish error: %s", ex.what());
 		send_reply(500);
@@ -665,7 +665,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				headers.set_content_length(str.size());
 				headers.set_content_type("text/xml");
 				reply.set_headers(headers);
-				send_reply(reply, str);
+				send_reply(std::move(reply), str);
 				return;
 			}
 		}
@@ -736,7 +736,7 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 		headers.set_content_type("text/plain");
 		reply.set_headers(headers);
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Cache: sending response");
-		send_reply(reply, res_str);
+		send_reply(std::move(reply), res_str);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
 		send_reply(500);
@@ -817,7 +817,7 @@ void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result
 		headers.set_content_length(body.size());
 		reply.set_headers(headers);
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: sending response");
-		send_reply(reply, body);
+		send_reply(std::move(reply), body);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
 		send_reply(500);
