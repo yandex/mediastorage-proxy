@@ -3,8 +3,8 @@
 #include "data_container.hpp"
 #include "loggers.hpp"
 
-#include <swarm/network_url.h>
-#include <swarm/logger.h>
+#include <swarm/url.hpp>
+#include <swarm/logger.hpp>
 
 #include <stdexcept>
 #include <iterator>
@@ -26,8 +26,8 @@ enum tag_user_flags {
 };
 
 template <typename T>
-T get_arg(const ioremap::swarm::network_query_list &query_list, const std::string &name, const T &default_value = T()) {
-	auto &&arg = query_list.try_item(name);
+T get_arg(const ioremap::swarm::url_query &query_list, const std::string &name, const T &default_value = T()) {
+	auto &&arg = query_list.item_value(name);
 	return arg ? boost::lexical_cast<T>(*arg) : default_value;
 }
 
@@ -189,8 +189,8 @@ std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjso
 	return res;
 }
 
-std::pair<std::string, std::string> get_filename(const ioremap::swarm::network_request &req) {
-	auto scriptname = req.get_url();
+std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_request &req) {
+	auto scriptname = req.url().to_string();
 	auto begin = scriptname.find('/', 1) + 1;
 	auto end = scriptname.find('?', begin);
 	auto filename = scriptname.substr(begin, end - begin);
@@ -227,14 +227,14 @@ ioremap::elliptics::async_write_result write(
 	  ioremap::elliptics::session &session
 	, const ioremap::elliptics::key &key
 	, const ioremap::elliptics::data_pointer &data
-	, const ioremap::swarm::network_query_list &query_list
+	, const ioremap::swarm::url_query &query_list
 	) {
 	session.set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(session));
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
-    if (auto &&arg = query_list.try_item("prepare")) {
+    if (auto &&arg = query_list.item_value("prepare")) {
         size_t size = boost::lexical_cast<uint64_t>(*arg);
         return session.write_prepare(key, data, offset, size);
-    } else if (auto &&arg = query_list.try_item("commit")) {
+    } else if (auto &&arg = query_list.item_value("commit")) {
         size_t size = boost::lexical_cast<uint64_t>(*arg);
         return session.write_commit(key, data, offset, size);
     } else if (query_list.has_item("plain_write") || query_list.has_item("plain-write")) {
@@ -265,57 +265,57 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 	} catch(const std::exception &ex) {
 		if (m_proxy_logger) {
-			m_proxy_logger->log(ioremap::swarm::LOG_ERROR, "%s", ex.what());
+			m_proxy_logger->log(ioremap::swarm::SWARM_LOG_ERROR, "%s", ex.what());
 		} else {
 			std::cerr << ex.what() << std::endl;
 		}
 	}
 
-	on_prefix<req_upload>("/upload");
-	on_prefix<req_get>("/get/");
-	on_prefix<req_delete>("/delete/");
-	on_prefix<req_download_info>("/download_info/");
-	on_prefix<req_download_info>("/download-info/");
-	on<req_stat_log>("/stat-log");
-	on<req_stat_log>("/stat_log");
-	on<req_ping>("/ping");
-	on<req_ping>("/stat");
-	on<req_cache>("/cache");
+	on<req_upload>(options::prefix_match("/upload"));
+	on<req_get>(options::prefix_match("/get/"));
+	on<req_delete>(options::prefix_match("/delete/"));
+	on<req_download_info>(options::prefix_match("/download_info/"));
+	on<req_download_info>(options::prefix_match("/download-info/"));
+	on<req_stat_log>(options::exact_match("/stat-log"));
+	on<req_stat_log>(options::exact_match("/stat_log"));
+	on<req_ping>(options::exact_match("/ping"));
+	on<req_ping>(options::exact_match("/stat"));
+	on<req_cache>(options::exact_match("/cache"));
 
 	return true;
 }
 
-void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_upload::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		m_beg_time = std::chrono::system_clock::now();
-		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: handle request: %s; body size: %d", 
-			req.get_url().c_str()
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %d",
+			req.url().to_string().c_str()
 			, static_cast<int>(boost::asio::buffer_size(buffer))
 			);
-		if (get_server()->logger().get_level() >= ioremap::swarm::LOG_DEBUG) {
+		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG) {
 			std::ostringstream oss;
-			const auto &headers = req.get_headers();
+			const auto &headers = req.headers().all();
 			oss << "Headers:" << std::endl;
 			for (auto it = headers.begin(); it != headers.end(); ++it) {
 				oss << it->first << ": " << it->second << std::endl;
 			}
-			get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "%s", oss.str().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", oss.str().c_str());
 		}
 
-		m_session = get_server()->get_session();
-		auto file_info = get_server()->get_file_info(req);
+		m_session = server()->get_session();
+		auto file_info = server()->get_file_info(req);
 		if (file_info.second.name.empty()) {
-			get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: Cannot determine a namespace");
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: Cannot determine a namespace");
 			send_reply(400);
 			return;
 		}
 		m_key = file_info.first;
 		m_session->set_checker(file_info.second.result_checker);
 
-		m_session->set_groups(get_server()->groups_for_upload(file_info.second));
-		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
+		m_session->set_groups(server()->groups_for_upload(file_info.second));
+		auto query_list = req.url().query();
 
-		if (m_session->state_num() < get_server()->die_limit()) {
+		if (m_session->state_num() < server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
 		}
 
@@ -338,7 +338,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 
 		m_content = elliptics::data_container_t::pack(dc);
 
-		if (get_server()->logger().get_level() >= ioremap::swarm::LOG_INFO) {
+		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
 			std::ostringstream oss;
 
 			auto groups = m_session->get_groups();
@@ -352,7 +352,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 
 			oss << ']';
 
-			get_server()->logger().log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 		}
 
 		auto awr = write(*m_session, m_key, m_content, query_list);
@@ -360,19 +360,19 @@ void proxy::req_upload::on_request(const ioremap::swarm::network_request &req, c
 		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	
 	} catch (std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request ERROR: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload request ERROR: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload request ERROR: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload request ERROR: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Upload: prepare response");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Upload: prepare response");
 		if (error) {
-			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: %s", error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -394,7 +394,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 
 		size_t written = 0;
 		for (auto it = swr.begin(); it != swr.end(); ++it) {
-			auto pl = get_server()->parse_lookup(*it);
+			auto pl = server()->parse_lookup(*it);
 			if (pl.status() == 0)
 				written += 1;
 			oss << "<complete addr=\"" << pl.addr() << "\" path=\"" <<
@@ -407,29 +407,31 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			<< "</post>";
 
 		auto res_str = oss.str();
-		ioremap::swarm::network_reply reply;
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
-		reply.set_content_length(res_str.size());
-		reply.set_content_type("text/plain");
+		headers.set_content_length(res_str.size());
+		headers.set_content_type("text/plain");
+		reply.set_headers(headers);
 		auto end_time = std::chrono::system_clock::now();
-		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Upload: done; status code: 200; spent time: %d",
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: done; status code: 200; spent time: %d",
 			static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count())
 		);
 		send_reply(reply, res_str);
 
 	} catch (std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Upload finish ERROR: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_get::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: prepare to handle request");
-		auto &&prep_session = get_server()->prepare_session(req);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: prepare to handle request");
+		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
 		if (session.get_groups().empty()) {
@@ -437,29 +439,29 @@ void proxy::req_get::on_request(const ioremap::swarm::network_request &req, cons
 			return;
 		}
 
-		m_query_list.set_query(ioremap::swarm::network_url(req.get_url()).query());
+		m_query_list = req.url().query();
 
 		auto &&key = prep_session.second;
 		auto offset = get_arg<uint64_t>(m_query_list, "offset", 0);
 		auto size = get_arg<uint64_t>(m_query_list, "size", 0);
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: reading data");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: reading data");
 		auto arr = session.read_data(key, offset, size);
 
-		arr.connect(std::bind(&req_get::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2, req.try_header("If-Modified-Since")));
+		arr.connect(std::bind(&req_get::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2, req.headers().get("If-Modified-Since")));
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error, const boost::optional<std::string> &if_modified_since) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: prepare response");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: prepare response");
 		if (error) {
-			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -473,7 +475,8 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 		
 		auto ts = dc.get<elliptics::DNET_FCGI_EMBED_TIMESTAMP>();
 
-		ioremap::swarm::network_reply reply;
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
 		if (ts) {
 			char ts_str[128] = {0};
 			time_t timestamp = (time_t)(ts->tv_sec);
@@ -486,28 +489,29 @@ void proxy::req_get::on_finished(const ioremap::elliptics::sync_read_result &srr
 					return;
 				}
 			}
-			reply.set_header("Last-Modified", ts_str);
+			headers.set("Last-Modified", ts_str);
 		}
 
 		auto res_str = dc.data.to_string();
 		reply.set_code(200);
-		reply.set_content_length(res_str.size());
-		reply.set_content_type("text/plain");
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Get: sending response");
+		headers.set_content_length(res_str.size());
+		headers.set_content_type("text/plain");
+		reply.set_headers(headers);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: sending response");
 		send_reply(reply, res_str);
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get finish error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Get finish error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get finish error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: prepare to handle request");
-		auto &&prep_session = get_server()->prepare_session(req);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: prepare to handle request");
+		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
 		if (session.get_groups().empty()) {
@@ -515,20 +519,20 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 			return;
 		}
 
-		if (session.state_num() < get_server()->die_limit()) {
+		if (session.state_num() < server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
 		}
 
 		session.set_filter(ioremap::elliptics::filters::all);
 
 		auto &&key = prep_session.second;
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: removing data");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: removing data");
 		session.remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Delete request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Delete request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request error: unknown");
 		send_reply(500);
 	}
 }
@@ -536,18 +540,18 @@ void proxy::req_delete::on_request(const ioremap::swarm::network_request &req, c
 void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
 	(void)srr;
 	if (error) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
 		send_reply(error.code() == -ENOENT ? 404 : 500);
 		return;
 	}
-	get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Delete: sending reply");
+	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: sending reply");
 	send_reply(200);
 }
 
-void proxy::req_download_info::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: prepare to handle request");
-		auto &&prep_session = get_server()->prepare_session(req);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: prepare to handle request");
+		auto &&prep_session = server()->prepare_session(req);
 		auto &&session = prep_session.first;
 
 		if (session.get_groups().empty()) {
@@ -558,24 +562,24 @@ void proxy::req_download_info::on_request(const ioremap::swarm::network_request 
 		session.set_filter(ioremap::elliptics::filters::all);
 
 		auto &&key = prep_session.second;
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: looking up");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: looking up");
 		auto alr = session.lookup(key);
 
 		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: prepare response");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: prepare response");
 		if (error) {
-			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -586,7 +590,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
 				std::string region = "-1";
 				
-				auto entry = get_server()->parse_lookup(*it);
+				auto entry = server()->parse_lookup(*it);
 				
 				long time;
 				{
@@ -604,112 +608,116 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 				const std::string &str = oss.str();
 
-				ioremap::swarm::network_reply reply;
+				ioremap::swarm::http_response reply;
+				ioremap::swarm::http_headers headers;
 				reply.set_code(200);
-				reply.set_content_length(str.size());
-				reply.set_content_type("text/xml");
+				headers.set_content_length(str.size());
+				headers.set_content_type("text/xml");
+				reply.set_headers(headers);
 				send_reply(reply, str);
 				return;
 			}
 		}
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Download info: sending response");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: sending response");
 		send_reply(503);  
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info finish error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Download info finish error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info finish error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_ping::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Ping: handle request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping: handle request");
 		int code = 200;
-		auto session = get_server()->get_session();
-		if (session.state_num() < get_server()->die_limit()) {
+		auto session = server()->get_session();
+		if (session.state_num() < server()->die_limit()) {
 			code = 500;
 		}
 		send_reply(code);
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Ping request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Ping request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Ping request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Ping request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_cache::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_INFO, "Cache: handle request: %s", req.get_url().c_str());
-		ioremap::swarm::network_query_list query_list(ioremap::swarm::network_url(req.get_url()).query());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Cache: handle request: %s", req.url().to_string().c_str());
+		auto query_list = req.url().query();
 
 		bool g = false;
 
 		std::ostringstream oss;
 		oss << '{' << std::endl;
 		if (query_list.has_item("group-weights")) {
-			oss << "\"group-weights\" : " << get_server()->mastermind()->json_group_weights();
+			oss << "\"group-weights\" : " << server()->mastermind()->json_group_weights();
 			g = true;
 		}
 		if (query_list.has_item("symmetric-groups")) {
 			if (g) oss << ',' << std::endl;
-			oss << "\"symmetric-groups\" : " << get_server()->mastermind()->json_symmetric_groups();
+			oss << "\"symmetric-groups\" : " << server()->mastermind()->json_symmetric_groups();
 			g = true;
 		}
 		if (query_list.has_item("bad-groups")) {
 			if (g) oss << ',' << std::endl;
-			oss << "\"bad-groups\" : " << get_server()->mastermind()->json_bad_groups();
+			oss << "\"bad-groups\" : " << server()->mastermind()->json_bad_groups();
 			g = true;
 		}
 		if (query_list.has_item("cache-groups")) {
 			if (g) oss << ',' << std::endl;
-			oss << "\"cache-groups\" : " << get_server()->mastermind()->json_cache_groups();
+			oss << "\"cache-groups\" : " << server()->mastermind()->json_cache_groups();
 			g = true;
 		}
 		if (g) oss << std::endl;
 		oss << '}' << std::endl;
 		auto res_str = oss.str();
-		ioremap::swarm::network_reply reply;
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
-		reply.set_content_length(res_str.size());
-		reply.set_content_type("text/plain");
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Cache: sending response");
+		headers.set_content_length(res_str.size());
+		headers.set_content_type("text/plain");
+		reply.set_headers(headers);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Cache: sending response");
 		send_reply(reply, res_str);
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Cache request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Cache request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_stat_log::on_request(const ioremap::swarm::network_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_stat_log::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: prepare to handle request");
-		auto session = get_server()->get_session();
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: prepare to handle request");
+		auto session = server()->get_session();
 
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: process \'stat_log\'");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
 		auto asr = session.stat_log();
 
 		asr.connect(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log request error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log request error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
 	try {
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: prepare response");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: prepare response");
 		if (error) {
-			get_server()->logger().log(ioremap::swarm::LOG_ERROR, "%s", error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -751,17 +759,19 @@ void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result
 		oss << "</data>";
 
 		const std::string &body = oss.str();
-		ioremap::swarm::network_reply reply;
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
-		reply.set_content_type("text/xml");
-		reply.set_content_length(body.size());
-		get_server()->logger().log(ioremap::swarm::LOG_DEBUG, "Stat log: sending response");
+		headers.set_content_type("text/xml");
+		headers.set_content_length(body.size());
+		reply.set_headers(headers);
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: sending response");
 		send_reply(reply, body);
 	} catch (const std::exception &ex) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log finish error: %s", ex.what());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		get_server()->logger().log(ioremap::swarm::LOG_ERROR, "Stat log finish error: unknown");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log finish error: unknown");
 		send_reply(500);
 	}
 }
@@ -782,16 +792,16 @@ std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_spa
 	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name);
 }
 
-std::pair<ioremap::elliptics::key, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::network_request &req) {
+std::pair<ioremap::elliptics::key, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
 	auto p = get_filename(req);
 	auto it = m_namespaces.find(p.second);
 	return std::make_pair(ioremap::elliptics::key(p.first), (it != m_namespaces.end() ? it->second : elliptics::namespace_t()));
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::network_request &req) {
+std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
 	auto session = get_session();
 
-	auto url = req.get_url();
+	auto url = req.url().to_string();
 	auto bg = url.find('/', 1) + 1;
 	auto eg = url.find('/', bg);
 	auto bf = eg + 1;
@@ -811,10 +821,10 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
 		session.set_groups(vec_groups1);
 	} catch (...) {
-		logger().log(ioremap::swarm::LOG_ERROR, "Cannot to determine groups");
+		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups");
 	}
 
-	if (m_proxy_logger->get_level() >= ioremap::swarm::LOG_INFO) {
+	if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO) {
 		std::ostringstream oss;
 
 		auto groups = session.get_groups();
@@ -826,8 +836,8 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		}
 		oss << "]";
 
-		m_proxy_logger->log(ioremap::swarm::LOG_INFO, "%s", oss.str().c_str());
-		m_proxy_logger->log(ioremap::swarm::LOG_INFO, "filename: %s", filename.c_str());
+		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "filename: %s", filename.c_str());
 	}
 
 	return std::make_pair(session, ioremap::elliptics::key(filename));;

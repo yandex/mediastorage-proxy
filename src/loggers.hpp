@@ -1,7 +1,7 @@
 #ifndef SRC__LOGGERS_HPP
 #define SRC__LOGGERS_HPP
 
-#include <swarm/logger.h>
+#include <swarm/logger.hpp>
 #include <cocaine/framework/logging.hpp>
 #include <elliptics/session.hpp>
 
@@ -18,14 +18,14 @@ public:
 
 	cocaine::logging::priorities verbosity() const {
 		using namespace cocaine::logging;
-		switch(m_logger.get_level()) {
-		case ioremap::swarm::LOG_DATA:
+		switch(m_logger.level()) {
+		case ioremap::swarm::SWARM_LOG_DATA:
 			return priorities::ignore;
-		case ioremap::swarm::LOG_ERROR:
+		case ioremap::swarm::SWARM_LOG_ERROR:
 			return priorities::error;
-		case ioremap::swarm::LOG_INFO:
+		case ioremap::swarm::SWARM_LOG_INFO:
 			return priorities::info;
-		case ioremap::swarm::LOG_NOTICE:
+		case ioremap::swarm::SWARM_LOG_NOTICE:
 			return priorities::info;
 		default:
 			return priorities::debug;
@@ -37,15 +37,15 @@ private:
 		using namespace cocaine::logging;
 		switch(priority) {
 		case priorities::ignore:
-			return ioremap::swarm::LOG_DATA;
+			return ioremap::swarm::SWARM_LOG_DATA;
 		case priorities::error:
-			return ioremap::swarm::LOG_ERROR;
+			return ioremap::swarm::SWARM_LOG_ERROR;
 		case priorities::warning:
-			return ioremap::swarm::LOG_ERROR;
+			return ioremap::swarm::SWARM_LOG_ERROR;
 		case priorities::info:
-			return ioremap::swarm::LOG_INFO;
+			return ioremap::swarm::SWARM_LOG_INFO;
 		default:
-			return ioremap::swarm::LOG_DEBUG;
+			return ioremap::swarm::SWARM_LOG_DEBUG;
 		}
 	}
 
