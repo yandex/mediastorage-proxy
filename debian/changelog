@@ -1,3 +1,9 @@
+mediastorage-proxy (0.14) lucid; urgency=low
+
+  * Handlers get, delete and downloadinfo takes namespace as upload handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 26 Nov 2013 13:16:54 +0400
+
 mediastorage-proxy (0.13) lucid; urgency=low
 
   * Using thevoid and swarm >= 0.6
