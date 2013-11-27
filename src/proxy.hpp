@@ -40,6 +40,7 @@ public:
 	private:
 		boost::optional<ioremap::elliptics::session> m_session;
 		ioremap::elliptics::key m_key;
+		std::string m_filename;
 		ioremap::elliptics::data_pointer m_content;
 		std::chrono::system_clock::time_point m_beg_time;
 	};
@@ -96,7 +97,7 @@ protected:
 	ioremap::elliptics::session get_session();
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
 	int die_limit() const;
-	std::pair<ioremap::elliptics::key, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);
+	std::pair<std::string, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req);
 	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space);
 	ioremap::swarm::logger &logger();

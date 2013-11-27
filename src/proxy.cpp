@@ -272,10 +272,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	}
 
 	on<req_upload>(options::prefix_match("/upload"));
-	on<req_get>(options::prefix_match("/get/"));
-	on<req_delete>(options::prefix_match("/delete/"));
-	on<req_download_info>(options::prefix_match("/download_info/"));
-	on<req_download_info>(options::prefix_match("/download-info/"));
+	on<req_get>(options::prefix_match("/get"));
+	on<req_delete>(options::prefix_match("/delete"));
+	on<req_download_info>(options::prefix_match("/downloadinfo"));
 	on<req_stat_log>(options::exact_match("/stat-log"));
 	on<req_stat_log>(options::exact_match("/stat_log"));
 	on<req_ping>(options::exact_match("/ping"));
@@ -309,7 +308,8 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req, cons
 			send_reply(400);
 			return;
 		}
-		m_key = file_info.first;
+		m_key = ioremap::elliptics::key(file_info.second.name + '.' + file_info.first);
+		m_filename = file_info.first;
 		m_session->set_checker(file_info.second.result_checker);
 
 		m_session->set_groups(server()->groups_for_upload(file_info.second));
@@ -431,7 +431,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			auto git = std::min_element(groups.begin(), groups.end());
 			oss << *git;
 		}
-		oss << '/' << m_key.remote() << "\">\n";
+		oss << '/' << m_filename << "\">\n";
 
 		size_t written = 0;
 		for (auto it = swr.begin(); it != swr.end(); ++it) {
@@ -843,10 +843,11 @@ std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_spa
 	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name);
 }
 
-std::pair<ioremap::elliptics::key, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
+std::pair<std::string, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
 	auto p = get_filename(req);
 	auto it = m_namespaces.find(p.second);
-	return std::make_pair(ioremap::elliptics::key(p.first), (it != m_namespaces.end() ? it->second : elliptics::namespace_t()));
+	auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
+	return std::make_pair(p.first, nm);
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
@@ -890,8 +891,11 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "filename: %s", filename.c_str());
 	}
+	auto p = get_filename(req);
+	auto it = m_namespaces.find(p.second);
+	auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
 
-	return std::make_pair(session, ioremap::elliptics::key(filename));;
+	return std::make_pair(session, ioremap::elliptics::key(nm.name + '.' + filename));;
 }
 
 ioremap::swarm::logger &proxy::logger() {
