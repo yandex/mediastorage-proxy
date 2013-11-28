@@ -19,7 +19,6 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		return;
 	}
 
-	// TODO: check %lu prints size_t like %d prints int
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %lu",
 		req.url().to_string().c_str(), m_size);
 
@@ -69,6 +68,18 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 }
 
 void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+		std::ostringstream oss;
+		oss
+			<< "Upload: on_chunk: writing chunk: chunk_size=" << chunk_size()
+			<< "file_size=" << m_size << " offset=" << m_offset << " data_size=" << boost::asio::buffer_size(buffer)
+			<< " write_type=";
+		if (flags & first_chunk) oss << "prepare";
+		else if (flags & last_chunk) oss << "commit";
+		else oss << "plain";
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+	}
 	if (flags & first_chunk) {
 		auto data = std::string(
 			boost::asio::buffer_cast<const char *>(buffer)
@@ -92,23 +103,6 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 			);
 	}
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
-		std::ostringstream oss;
-
-		auto groups = m_session->get_groups();
-		oss << "Upload: writing content by key=" << m_key.to_string() << " into groups=[";
-
-		for (auto it = groups.begin(); it != groups.end(); ++it) {
-			if (it != groups.begin())
-				oss << ", ";
-			oss << *it;
-		}
-
-		oss << ']';
-
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
-	}
-
 	auto awr = write(flags);
 	m_offset += m_content.size();
 
@@ -129,27 +123,46 @@ void proxy::req_upload::on_error(const boost::system::error_code &err) {
 }
 
 void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
-	// TODO: add logs
 	if (error) {
 		on_finished(swr, error);
 		return;
 	}
 
-	std::vector<int> groups;
+	std::vector<int> good_groups;
+	std::vector<int> bad_groups;
 
 	for (auto it = swr.begin(); it != swr.end(); ++it) {
+		int group = it->command()->id.group_id;
 		if (!it->error()) {
-			groups.push_back(it->command()->id.group_id);
+			good_groups.push_back(group);
+		} else {
+			bad_groups.push_back(group);
 		}
 	}
 
-	m_session->set_groups(groups);
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
+		std::ostringstream oss;
+		oss << "Upload: on_wrote: chunk was written into groups [";
+		for (auto itb = good_groups.begin(), it = itb; it != good_groups.end(); ++it) {
+			if (it != itb) oss << ", ";
+			oss << *it;
+		}
+		oss << "] uploading will not use bad groups [";
+		for (auto itb = bad_groups.begin(), it = itb; it != bad_groups.end(); ++it) {
+			if (it != itb) oss << ", ";
+			oss << *it;
+		}
+		oss << ']';
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+	}
+
+	m_session->set_groups(good_groups);
 
 	try_next_chunk();
 }
 
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
-	// TODO: add logs
 	if (error) {
 		std::vector<int> good_groups;
 		std::vector<int> bad_groups;
