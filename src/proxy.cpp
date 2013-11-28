@@ -21,16 +21,6 @@
 
 namespace {
 
-enum tag_user_flags {
-	UF_EMBEDS = 1
-};
-
-template <typename T>
-T get_arg(const ioremap::swarm::url_query &query_list, const std::string &name, const T &default_value = T()) {
-	auto &&arg = query_list.item_value(name);
-	return arg ? boost::lexical_cast<T>(*arg) : default_value;
-}
-
 int get_int(const rapidjson::Value &config, const char *name, int def_val = 0) {
 	return config.HasMember(name) ? config[name].GetInt() : def_val;
 }
@@ -210,6 +200,10 @@ std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_requ
 	return std::make_pair(filename, str_namespace);
 }
 
+} // namespace
+
+namespace elliptics {
+
 std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess) {
 	struct dnet_id id;
 	memset(&id, 0, sizeof(id));
@@ -222,32 +216,6 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	dnet_dump_id_len_raw(id.id, DNET_ID_SIZE, str);
 	return std::string(str);
 }
-
-ioremap::elliptics::async_write_result write(
-	  ioremap::elliptics::session &session
-	, const ioremap::elliptics::key &key
-	, const ioremap::elliptics::data_pointer &data
-	, const ioremap::swarm::url_query &query_list
-	) {
-	session.set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(session));
-	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
-    if (auto &&arg = query_list.item_value("prepare")) {
-        size_t size = boost::lexical_cast<uint64_t>(*arg);
-        return session.write_prepare(key, data, offset, size);
-    } else if (auto &&arg = query_list.item_value("commit")) {
-        size_t size = boost::lexical_cast<uint64_t>(*arg);
-        return session.write_commit(key, data, offset, size);
-    } else if (query_list.has_item("plain_write") || query_list.has_item("plain-write")) {
-        return session.write_plain(key, data, offset);
-    } else {
-		// TODO: add chunk write
-        return session.write_data(key, data, offset, 0 /*m_data->m_chunk_size*/);
-    }
-}
-
-} // namespace
-
-namespace elliptics {
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
@@ -282,201 +250,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_cache>(options::exact_match("/cache"));
 
 	return true;
-}
-
-void proxy::req_upload::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
-	try {
-		m_beg_time = std::chrono::system_clock::now();
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %d",
-			req.url().to_string().c_str()
-			, static_cast<int>(boost::asio::buffer_size(buffer))
-			);
-		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG) {
-			std::ostringstream oss;
-			const auto &headers = req.headers().all();
-			oss << "Headers:" << std::endl;
-			for (auto it = headers.begin(); it != headers.end(); ++it) {
-				oss << it->first << ": " << it->second << std::endl;
-			}
-			server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", oss.str().c_str());
-		}
-
-		m_session = server()->get_session();
-		auto file_info = server()->get_file_info(req);
-		if (file_info.second.name.empty()) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: Cannot determine a namespace");
-			send_reply(400);
-			return;
-		}
-		m_key = ioremap::elliptics::key(file_info.second.name + '.' + file_info.first);
-		m_filename = file_info.first;
-		m_session->set_checker(file_info.second.result_checker);
-
-		m_session->set_groups(server()->groups_for_upload(file_info.second));
-		auto query_list = req.url().query();
-
-		if (m_session->state_num() < server()->die_limit()) {
-			throw std::runtime_error("Too low number of existing states");
-		}
-
-		auto data = std::string(
-			boost::asio::buffer_cast<const char *>(buffer)
-			, boost::asio::buffer_size(buffer)
-			);
-		elliptics::data_container_t dc(data);
-
-		if (query_list.has_item("embed") || query_list.has_item("embed_timestamp")) {
-			timespec timestamp;
-			timestamp.tv_sec = get_arg<uint64_t>(query_list, "timestamp", 0);
-			timestamp.tv_nsec = 0;
-			dc.set<elliptics::DNET_FCGI_EMBED_TIMESTAMP>(timestamp);
-		}
-
-		if (dc.embeds_count() != 0) {
-			m_session->set_user_flags(m_session->get_user_flags() | UF_EMBEDS);
-		}
-
-		m_content = elliptics::data_container_t::pack(dc);
-
-		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
-			std::ostringstream oss;
-
-			auto groups = m_session->get_groups();
-			oss << "Upload: writing content by key=" << m_key.to_string() << " into groups=[";
-
-			for (auto it = groups.begin(); it != groups.end(); ++it) {
-				if (it != groups.begin())
-					oss << ", ";
-				oss << *it;
-			}
-
-			oss << ']';
-
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
-		}
-
-		auto awr = write(*m_session, m_key, m_content, query_list);
-
-		awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-	
-	} catch (std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload request ERROR: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload request ERROR: unknown");
-		send_reply(500);
-	}
-}
-
-void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
-	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Upload: prepare response");
-
-		std::vector<int> good_groups;
-		for (auto it = swr.begin(); it != swr.end(); ++it) {
-			good_groups.push_back(it->command()->id.group_id);
-		}
-
-		if (error) {
-			std::vector<int> all_groups = m_session->get_groups();
-			std::vector<int> bad_groups;
-			std::sort(all_groups.begin(), all_groups.end());
-			std::sort(good_groups.begin(), good_groups.end());
-			{
-				std::ostringstream oss;
-				oss << "good groups: [";
-				for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
-					if (it != good_groups.begin()) oss << ", ";
-					oss << *it;
-				}
-				oss << "]; all groups: [";
-				for (auto it = all_groups.begin(); it != all_groups.end(); ++it) {
-					if (it != all_groups.begin()) oss << ", ";
-					oss << *it;
-				}
-				oss << "]";
-				server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", oss.str().c_str());
-			}
-			std::set_difference(
-				all_groups.begin(), all_groups.end(),
-				good_groups.begin(), good_groups.end(),
-				std::back_inserter(bad_groups));
-			std::ostringstream oss;
-			oss << "wrote into groups: [";
-			for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
-				if (it != good_groups.begin()) oss << ", ";
-				oss << *it;
-			}
-			oss << "]; cannot write into: [";
-			for (auto it = bad_groups.begin(); it != bad_groups.end(); ++it) {
-				if (it != bad_groups.begin()) oss << ", ";
-				oss << *it;
-			}
-			oss << ']';
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s; %s", error.message().c_str(), oss.str().c_str());
-			send_reply(500);
-			return;
-		}
-		std::ostringstream oss;
-
-		oss 
-			<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-			<< "<post obj=\"" << m_key.remote() << "\" id=\""
-			<< id_str(m_key, *m_session)
-			<< "\" groups=\"" << swr.size()
-			<< "\" size=\"" << m_content.size()
-			<< "\" key=\"/";
-		{
-			auto groups = m_session->get_groups();
-			auto git = std::min_element(groups.begin(), groups.end());
-			oss << *git;
-		}
-		oss << '/' << m_filename << "\">\n";
-
-		size_t written = 0;
-		for (auto it = swr.begin(); it != swr.end(); ++it) {
-			auto pl = server()->parse_lookup(*it);
-			if (pl.status() == 0)
-				written += 1;
-			oss << "<complete addr=\"" << pl.addr() << "\" path=\"" <<
-				pl.full_path() << "\" group=\"" << pl.group() <<
-				"\" status=\"" << pl.status() << "\"/>\n";
-		}
-
-		oss
-			<< "<written>" << written << "</written>\n"
-			<< "</post>";
-
-		auto res_str = oss.str();
-		ioremap::swarm::http_response reply;
-		ioremap::swarm::http_headers headers;
-		reply.set_code(200);
-		headers.set_content_length(res_str.size());
-		headers.set_content_type("text/plain");
-		reply.set_headers(headers);
-		auto end_time = std::chrono::system_clock::now();
-		if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
-			std::ostringstream oss;
-			oss
-				<< "Upload: done; status code: 200; spent time: "
-				<< std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count()
-				<< "; wrote into groups: [";
-			for (auto it = good_groups.begin(); it != good_groups.end(); ++it) {
-				if (it != good_groups.begin()) oss << ", ";
-				oss << *it;
-			}
-			oss << ']';
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
-		}
-		send_reply(std::move(reply), std::move(res_str));
-
-	} catch (std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload finish ERROR: unknown");
-		send_reply(500);
-	}
 }
 
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {

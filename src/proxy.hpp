@@ -18,6 +18,18 @@
 
 namespace elliptics {
 
+template <typename T>
+T get_arg(const ioremap::swarm::url_query &query_list, const std::string &name, const T &default_value = T()) {
+	auto &&arg = query_list.item_value(name);
+	return arg ? boost::lexical_cast<T>(*arg) : default_value;
+}
+
+std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess);
+
+enum tag_user_flags {
+	UF_EMBEDS = 1
+};
+
 struct namespace_t {
 	std::string name;
 	int groups_count;
@@ -31,14 +43,24 @@ public:
 	bool initialize(const rapidjson::Value &config);
 
 	struct req_upload
-		: public ioremap::thevoid::simple_request_stream<proxy>
+		: public ioremap::thevoid::buffered_request_stream<proxy>
 		, public std::enable_shared_from_this<req_upload>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::swarm::http_request &req);
+		void on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags);
+		void on_error(const boost::system::error_code &err);
+
+		void on_wrote(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error);
 		void on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error);
 
 	private:
+		ioremap::elliptics::async_write_result write(unsigned int flags);
+
 		boost::optional<ioremap::elliptics::session> m_session;
+		size_t m_offset;
+		size_t m_size;
+		bool m_embed;
+		timespec m_timestamp;
 		ioremap::elliptics::key m_key;
 		std::string m_filename;
 		ioremap::elliptics::data_pointer m_content;
