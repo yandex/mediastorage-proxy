@@ -72,9 +72,21 @@ public:
 		, public std::enable_shared_from_this<req_get>
 	{
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_finished(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error, const boost::optional<std::string> &if_modified_since);
+		void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
+		void read_chunk();
+		void on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error);
+		void on_sent_chunk(const boost::system::error_code &error);
 	private:
-		ioremap::swarm::url_query m_query_list;
+		boost::optional<ioremap::elliptics::session> m_session;
+		ioremap::elliptics::key m_key;
+
+		size_t m_offset;
+		size_t m_size;
+		size_t m_chunk_size;
+		bool m_embed;
+
+		boost::optional<std::string> m_if_modified_since;
+		bool m_first_chunk;
 	};
 
 	struct req_delete

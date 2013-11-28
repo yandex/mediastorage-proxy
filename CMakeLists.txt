@@ -15,6 +15,7 @@ set(REQUIRED_LIBRARIES
 set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/proxy.cpp
 	${PROJECT_SOURCE_DIR}/src/upload.cpp
+	${PROJECT_SOURCE_DIR}/src/get.cpp
 	${PROJECT_SOURCE_DIR}/src/lookup_result.cpp
 	${PROJECT_SOURCE_DIR}/src/data_container.cpp
 	)
