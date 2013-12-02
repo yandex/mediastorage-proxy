@@ -68,18 +68,6 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 }
 
 void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
-		std::ostringstream oss;
-		oss
-			<< "Upload: on_chunk: writing chunk: chunk_size=" << chunk_size()
-			<< "file_size=" << m_size << " offset=" << m_offset << " data_size=" << boost::asio::buffer_size(buffer)
-			<< " write_type=";
-		if (flags & first_chunk) oss << "prepare";
-		else if (flags & last_chunk) oss << "commit";
-		else oss << "plain";
-
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
-	}
 	if (flags & first_chunk) {
 		auto data = std::string(
 			boost::asio::buffer_cast<const char *>(buffer)
@@ -101,6 +89,21 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 			const_cast<char *>(boost::asio::buffer_cast<const char *>(buffer))
 			, boost::asio::buffer_size(buffer)
 			);
+	}
+
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+		std::ostringstream oss;
+		oss
+			<< "Upload: on_chunk: writing chunk: chunk_size=" << chunk_size()
+			<< " file_size=" << m_size << " offset=" << m_offset << " data_size=" << boost::asio::buffer_size(buffer)
+			<< " data_left=" << (m_size - m_offset)
+			<< " write_type=";
+		if (flags == single_chunk) oss << "simple";
+		else if (flags & first_chunk)	oss << "prepare";
+		else if (flags & last_chunk) oss << "commit";
+		else oss << "plain";
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
 	auto awr = write(flags);
@@ -165,14 +168,13 @@ void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &sw
 void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		std::vector<int> good_groups;
-		std::vector<int> bad_groups;
 
 		for (auto it = swr.begin(); it != swr.end(); ++it) {
 			int group = it->command()->id.group_id;
 			if (!it->error()) {
 				good_groups.push_back(group);
 			} else {
-				bad_groups.push_back(group);
+				m_bad_groups.push_back(group);
 			}
 		}
 
@@ -183,8 +185,8 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			if (it != itb) oss << ", ";
 			oss << *it;
 		}
-		oss << "]; cannot write into: [";
-		for (auto itb = bad_groups.begin(), it = itb; it != bad_groups.end(); ++it) {
+		oss << "]; failed to write into: [";
+		for (auto itb = m_bad_groups.begin(), it = itb; it != m_bad_groups.end(); ++it) {
 			if (it != itb) oss << ", ";
 			oss << *it;
 		}
@@ -258,9 +260,13 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 }
 
 ioremap::elliptics::async_write_result proxy::req_upload::write(unsigned int flags) {
+	if (flags == single_chunk) {
+		return m_session->write_data(m_key, m_content, m_offset);
+	}
 	if (flags & first_chunk) {
 		return m_session->write_prepare(m_key, m_content, m_offset, m_size);
-	} else if (flags & last_chunk) {
+	}
+	if (flags & last_chunk) {
 		return m_session->write_commit(m_key, m_content, m_offset, m_size);
 	}
 	return m_session->write_plain(m_key, m_content, m_offset);
