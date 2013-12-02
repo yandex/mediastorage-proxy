@@ -65,6 +65,7 @@ public:
 		std::string m_filename;
 		ioremap::elliptics::data_pointer m_content;
 		std::chrono::system_clock::time_point m_beg_time;
+		std::vector<int> m_bad_groups;
 	};
 
 	struct req_get
@@ -87,6 +88,8 @@ public:
 
 		boost::optional<std::string> m_if_modified_since;
 		bool m_first_chunk;
+
+		std::chrono::system_clock::time_point m_beg_time;
 	};
 
 	struct req_delete

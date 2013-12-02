@@ -8,6 +8,7 @@
 namespace elliptics {
 
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+	m_beg_time = std::chrono::system_clock::now();
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", req.url().to_string().c_str());
 	auto &&prep_session = server()->prepare_session(req);
 	m_session = prep_session.first;
@@ -50,12 +51,32 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr
 	const auto &entry = slr.front();
 	m_size = entry.file_info()->size;
 
+	std::vector<int> groups;
+	groups.push_back(entry.command()->id.group_id);
+	m_session->set_groups(groups);
+
 	read_chunk();
 }
 
 void proxy::req_get::read_chunk() {
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: read_chunk: offset=%lu", m_offset);
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+		std::ostringstream oss;
+		oss
+			<< "Get: read_chunk: chunk_size=" << m_chunk_size
+			<< " file_size=" << m_size << " offset=" << m_offset
+			<< " data_left=" << (m_size - m_offset)
+			<< " groups: [";
+		auto groups = m_session->get_groups();
+		for (auto itb = groups.begin(), it = itb; it != groups.end(); ++it) {
+			if (it != itb) oss << ", ";
+			oss << *it;
+		}
+		oss << ']';
 
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+	}
+
+	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: read_chunk: reading of chunks is starting");
 	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);
 	arr.connect(std::bind(&proxy::req_get::on_read_chunk, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
@@ -66,6 +87,8 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 		send_reply(500);
 		return;
 	}
+
+	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: on_read_chunk: got a chunk");
 
 	const auto &rr = srr.front();
 
@@ -106,10 +129,6 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 		send_headers(std::move(reply), std::function<void (const boost::system::error_code &)>());
 
 		dc.data.to_string().swap(data);
-
-		std::vector<int> groups;
-		groups.push_back(rr.command()->id.group_id);
-		m_session->set_groups(groups);
 	} else {
 		rr.file().to_string().swap(data);
 	}
@@ -127,6 +146,19 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 
 	if (m_offset < m_size) {
 		read_chunk();
+		return;
+	}
+
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
+		auto end_time = std::chrono::system_clock::now();
+		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count();
+
+		std::ostringstream oss;
+		oss
+			<< "Get: on_finished: request=" << request().url().to_string() << " spent_time=" << spent_time
+			<< " file_size=" << m_size;
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 }
 
