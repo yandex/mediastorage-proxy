@@ -1,3 +1,9 @@
+mediastorage-proxy (0.15) lucid; urgency=low
+
+  * Handlers `upload` and `get` now write data by chunks
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 28 Nov 2013 18:12:20 +0400
+
 mediastorage-proxy (0.14) lucid; urgency=low
 
   * Handlers get, delete and downloadinfo takes namespace as upload handler
