@@ -55,7 +55,16 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	m_filename = file_info.first;
 	m_session->set_checker(file_info.second.result_checker);
 	m_session->set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(*m_session));
-	m_session->set_groups(server()->groups_for_upload(file_info.second));
+	try {
+		m_session->set_groups(server()->groups_for_upload(file_info.second));
+	} catch (const std::exception &ex) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
+			, static_cast<int>(file_info.second.groups_count)
+			, file_info.second.name.c_str()
+			, ex.what());
+		send_reply(500);
+		return;
+	}
 	m_session->set_filter(ioremap::elliptics::filters::all);
 
 	auto query_list = req.url().query();
@@ -64,6 +73,26 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	if (m_embed) {
 		m_timestamp.tv_sec = get_arg<uint64_t>(query_list, "timestamp", 0);
 		m_timestamp.tv_nsec = 0;
+	}
+
+	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+		std::ostringstream oss;
+		oss
+			<< "Upload: starts request=" << req.url().to_string()
+			<< " filename=" << m_filename
+			<< " key=" << m_key.remote()
+			<< " embed=" << m_embed
+			<< " offset=" << m_offset
+			<< " size=" << m_size
+			<< " groups=[";
+		auto groups = m_session->get_groups();
+		for (auto itb = groups.begin(), it = itb; it != groups.end(); ++it) {
+			if (itb != it) oss << ", ";
+			oss << *it;
+		}
+		oss << ']';
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 }
 
