@@ -1,3 +1,10 @@
+mediastorage-proxy (0.16) lucid; urgency=low
+
+  * Chunk sizes are reading from config
+  * You should add according settings: chunk-size:write and chunk-size:read
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 03 Dec 2013 18:52:22 +0400
+
 mediastorage-proxy (0.15) lucid; urgency=low
 
   * Handlers `upload` and `get` now write data by chunks
