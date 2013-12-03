@@ -26,8 +26,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	m_embed = query_list.has_item("embed") || query_list.has_item("embed_timestamp");
 	m_if_modified_since = req.headers().get("If-Modified-Since");
 	m_first_chunk = true;
-	// TODO: read chunk size from config
-	m_chunk_size = 10 * 1024 * 1024;
+	m_chunk_size = server()->m_read_chunk_size;
 
 	if (m_size == 0) {
 		auto alr = m_session->lookup(m_key);

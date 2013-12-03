@@ -32,8 +32,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", oss.str().c_str());
 	}
 
-	// TODO: set chunk size according to config
-	set_chunk_size(10 * 1024 * 1024);
+	set_chunk_size(server()->m_write_chunk_size);
 
 	m_session = server()->get_session();
 

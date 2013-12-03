@@ -231,12 +231,27 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_direction_bit_num = get_int(config, "direction-bit-num", 16);
 		m_base_port = get_int(config, "base-port", 1024);
 
+		if (config.HasMember("chunk-size") == false) {
+			const char *err = "You should set values for write and read chunk sizes";
+			throw std::runtime_error(err);
+		}
+		{
+			const auto &chunk_size = config["chunk-size"];
+			if (chunk_size.HasMember("write") == false || chunk_size.HasMember("read") == false) {
+				throw std::runtime_error("You should set both write and read chunk-sizes");
+			}
+			const size_t MB = 1024 * 1024;
+			m_write_chunk_size = chunk_size["write"].GetInt() * MB;
+			m_read_chunk_size = chunk_size["read"].GetInt() * MB;
+		}
+
 	} catch(const std::exception &ex) {
 		if (m_proxy_logger) {
 			m_proxy_logger->log(ioremap::swarm::SWARM_LOG_ERROR, "%s", ex.what());
 		} else {
 			std::cerr << ex.what() << std::endl;
 		}
+		return false;
 	}
 
 	on<req_upload>(options::prefix_match("/upload"));

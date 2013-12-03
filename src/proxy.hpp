@@ -150,6 +150,8 @@ private:
 	int m_direction_bit_num;
 	int m_base_port;
 	int m_groups_count;
+	int m_write_chunk_size;
+	int m_read_chunk_size;
 	std::shared_ptr<elliptics::mastermind_t> m_mastermind;
 	std::map<std::string, namespace_t> m_namespaces;
 };
