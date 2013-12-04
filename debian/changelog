@@ -1,3 +1,9 @@
+mediastorage-proxy (0.17) lucid; urgency=low
+
+  * Fixed depends of thevoid and swarm
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 04 Dec 2013 14:39:42 +0400
+
 mediastorage-proxy (0.16) lucid; urgency=low
 
   * Chunk sizes are reading from config
