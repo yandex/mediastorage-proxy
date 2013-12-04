@@ -26,7 +26,7 @@ Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends}, libthevoid1 (>= 0.5.4.0), libswarm1 (>= 0.5.4.0), libthevoid1 (<< 0.6), libswarm1 (<< 0.6)
+Depends: ${shlibs:Depends}, libthevoid2 (>= 0.6), libswarm2 (>= 0.6)
 Description: Proxy with elliptics support based on thevoid
 
 Package: mediastorage-proxy-dbg
