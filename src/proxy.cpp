@@ -64,6 +64,14 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ior
 	if (config.HasMember("cfg-flags"))
 		dnet_conf.flags = config["cfg-flags"].GetInt();
 
+	if (config.HasMember("elliptics-threads")) {
+		const auto &ell_threads = config["elliptics-threads"];
+		if (ell_threads.HasMember("io-thread-num"))
+			dnet_conf.io_thread_num = ell_threads["io-thread-num"].GetInt();
+		if (ell_threads.HasMember("net-thread-num"))
+			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
+	}
+
 	return ioremap::elliptics::node(logger, dnet_conf);
 }
 
