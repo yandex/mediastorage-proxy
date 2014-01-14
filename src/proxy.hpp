@@ -2,6 +2,7 @@
 #define SRC__PROXY_HPP
 
 #include "lookup_result.hpp"
+#include "loggers.hpp"
 
 #include <elliptics/session.hpp>
 #include <elliptics/mastermind.hpp>
@@ -141,8 +142,9 @@ protected:
 	std::shared_ptr<elliptics::mastermind_t> &mastermind();
 
 private:
+	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
-	boost::optional<ioremap::swarm::logger> m_elliptics_logger;
+	boost::optional<elliptics_logger_t> m_elliptics_logger;
 	boost::optional<ioremap::swarm::logger> m_proxy_logger;
 	boost::optional<ioremap::swarm::logger> m_mastermind_logger;
 	int m_die_limit;

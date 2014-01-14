@@ -1,7 +1,6 @@
 #include "proxy.hpp"
 #include "lookup_result.hpp"
 #include "data_container.hpp"
-#include "loggers.hpp"
 
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
@@ -49,7 +48,7 @@ ioremap::swarm::logger generate_logger(const rapidjson::Value &config, const std
 	return ioremap::swarm::logger(log_path.c_str(), log_mask);
 }
 
-ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ioremap::elliptics::logger &logger) {
+ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &logger) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -72,11 +71,7 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, const ior
 			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
 	}
 
-	return ioremap::elliptics::node(logger, dnet_conf);
-}
-
-ioremap::elliptics::session generate_session(const rapidjson::Value &config, ioremap::swarm::logger &logger) {
-	auto node = generate_node(config, elliptics_logger_t(logger));
+	ioremap::elliptics::node node(logger, dnet_conf);
 
 	if (config.HasMember("remotes") == false) {
 		const char *err = "You should set a list of remote addresses";
@@ -92,11 +87,15 @@ ioremap::elliptics::session generate_session(const rapidjson::Value &config, ior
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Can\'t connect to remote node " << host << " : " << ex.what();
-				logger.log(DNET_LOG_INFO, "%s", oss.str().c_str());
+				logger.log(DNET_LOG_INFO, oss.str().c_str());
 			}
 		}
 	}
 
+	return node;
+}
+
+ioremap::elliptics::session generate_session(const ioremap::elliptics::node &node) {
 	ioremap::elliptics::session session(node);
 
 	session.set_error_handler(ioremap::elliptics::error_handlers::none);
@@ -228,9 +227,10 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
 		m_proxy_logger.reset(generate_logger(config, "proxy"));
-		m_elliptics_logger.reset(generate_logger(config, "elliptics"));
+		m_elliptics_logger.reset(elliptics_logger_t(generate_logger(config, "elliptics")));
 		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
-		m_elliptics_session.reset(generate_session(config, *m_elliptics_logger));
+		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger));
+		m_elliptics_session.reset(generate_session(*m_elliptics_node));
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
 		m_namespaces = generate_namespaces(config);
 
