@@ -1,3 +1,9 @@
+mediastorage-proxy (0.19) lucid; urgency=low
+
+  * Keep elliptics node alive
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 14 Jan 2014 20:37:51 +0400
+
 mediastorage-proxy (0.18) lucid; urgency=low
 
   * Added options for elliptics threads
