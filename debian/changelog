@@ -1,3 +1,9 @@
+mediastorage-proxy (0.20) lucid; urgency=low
+
+  * Added basic-auth for upload handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 22 Jan 2014 00:08:36 +0400
+
 mediastorage-proxy (0.19) lucid; urgency=low
 
   * Keep elliptics node alive
