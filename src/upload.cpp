@@ -32,6 +32,20 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", oss.str().c_str());
 	}
 
+	auto file_info = server()->get_file_info(req);
+
+	{
+		if (!server()->check_basic_auth(file_info.second.name, file_info.second.auth_key, req.headers().get("Authorization"))) {
+			ioremap::swarm::http_response reply;
+			ioremap::swarm::http_headers headers;
+
+			reply.set_code(401);
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second.name + "\"");
+			reply.set_headers(headers);
+			send_reply(std::move(reply));
+		}
+	}
+
 	set_chunk_size(server()->m_write_chunk_size);
 
 	m_session = server()->get_session();
@@ -41,8 +55,6 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		send_reply(503);
 		return;
 	}
-
-	auto file_info = server()->get_file_info(req);
 
 	if (file_info.second.name.empty()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: cannot determine a namespace");

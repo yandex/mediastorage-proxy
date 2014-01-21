@@ -35,6 +35,7 @@ struct namespace_t {
 	std::string name;
 	int groups_count;
 	ioremap::elliptics::result_checker result_checker;
+	boost::optional<std::string> auth_key;
 };
 
 class proxy : public ioremap::thevoid::server<proxy>
@@ -140,6 +141,7 @@ protected:
 	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space);
 	ioremap::swarm::logger &logger();
 	std::shared_ptr<elliptics::mastermind_t> &mastermind();
+	bool check_basic_auth(const std::string &ns, const boost::optional<std::string> &auth_key, const boost::optional<std::string> &auth_header);
 
 private:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;

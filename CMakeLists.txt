@@ -10,6 +10,7 @@ set(REQUIRED_LIBRARIES
 	boost_system
 	swarm
 	msgpack
+	glib-2.0
 	)
 
 set(SOURCE
@@ -21,6 +22,8 @@ set(SOURCE
 	)
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
+include_directories(BEFORE /usr/include/glib-2.0)
+include_directories(BEFORE /usr/lib/glib-2.0/include)
 
 add_executable(${TARGET} ${SOURCE})
 

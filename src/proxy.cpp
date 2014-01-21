@@ -5,6 +5,8 @@
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
 
+#include <glib.h>
+
 #include <stdexcept>
 #include <iterator>
 #include <algorithm>
@@ -13,6 +15,7 @@
 #include <sstream>
 #include <iomanip>
 #include <utility>
+#include <cstring>
 
 #include <boost/lexical_cast.hpp>
 
@@ -178,6 +181,10 @@ std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjso
 			std::ostringstream oss;
 			oss << "Unknown type of success-copies-num \'" << scn << "\' in \'" << item.name << "\' namespace. Allowed types: any, quorum, all.";
 			throw std::runtime_error(oss.str());
+		}
+
+		if (value.HasMember("auth-key")) {
+			item.auth_key.reset(value["auth-key"].GetString());
 		}
 
 		res.insert(std::map<std::string, elliptics::namespace_t>::value_type(item.name, item));
@@ -620,6 +627,32 @@ ioremap::swarm::logger &proxy::logger() {
 
 std::shared_ptr<elliptics::mastermind_t> &proxy::mastermind() {
 	return m_mastermind;
+}
+
+bool proxy::check_basic_auth(const std::string &ns, const boost::optional<std::string> &auth_key, const boost::optional<std::string> &auth_header) {
+	if (!auth_key) {
+		return true;
+	}
+
+	if (!auth_header) {
+		return false;
+	}
+
+	if (auth_header->compare(0, sizeof("Basic ") - 1, "Basic ")) {
+		return false;
+	}
+
+	std::ostringstream oss;
+	oss << ns << ':' << *auth_key;
+	std::string str = oss.str();
+
+	auto base64 = g_base64_encode((const guchar *)str.data(), str.size());
+
+	int result = strcmp((const char *)base64, auth_header->data() + sizeof ("Basic ") - 1);
+
+	g_free(base64);
+
+	return !result;
 }
 
 } // namespace elliptics
