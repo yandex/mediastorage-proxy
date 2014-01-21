@@ -17,7 +17,9 @@ Build-Depends: debhelper (>=5),
  libswarm2 (>= 0.6),
  libswarm-dev (>= 0.6),
  libboost-dev,
- libmsgpack-dev
+ libmsgpack-dev,
+ libglib2.0-0,
+ libglib2.0-dev
 Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
