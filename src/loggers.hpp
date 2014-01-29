@@ -74,7 +74,7 @@ private:
 
 class elliptics_logger_t : public ioremap::elliptics::logger {
 public:
-	elliptics_logger_t(const ioremap::swarm::logger &logger) : ioremap::elliptics::logger(new swarm_logger_interface(logger))
+	elliptics_logger_t(const ioremap::swarm::logger &logger) : ioremap::elliptics::logger(new swarm_logger_interface(logger), DNET_LOG_INFO)
 	{
 	}
 };
