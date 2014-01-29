@@ -282,46 +282,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	return true;
 }
 
-void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
-	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().to_string().c_str());
-		auto &&prep_session = server()->prepare_session(req);
-		auto &&session = prep_session.first;
-
-		if (session.get_groups().empty()) {
-			send_reply(404);
-			return;
-		}
-
-		if (session.state_num() < server()->die_limit()) {
-			throw std::runtime_error("Too low number of existing states");
-		}
-
-		session.set_filter(ioremap::elliptics::filters::all);
-
-		auto &&key = prep_session.second;
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: removing data");
-		session.remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request error: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request error: unknown");
-		send_reply(500);
-	}
-}
-
-void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
-	(void)srr;
-	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
-		send_reply(error.code() == -ENOENT ? 404 : 500);
-		return;
-	}
-	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: sending reply");
-	send_reply(200);
-}
-
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().to_string().c_str());
@@ -573,28 +533,17 @@ std::pair<std::string, elliptics::namespace_t> proxy::get_file_info(const iorema
 	return std::make_pair(p.first, nm);
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
-	auto session = get_session();
-
-	auto url = req.url().to_string();
-	auto bg = url.find('/', 1) + 1;
-	auto eg = url.find('/', bg);
-	auto bf = eg + 1;
-	auto ef = url.find('?', bf);
-	auto g = url.substr(bg, eg - bg);
-	auto filename = url.substr(bf, ef - bf);
-
-
+std::vector<int> proxy::get_groups(int group, const std::string &filename) {
+	std::vector<int> res;
 
 	try {
-		auto group = boost::lexical_cast<int>(g);
 		std::vector<int> vec_groups1;
 		std::vector<int> vec_groups2;
 		m_mastermind->get_symmetric_groups(group).swap(vec_groups1);
 		m_mastermind->get_cache_groups(filename).swap(vec_groups2);
 		vec_groups1.reserve(vec_groups2.size());
 		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
-		session.set_groups(vec_groups1);
+		res.swap(vec_groups1);
 	} catch (...) {
 		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups");
 	}
@@ -602,7 +551,7 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO) {
 		std::ostringstream oss;
 
-		auto groups = session.get_groups();
+		auto &groups = res;
 		oss << "Fetched groups for request: [";
 		for (auto it = groups.begin(); it != groups.end(); ++it) {
 			if (it != groups.begin())
@@ -614,6 +563,28 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "filename: %s", filename.c_str());
 	}
+
+	return res;
+}
+
+std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
+	auto session = get_session();
+
+	auto url = req.url().to_string();
+	auto bg = url.find('/', 1) + 1;
+	auto eg = url.find('/', bg);
+	auto bf = eg + 1;
+	auto ef = url.find('?', bf);
+	auto g = url.substr(bg, eg - bg);
+	auto filename = url.substr(bf, ef - bf);
+
+	try {
+		auto group = boost::lexical_cast<int>(g);
+		session.set_groups(get_groups(group, filename));
+	} catch (...) {
+		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups");
+	}
+
 	auto p = get_filename(req);
 	auto it = m_namespaces.find(p.second);
 	auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
