@@ -1,3 +1,9 @@
+mediastorage-proxy (0.21) lucid; urgency=low
+
+  * Added basic-auth for delete handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 29 Jan 2014 19:54:22 +0400
+
 mediastorage-proxy (0.20) lucid; urgency=low
 
   * Added basic-auth for upload handler
