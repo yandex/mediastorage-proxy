@@ -1,3 +1,9 @@
+mediastorage-proxy (0.22) lucid; urgency=low
+
+  * added extended ubic init https://st.yandex-team.ru/MDADM-1488
+
+ -- Evgeniy Zaitsev <eightn@yandex-team.ru>  Mon, 10 Feb 2014 14:08:33 +0400
+
 mediastorage-proxy (0.21) lucid; urgency=low
 
   * Added basic-auth for delete handler
