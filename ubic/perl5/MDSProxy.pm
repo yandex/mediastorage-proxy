@@ -4,19 +4,16 @@ use strict;
 use warnings;
 
 use Ubic::Daemon qw(:all);
-
 use Ubic::Result qw(result);
-
 ###use Ubic::Service::Shared::Ulimits;
 use Ubic::Service::Shared::Dirs;
-
 use parent qw(Ubic::Service::SimpleDaemon);
 
 use Params::Validate qw(:all);
-
-use LogGiver::common;
-use FCGI::Client;
-use IO::Socket::UNIX;
+use JSON qw( decode_json from_json );
+use LWP::UserAgent;
+use HTTP::Request::Common;
+use LWP::Protocol::http::SocketUnixAlt;
 
 my %opt2arg = ();
 for my $arg (qw(configuration server:announce server:announce-interval))
@@ -34,6 +31,7 @@ sub new {
         user => { type => SCALAR, default => "root", optional => 1 },
         log_dir => { type => SCALAR, default => "/var/log/mdst", optional => 1 },
         run_dir => { type => SCALAR, default => "/var/run/mediastorage", optional => 1 },
+        conf_file => { type => SCALAR, default => "/etc/elliptics/mediastorage-proxy.conf", optional => 1 },
         rlimit_nofile => { type => SCALAR,
                            regex => qr/^\d+$/,
                            optional => 1,
@@ -48,14 +46,14 @@ sub new {
 
     #
     # check ulimits
-    #
+    # 
     my $ulimits;
     if (defined $params->{rlimit_nofile}) { $ulimits->{"RLIMIT_NOFILE"} = $params->{rlimit_nofile} };
     if (defined $params->{rlimit_core})   { $ulimits->{"RLIMIT_CORE"} = $params->{rlimit_core} };
     if (defined $params->{rlimit_stack})  { $ulimits->{"RLIMIT_STACK"} = $params->{rlimit_stack} };
 
     my $bin = [
-        '/usr/bin/mediastorage-proxy -c /etc/elliptics/mediastorage-proxy.conf'
+        '/usr/bin/mediastorage-proxy -c '.$params->{conf_file}
     ];
 
     my $daemon_user = $params->{user};
@@ -64,10 +62,10 @@ sub new {
         user => 'root',
         ulimit => $ulimits || {},
         daemon_user => $daemon_user,
-        ubic_log => $params->{log_dir}.'/ubic.log',
-        stdout => $params->{log_dir}.'/stdout.log',
-        stderr => $params->{log_dir}.'/stderr.log',
-        auto_start => 1,
+	ubic_log => $params->{log_dir}.'/ubic.log',
+	stdout => $params->{log_dir}.'/stdout.log',
+	stderr => $params->{log_dir}.'/stderr.log',
+	auto_start => 1,
     });
 }
 
@@ -87,24 +85,23 @@ sub status_impl {
 
     return $status if $status->status ne 'running';
 
-    LogGiver::common::define_vars();
-    my $stdout;
-    eval{
-        my $socket_file = LogGiver::common::get_config_value('fcgi_socket');
-        my $sock=IO::Socket::UNIX->new( Peer=>$socket_file );
-        my $client = FCGI::Client::Connection->new( sock => $sock );
-        my $stderr;
-        ($stdout,$stderr) = $client->request(
-{
-    REQUEST_METHOD => 'GET',
-    SCRIPT_NAME    => '/ping',
-#    SERVER_PORT    => 3132,
-},'');
-    };
-    ###print "stdout: $stdout\n";
-    if ( !defined $stdout || (defined $stdout && $stdout !~ /200 ok$/) ) { 
-        ###return result("broken", "fastcgi return status '$stdout'");
-        return result("broken", "fastcgi didn't return 200");
+    local $/;
+    open(my $fh, '<'.$params->{conf_file});
+    my $json_fh = <$fh> ;
+    my $json = decode_json($json_fh);
+    #print "js: ".$json->{endpoints}[0]."\n";
+    my $socket_file = $json->{endpoints}[0];
+    
+    LWP::Protocol::implementor( http => 'LWP::Protocol::http::SocketUnixAlt' );
+    my $ua = LWP::UserAgent->new;
+    $socket_file =~ s/^.*?\/(.*)/$1/; #strip first '/' and 'unix:' from path
+    my $resp = $ua->request(GET "http:$socket_file//ping");
+    #print "rc:'".$resp->code."'\n";
+
+    if ( !defined $resp->code || ( $resp->code ne 200) ) { 
+        my $res = '';
+        if (defined $resp->code) { $res = $resp->code; }
+	return result("broken", "http through socket $socket_file didn't return 200 (result: '$res')");
     };
 
     return "running";
@@ -124,3 +121,4 @@ sub reload {
 }
 
 1;
+
