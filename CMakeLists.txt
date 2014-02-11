@@ -38,4 +38,6 @@ target_link_libraries(${TARGET} ${REQUIRED_LIBRARIES})
 
 install(TARGETS ${TARGET} DESTINATION bin/)
 install(FILES ubic/init.d/mediastorage-proxy DESTINATION /etc/init.d)
-install(FILES ubic/service/mediastorage-proxy DESTINATION /etc/ubic/service)
+install(FILES ubic/service/mediastorage-proxy.ini DESTINATION /etc/ubic/service)
+install(FILES ubic/perl5/MDSProxy.pm DESTINATION /usr/share/perl5/Ubic/Service)
+install(FILES ubic/logrotate.d/mediastorage-proxy DESTINATION /etc/logrotate.d)
