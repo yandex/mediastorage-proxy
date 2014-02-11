@@ -1,6 +1,7 @@
 mediastorage-proxy (0.22) lucid; urgency=low
 
   * added extended ubic init https://st.yandex-team.ru/MDADM-1488
+    extended check checked service via http /ping through unix socket
 
  -- Evgeniy Zaitsev <eightn@yandex-team.ru>  Mon, 10 Feb 2014 14:08:33 +0400
 
