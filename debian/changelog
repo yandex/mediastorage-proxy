@@ -1,3 +1,9 @@
+mediastorage-proxy (0.23) lucid; urgency=low
+
+  * added extended ubic init https://st.yandex-team.ru/MDADM-1488
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 17 Feb 2014 20:26:19 +0400
+
 mediastorage-proxy (0.22) lucid; urgency=low
 
   * added extended ubic init https://st.yandex-team.ru/MDADM-1488
