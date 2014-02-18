@@ -1,3 +1,9 @@
+mediastorage-proxy (0.24) lucid; urgency=low
+
+  * Remove unix sockets before starting the proxy
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 18 Feb 2014 19:16:31 +0400
+
 mediastorage-proxy (0.23) lucid; urgency=low
 
   * added extended ubic init https://st.yandex-team.ru/MDADM-1488
