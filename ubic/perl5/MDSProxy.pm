@@ -71,6 +71,17 @@ sub new {
 
 sub start_impl {
     my $self = shift;
+    local $/;
+    open(my $fh, '<'.$params->{conf_file});
+    my $json_fh = <$fh> ;
+    my $json = decode_json($json_fh);
+    foreach my $socket (@{$json->{endpoints}}) {
+        $socket =~ s/^unix://;
+        if ( -S "$socket" ) {
+            print "remove socket: $socket\n";
+            unlink ($socket);
+        }
+    }
 
     Ubic::Service::Shared::Dirs::directory_checker( $params->{log_dir}, $params->{user});
     Ubic::Service::Shared::Dirs::directory_checker( $params->{run_dir}, $params->{user});
