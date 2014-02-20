@@ -33,7 +33,7 @@ sub new {
         run_dir => { type => SCALAR, default => "/var/run/mediastorage", optional => 1 },
         conf_file => { type => SCALAR, default => "/etc/elliptics/mediastorage-proxy.conf", optional => 1 },
         rlimit_nofile => { type => SCALAR,
-                           regex => qr/^\d+$/,
+                           regex => qr/(^\-?\d+|unlimited)$/,
                            optional => 1,
                         },
         rlimit_core => {   type => SCALAR,
