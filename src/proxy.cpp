@@ -142,34 +142,19 @@ std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::V
 	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
-std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjson::Value &config) {
-	if (config.HasMember("namespaces") == false) {
-		throw std::runtime_error("You should set a dict of namespaces");
-	}
-
-	const auto &namespaces = config["namespaces"];
-
+std::map<std::string, elliptics::namespace_t> generate_namespaces(std::shared_ptr<mastermind::mastermind_t> &m_mastermind) {
 	std::map<std::string, elliptics::namespace_t> res;
+	auto nms = m_mastermind->get_namespaces_settings();
 
-	for (auto it = namespaces.MemberBegin(); it != namespaces.MemberEnd(); ++it) {
-		const auto &name = it->name;
-		const auto &value = it->value;
-
+	for (auto it = nms.begin(); it != nms.end(); ++it) {
 		elliptics::namespace_t item;
-		item.name = name.GetString();
 
-		if (value.HasMember("groups-count") == false) {
-			std::ostringstream oss;
-			oss << "Missing \'groups-count\' in \'" << item.name << "\' namespace";
-			throw std::runtime_error(oss.str());
-		}
-		if (value.HasMember("success-copies-num") == false) {
-			std::ostringstream oss;
-			oss << "Missing \'success-copies-num\' in \'" << item.name << "\' namespace";
-			throw std::runtime_error(oss.str());
-		}
-		item.groups_count = value["groups-count"].GetInt();
-		const std::string &scn = value["success-copies-num"].GetString();
+		item.name = it->name;
+		item.groups_count = it->groups_count;
+		item.auth_key = it->auth_key;
+		item.static_couple = it->static_couple;
+
+		const std::string &scn = it->success_copies_num;
 
 		if (scn == "all") {
 			item.result_checker = ioremap::elliptics::checkers::all;
@@ -181,10 +166,6 @@ std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjso
 			std::ostringstream oss;
 			oss << "Unknown type of success-copies-num \'" << scn << "\' in \'" << item.name << "\' namespace. Allowed types: any, quorum, all.";
 			throw std::runtime_error(oss.str());
-		}
-
-		if (value.HasMember("auth-key")) {
-			item.auth_key.reset(value["auth-key"].GetString());
 		}
 
 		res.insert(std::map<std::string, elliptics::namespace_t>::value_type(item.name, item));
@@ -239,7 +220,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger));
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
-		m_namespaces = generate_namespaces(config);
+		m_namespaces = generate_namespaces(m_mastermind);
 
 		m_die_limit = get_int(config, "die-limit", 1);
 		m_eblob_style_path = get_bool(config, "eblob-style-path", true);
@@ -409,6 +390,11 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 			oss << "\"cache-groups\" : " << server()->mastermind()->json_cache_groups();
 			g = true;
 		}
+		if (query_list.has_item("namespaces-settings")) {
+			if (g) oss << ',' << std::endl;
+			oss << "\"namespaces-settings\" : " << server()->mastermind()->json_namespaces_settings();
+			g = true;
+		}
 		if (g) oss << std::endl;
 		oss << '}' << std::endl;
 		auto res_str = oss.str();
@@ -523,6 +509,8 @@ int proxy::die_limit() const {
 }
 
 std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size) {
+	if (!name_space.static_couple.empty())
+		return name_space.static_couple;
 	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name, size);
 }
 
@@ -581,15 +569,22 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	try {
 		auto group = boost::lexical_cast<int>(g);
 		session.set_groups(get_groups(group, filename));
+
+		auto p = get_filename(req);
+		auto it = m_namespaces.find(p.second);
+		auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
+
+		return std::make_pair(session, ioremap::elliptics::key(nm.name + '.' + filename));;
 	} catch (...) {
-		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups");
+		auto it = m_namespaces.find(g);
+		if (it != m_namespaces.end()) {
+			session.set_groups(it->second.static_couple);
+			return std::make_pair(session, ioremap::elliptics::key(g + '.' + filename));;
+		}
+
+		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups or namespace");
+		throw std::runtime_error("Cannot to determine groups or namespace");
 	}
-
-	auto p = get_filename(req);
-	auto it = m_namespaces.find(p.second);
-	auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
-
-	return std::make_pair(session, ioremap::elliptics::key(nm.name + '.' + filename));;
 }
 
 ioremap::swarm::logger &proxy::logger() {
@@ -600,8 +595,8 @@ std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {
 	return m_mastermind;
 }
 
-bool proxy::check_basic_auth(const std::string &ns, const boost::optional<std::string> &auth_key, const boost::optional<std::string> &auth_header) {
-	if (!auth_key) {
+bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header) {
+	if (auth_key.empty()) {
 		return true;
 	}
 
@@ -614,7 +609,7 @@ bool proxy::check_basic_auth(const std::string &ns, const boost::optional<std::s
 	}
 
 	std::ostringstream oss;
-	oss << ns << ':' << *auth_key;
+	oss << ns << ':' << auth_key;
 	std::string str = oss.str();
 
 	auto base64 = g_base64_encode((const guchar *)str.data(), str.size());
