@@ -67,12 +67,19 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	m_session->set_checker(file_info.second.result_checker);
 	m_session->set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(*m_session));
 	try {
-		m_session->set_groups(server()->groups_for_upload(file_info.second));
-	} catch (const std::exception &ex) {
+		m_session->set_groups(server()->groups_for_upload(file_info.second, m_size));
+	} catch (const mastermind::not_enough_memory_error &e) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
 			, static_cast<int>(file_info.second.groups_count)
 			, file_info.second.name.c_str()
-			, ex.what());
+			, e.code().message().c_str());
+		send_reply(507);
+		return;
+	} catch (const std::system_error &e) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
+			, static_cast<int>(file_info.second.groups_count)
+			, file_info.second.name.c_str()
+			, e.code().message().c_str());
 		send_reply(500);
 		return;
 	}

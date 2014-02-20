@@ -106,7 +106,7 @@ ioremap::elliptics::session generate_session(const ioremap::elliptics::node &nod
 	return session;
 }
 
-std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Value &config, const cocaine_logger_t &logger) {
+std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config, const cocaine_logger_t &logger) {
 	if (config.HasMember("mastermind") == false) {
 		const char *err = "You should set settings for mastermind";
 		throw std::runtime_error(err);
@@ -120,7 +120,7 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 
 	const auto &nodes = mastermind["nodes"];
 
-	elliptics::mastermind_t::remotes_t remotes;
+	mastermind::mastermind_t::remotes_t remotes;
 	auto sp_lg = std::make_shared<cocaine_logger_t>(logger);
 
 	for (auto it = nodes.Begin(); it != nodes.End(); ++it) {
@@ -139,7 +139,7 @@ std::shared_ptr<elliptics::mastermind_t> generate_mastermind(const rapidjson::Va
 
 	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
 
-	return std::make_shared<elliptics::mastermind_t>(remotes, sp_lg, group_info_update_period);
+	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
 std::map<std::string, elliptics::namespace_t> generate_namespaces(const rapidjson::Value &config) {
@@ -522,8 +522,8 @@ int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_space) {
-	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name);
+std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size) {
+	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name, size);
 }
 
 std::pair<std::string, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
@@ -596,7 +596,7 @@ ioremap::swarm::logger &proxy::logger() {
 	return *m_proxy_logger;
 }
 
-std::shared_ptr<elliptics::mastermind_t> &proxy::mastermind() {
+std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {
 	return m_mastermind;
 }
 

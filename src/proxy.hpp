@@ -5,7 +5,7 @@
 #include "loggers.hpp"
 
 #include <elliptics/session.hpp>
-#include <elliptics/mastermind.hpp>
+#include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
 
 #include <boost/optional.hpp>
@@ -139,9 +139,9 @@ protected:
 	std::pair<std::string, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req);
-	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space);
+	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size);
 	ioremap::swarm::logger &logger();
-	std::shared_ptr<elliptics::mastermind_t> &mastermind();
+    std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	bool check_basic_auth(const std::string &ns, const boost::optional<std::string> &auth_key, const boost::optional<std::string> &auth_header);
 
 private:
@@ -157,7 +157,7 @@ private:
 	int m_groups_count;
 	int m_write_chunk_size;
 	int m_read_chunk_size;
-	std::shared_ptr<elliptics::mastermind_t> m_mastermind;
+	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::map<std::string, namespace_t> m_namespaces;
 };
 
