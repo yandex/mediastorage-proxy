@@ -78,7 +78,6 @@ sub start_impl {
     foreach my $socket (@{$json->{endpoints}}) {
         $socket =~ s/^unix://;
         if ( -S "$socket" ) {
-            print "remove socket: $socket\n";
             unlink ($socket);
         }
     }
