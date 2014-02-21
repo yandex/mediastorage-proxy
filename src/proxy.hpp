@@ -142,6 +142,7 @@ protected:
 	std::pair<std::string, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req);
+	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_t &ns);
 	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size);
 	ioremap::swarm::logger &logger();
     std::shared_ptr<mastermind::mastermind_t> &mastermind();

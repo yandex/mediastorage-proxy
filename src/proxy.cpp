@@ -77,7 +77,6 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::
 	ioremap::elliptics::node node(logger, dnet_conf);
 
 	if (config.HasMember("remotes") == false) {
-		const char *err = "You should set a list of remote addresses";
 		throw std::runtime_error("You should set a list of remote addresses");
 	}
 
@@ -577,10 +576,13 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
-	auto session = get_session();
-
-	auto url = req.url().to_string();
+	const auto &url = req.url().to_string();
 	const auto &ns = get_namespace(url);
+	return prepare_session(url, ns);
+}
+
+std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const std::string &url, const namespace_t &ns) {
+	auto session = get_session();
 
 	std::vector<int> groups;
 	std::string filename;
