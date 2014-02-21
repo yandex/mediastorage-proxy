@@ -78,7 +78,7 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::
 
 	if (config.HasMember("remotes") == false) {
 		const char *err = "You should set a list of remote addresses";
-		throw std::runtime_error(err);
+		throw std::runtime_error("You should set a list of remote addresses");
 	}
 
 	{
@@ -108,8 +108,7 @@ ioremap::elliptics::session generate_session(const ioremap::elliptics::node &nod
 
 std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config, const cocaine_logger_t &logger) {
 	if (config.HasMember("mastermind") == false) {
-		const char *err = "You should set settings for mastermind";
-		throw std::runtime_error(err);
+		throw std::runtime_error("You should set settings for mastermind");
 	}
 	
 	const auto &mastermind = config["mastermind"];
@@ -228,8 +227,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_base_port = get_int(config, "base-port", 1024);
 
 		if (config.HasMember("chunk-size") == false) {
-			const char *err = "You should set values for write and read chunk sizes";
-			throw std::runtime_error(err);
+			throw std::runtime_error("You should set values for write and read chunk sizes");
 		}
 		{
 			const auto &chunk_size = config["chunk-size"];
