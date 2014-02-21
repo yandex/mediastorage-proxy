@@ -20,40 +20,12 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second.name + "\"");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
-		}
-
-		auto session = server()->get_session();
-
-		std::string filename;
-		{
-			auto &group_key = file_info.first;
-			auto pos = group_key.find('/');
-
-			if (pos == std::string::npos) {
-				server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: cannot determine a group from key");
-				send_reply(400);
-				return;
-			}
-
-			group_key.substr(pos + 1).swap(filename);
-
-			{
-				auto group = group_key.substr(0, pos);
-				try {
-					session.set_groups(server()->get_groups(boost::lexical_cast<int>(group), filename));
-				} catch (...) {
-					server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: cannot determine a group from key");
-					send_reply(400);
-					return;
-				}
-			}
-		}
-		auto key = ioremap::elliptics::key(file_info.second.name + '.' + filename);
-
-		if (session.get_groups().empty()) {
-			send_reply(404);
 			return;
 		}
+
+		auto &&prep_session = server()->prepare_session(req);
+		auto &&session = prep_session.first;
+		auto &&key = prep_session.second;
 
 		if (session.state_num() < server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");

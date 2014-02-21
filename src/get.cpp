@@ -10,8 +10,18 @@ namespace elliptics {
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	m_beg_time = std::chrono::system_clock::now();
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", req.url().to_string().c_str());
-	auto &&prep_session = server()->prepare_session(req);
-	m_session = prep_session.first;
+	try {
+		auto &&prep_session = server()->prepare_session(req);
+		m_session = prep_session.first;
+		m_key = prep_session.second;
+	} catch (const std::exception &ex) {
+		server()->logger().log(
+			ioremap::swarm::SWARM_LOG_INFO,
+			"Get: request = \"%s\"; err: \"%s\"",
+			req.url().to_string().c_str(), ex.what());
+		send_reply(400);
+		return;
+	}
 
 	if (m_session->get_groups().empty()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: on_request: cannot find couple of groups for the request");
@@ -20,7 +30,6 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	}
 
 	auto query_list = req.url().query();
-	m_key = prep_session.second;
 	m_offset = get_arg<uint64_t>(query_list, "offset", 0);
 	m_size = get_arg<uint64_t>(query_list, "size", 0);
 	m_embed = query_list.has_item("embed") || query_list.has_item("embed_timestamp");

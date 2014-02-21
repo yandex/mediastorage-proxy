@@ -136,6 +136,7 @@ public:
 
 protected:
 	ioremap::elliptics::session get_session();
+	const namespace_t &get_namespace(const std::string &scriptname);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
 	int die_limit() const;
 	std::pair<std::string, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);

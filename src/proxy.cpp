@@ -500,6 +500,29 @@ ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
 }
 
+const namespace_t &proxy::get_namespace(const std::string &scriptname) {
+	auto namespace_beg = scriptname.find('-');
+	auto namespace_end = scriptname.find('/', 1);
+
+	std::string str_namespace;
+
+	if (namespace_beg == std::string::npos) {
+		str_namespace = "default";
+	} else {
+		namespace_beg += 1;
+		if (namespace_beg < namespace_end) {
+			str_namespace = scriptname.substr(namespace_beg, namespace_end - namespace_beg);
+		}
+	}
+
+	auto it = m_namespaces.find(str_namespace);
+	if (it == m_namespaces.end()) {
+		throw std::runtime_error("Cannot detect namespace");
+	}
+
+	return it->second;
+}
+
 elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry) {
 	return elliptics::lookup_result(entry, m_eblob_style_path, m_base_port, m_direction_bit_num);
 }
@@ -559,32 +582,34 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	auto session = get_session();
 
 	auto url = req.url().to_string();
-	auto bg = url.find('/', 1) + 1;
-	auto eg = url.find('/', bg);
-	auto bf = eg + 1;
-	auto ef = url.find('?', bf);
-	auto g = url.substr(bg, eg - bg);
-	auto filename = url.substr(bf, ef - bf);
+	const auto &ns = get_namespace(url);
 
-	try {
-		auto group = boost::lexical_cast<int>(g);
-		session.set_groups(get_groups(group, filename));
+	std::vector<int> groups;
+	std::string filename;
 
-		auto p = get_filename(req);
-		auto it = m_namespaces.find(p.second);
-		auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
+	if (ns.static_couple.empty()) {
+		auto bg = url.find('/', 1) + 1;
+		auto eg = url.find('/', bg);
+		auto bf = eg + 1;
+		auto ef = url.find('?', bf);
+		auto g = url.substr(bg, eg - bg);
+		url.substr(bf, ef - bf).swap(filename);
 
-		return std::make_pair(session, ioremap::elliptics::key(nm.name + '.' + filename));;
-	} catch (...) {
-		auto it = m_namespaces.find(g);
-		if (it != m_namespaces.end()) {
-			session.set_groups(it->second.static_couple);
-			return std::make_pair(session, ioremap::elliptics::key(g + '.' + filename));;
+		try {
+			auto group = boost::lexical_cast<int>(g);
+			get_groups(group, filename).swap(groups);
+		} catch (...) {
+			throw std::runtime_error("Cannot to determine groups");
 		}
-
-		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups or namespace");
-		throw std::runtime_error("Cannot to determine groups or namespace");
+	} else {
+		auto bf = url.find('/', 1) + 1;
+		auto ef = url.find('?', bf);
+		url.substr(bf, ef - bf).swap(filename);
+		groups = ns.static_couple;
 	}
+
+	session.set_groups(groups);
+	return std::make_pair(session, ioremap::elliptics::key(ns.name + '.' + filename));;
 }
 
 ioremap::swarm::logger &proxy::logger() {
