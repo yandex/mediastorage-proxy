@@ -1,3 +1,14 @@
+mediastorage-proxy (0.25) lucid; urgency=low
+
+  * Using libmastermind=7.0
+  * Removed unix sockets during starting silently
+  * Now value of mediastorage-proxy.ini can be not only digits but also 'unlimited'
+  * Set limits core=unlimited and nofile=65536 by default
+  * Uses namespace settings from mastermind
+  * Improved handlers to work with namespaces with static couples
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 20 Feb 2014 17:37:22 +0400
+
 mediastorage-proxy (0.24) lucid; urgency=low
 
   * Remove unix sockets before starting the proxy
