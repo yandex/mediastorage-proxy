@@ -1,3 +1,9 @@
+mediastorage-proxy (0.26) lucid; urgency=low
+
+  * Removed '/' at the front of key-attr and group for static namespaces
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 24 Feb 2014 20:03:16 +0400
+
 mediastorage-proxy (0.25) lucid; urgency=low
 
   * Using libmastermind=7.0
