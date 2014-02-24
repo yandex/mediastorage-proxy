@@ -70,6 +70,7 @@ public:
 		ioremap::elliptics::data_pointer m_content;
 		std::chrono::system_clock::time_point m_beg_time;
 		std::vector<int> m_bad_groups;
+		bool m_is_static_ns;
 	};
 
 	struct req_get

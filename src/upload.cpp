@@ -62,6 +62,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		return;
 	}
 
+	m_is_static_ns = !file_info.second.static_couple.empty();
 	m_key = ioremap::elliptics::key(file_info.second.name + '.' + file_info.first);
 	m_filename = file_info.first;
 	m_session->set_checker(file_info.second.result_checker);
@@ -253,13 +254,15 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		<< id_str(m_key, *m_session)
 		<< "\" groups=\"" << swr.size()
 		<< "\" size=\"" << m_size
-		<< "\" key=\"/";
-	{
+		<< "\" key=\"";
+
+	if (!m_is_static_ns) {
 		auto groups = m_session->get_groups();
 		auto git = std::min_element(groups.begin(), groups.end());
-		oss << *git;
+		oss << *git << '/';
 	}
-	oss << '/' << m_filename << "\">\n";
+
+	oss << m_filename << "\">\n";
 
 	size_t written = 0;
 	std::vector<int> wrote_into_groups;
