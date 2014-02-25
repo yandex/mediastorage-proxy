@@ -99,6 +99,7 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: on_read_chunk: got a chunk");
 
 	const auto &rr = srr.front();
+	auto file = rr.file();
 
 	if (rr.io_attribute()->user_flags & UF_EMBEDS) {
 		m_embed = true;
@@ -109,12 +110,14 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 	if (m_first_chunk) {
 		m_first_chunk = false;
 
-		auto dc = elliptics::data_container_t::unpack(rr.file(), m_embed);
+		auto dc = elliptics::data_container_t::unpack(file, m_embed);
 		auto ts = dc.get<elliptics::DNET_FCGI_EMBED_TIMESTAMP>();
+
+		dc.data.to_string().swap(data);
 
 		ioremap::swarm::http_response reply;
 		reply.set_code(200);
-		reply.headers().set_content_length(m_size);
+		reply.headers().set_content_length(m_size - file.size() + data.size());
 		// TODO: detect Content-Type
 		reply.headers().set_content_type("text/plain");
 
@@ -135,14 +138,12 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 		}
 
 		send_headers(std::move(reply), std::function<void (const boost::system::error_code &)>());
-
-		dc.data.to_string().swap(data);
 	} else {
-		rr.file().to_string().swap(data);
+		file.to_string().swap(data);
 	}
 
 	send_data(std::move(data), std::bind(&proxy::req_get::on_sent_chunk, shared_from_this(), std::placeholders::_1));
-	m_offset += data.size();
+	m_offset += file.size();
 }
 
 void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
