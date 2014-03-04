@@ -1,3 +1,9 @@
+mediastorage-proxy (0.28) lucid; urgency=low
+
+  * Close stream in case of error occurs during on_request
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 04 Mar 2014 17:09:11 +0400
+
 mediastorage-proxy (0.27) lucid; urgency=low
 
   * Fixed reading of data with embeds
