@@ -1,3 +1,9 @@
+mediastorage-proxy (0.29) lucid; urgency=low
+
+  * Fixed bug: close stream in get handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 04 Mar 2014 22:57:38 +0400
+
 mediastorage-proxy (0.28) lucid; urgency=low
 
   * Close stream in case of error occurs during on_request
