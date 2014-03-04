@@ -169,6 +169,8 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
+
+	get_reply()->close(error);
 }
 
 }
