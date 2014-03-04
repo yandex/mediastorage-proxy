@@ -16,6 +16,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	} else {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: missing Content-Length");
 		send_reply(400);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
@@ -43,6 +44,8 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second.name + "\"");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
+			get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
+			return;
 		}
 	}
 
@@ -53,12 +56,14 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	if (m_session->state_num() < server()->die_limit()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: too low number of existing states");
 		send_reply(503);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
 	if (file_info.second.name.empty()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: cannot determine a namespace");
 		send_reply(400);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
@@ -75,6 +80,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 			, file_info.second.name.c_str()
 			, e.code().message().c_str());
 		send_reply(507);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	} catch (const std::system_error &e) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
@@ -82,6 +88,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 			, file_info.second.name.c_str()
 			, e.code().message().c_str());
 		send_reply(500);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 	m_session->set_filter(ioremap::elliptics::filters::all);
