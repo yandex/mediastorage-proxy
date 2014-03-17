@@ -101,6 +101,7 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 	const auto &rr = srr.front();
 	auto file = rr.file();
 
+	m_embed = false;
 	if (rr.io_attribute()->user_flags & UF_EMBEDS) {
 		m_embed = true;
 	}
