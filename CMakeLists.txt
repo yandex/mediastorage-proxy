@@ -14,8 +14,10 @@ set(REQUIRED_LIBRARIES
 	elliptics_cpp
 	mastermind
 	boost_system
+	boost_thread-mt
 	swarm
 	msgpack
+	magic
 	${GLIB_LIBRARY}
 	)
 

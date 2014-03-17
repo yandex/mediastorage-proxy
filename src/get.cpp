@@ -118,8 +118,16 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 		ioremap::swarm::http_response reply;
 		reply.set_code(200);
 		reply.headers().set_content_length(m_size - file.size() + data.size());
-		// TODO: detect Content-Type
-		reply.headers().set_content_type("text/plain");
+
+		if (NULL == server()->m_magic.get()) {
+			server()->m_magic.reset(new magic_provider());
+		}
+
+		if (m_size == file.size()) {
+			reply.headers().set_content_type(server()->m_magic->type(data));
+		} else {
+			reply.headers().set_content_type("application/octet-stream");
+		}
 
 		if (ts) {
 			char ts_str[128] = {0};

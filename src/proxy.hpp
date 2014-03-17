@@ -3,12 +3,14 @@
 
 #include "lookup_result.hpp"
 #include "loggers.hpp"
+#include "magic_provider.hpp"
 
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
 
 #include <boost/optional.hpp>
+#include <boost/thread/tss.hpp>
 
 #include <swarm/url_query.hpp>
 
@@ -164,6 +166,7 @@ private:
 	int m_read_chunk_size;
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::map<std::string, namespace_t> m_namespaces;
+	boost::thread_specific_ptr<magic_provider> m_magic;
 };
 
 } // namespace elliptics
