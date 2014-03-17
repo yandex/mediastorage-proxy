@@ -1,3 +1,10 @@
+mediastorage-proxy (0.30) lucid; urgency=low
+
+  * Added content type detection into get handler
+  * Using elliptics built-in features instead of embeds
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 17 Mar 2014 14:54:31 +0400
+
 mediastorage-proxy (0.29) lucid; urgency=low
 
   * Fixed bug: close stream in get handler
