@@ -97,8 +97,8 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	m_offset = get_arg<uint64_t>(query_list, "offset", 0);
 	m_embed = query_list.has_item("embed") || query_list.has_item("embed_timestamp");
 	if (m_embed) {
-		m_timestamp.tv_sec = get_arg<uint64_t>(query_list, "timestamp", 0);
-		m_timestamp.tv_nsec = 0;
+		m_timestamp.tsec = get_arg<uint64_t>(query_list, "timestamp", 0);
+		m_timestamp.tnsec = 0;
 	}
 
 	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
@@ -124,27 +124,15 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 
 void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
 	if (flags & first_chunk) {
-		auto data = std::string(
-			boost::asio::buffer_cast<const char *>(buffer)
-			, boost::asio::buffer_size(buffer)
-			);
-		elliptics::data_container_t dc(data);
-
 		if (m_embed) {
-			dc.set<elliptics::DNET_FCGI_EMBED_TIMESTAMP>(m_timestamp);
+			m_session->set_timestamp(&m_timestamp);
 		}
-
-		if (dc.embeds_count() != 0) {
-			m_session->set_user_flags(m_session->get_user_flags() | UF_EMBEDS);
-		}
-
-		m_content = elliptics::data_container_t::pack(dc);
-	} else {
-		m_content = ioremap::elliptics::data_pointer::from_raw(
-			const_cast<char *>(boost::asio::buffer_cast<const char *>(buffer))
-			, boost::asio::buffer_size(buffer)
-			);
 	}
+
+	m_content = ioremap::elliptics::data_pointer::from_raw(
+		const_cast<char *>(boost::asio::buffer_cast<const char *>(buffer))
+		, boost::asio::buffer_size(buffer)
+		);
 
 	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
 		std::ostringstream oss;

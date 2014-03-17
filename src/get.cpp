@@ -129,9 +129,15 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 			reply.headers().set_content_type("application/octet-stream");
 		}
 
-		if (ts) {
+		{
+			time_t timestamp = 0;
+			if (ts) {
+				timestamp = (time_t)(ts->tv_sec);
+			} else {
+				timestamp = (time_t)(rr.io_attribute()->timestamp.tsec);
+			}
+
 			char ts_str[128] = {0};
-			time_t timestamp = (time_t)(ts->tv_sec);
 			struct tm tmp;
 			strftime(ts_str, sizeof (ts_str), "%a, %d %b %Y %T %Z", gmtime_r(&timestamp, &tmp));
 			

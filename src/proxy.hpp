@@ -66,7 +66,7 @@ public:
 		size_t m_offset;
 		size_t m_size;
 		bool m_embed;
-		timespec m_timestamp;
+		dnet_time m_timestamp;
 		ioremap::elliptics::key m_key;
 		std::string m_filename;
 		ioremap::elliptics::data_pointer m_content;
