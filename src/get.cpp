@@ -124,11 +124,7 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 			server()->m_magic.reset(new magic_provider());
 		}
 
-		if (m_size == file.size()) {
-			reply.headers().set_content_type(server()->m_magic->type(data));
-		} else {
-			reply.headers().set_content_type("application/octet-stream");
-		}
+		reply.headers().set_content_type(server()->m_magic->type(data));
 
 		{
 			time_t timestamp = 0;
