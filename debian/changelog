@@ -1,3 +1,9 @@
+mediastorage-proxy (0.31) lucid; urgency=low
+
+  * Do not parse embeds if user_flags does not have corresponding bit
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 17 Mar 2014 20:35:44 +0400
+
 mediastorage-proxy (0.30) lucid; urgency=low
 
   * Added content type detection into get handler
