@@ -213,6 +213,7 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
 		m_proxy_logger.reset(generate_logger(config, "proxy"));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts");
 		m_elliptics_logger.reset(elliptics_logger_t(generate_logger(config, "elliptics")));
 		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
 		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger));
