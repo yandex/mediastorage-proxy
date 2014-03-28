@@ -36,12 +36,12 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	auto file_info = server()->get_file_info(req);
 
 	{
-		if (!server()->check_basic_auth(file_info.second.name, file_info.second.auth_key, req.headers().get("Authorization"))) {
+		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key, req.headers().get("Authorization"))) {
 			ioremap::swarm::http_response reply;
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
-			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second.name + "\"");
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second->name + "\"");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
 			get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
@@ -60,32 +60,32 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		return;
 	}
 
-	if (file_info.second.name.empty()) {
+	if (file_info.second->name.empty()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: cannot determine a namespace");
 		send_reply(400);
 		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
-	m_is_static_ns = !file_info.second.static_couple.empty();
-	m_key = ioremap::elliptics::key(file_info.second.name + '.' + file_info.first);
+	m_is_static_ns = !file_info.second->static_couple.empty();
+	m_key = ioremap::elliptics::key(file_info.second->name + '.' + file_info.first);
 	m_filename = file_info.first;
-	m_session->set_checker(file_info.second.result_checker);
+	m_session->set_checker(file_info.second->result_checker);
 	m_session->set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(*m_session));
 	try {
 		m_session->set_groups(server()->groups_for_upload(file_info.second, m_size));
 	} catch (const mastermind::not_enough_memory_error &e) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
-			, static_cast<int>(file_info.second.groups_count)
-			, file_info.second.name.c_str()
+			, static_cast<int>(file_info.second->groups_count)
+			, file_info.second->name.c_str()
 			, e.code().message().c_str());
 		send_reply(507);
 		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	} catch (const std::system_error &e) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload: cannot obtain any couple size=%d namespace=%s : %s"
-			, static_cast<int>(file_info.second.groups_count)
-			, file_info.second.name.c_str()
+			, static_cast<int>(file_info.second->groups_count)
+			, file_info.second->name.c_str()
 			, e.code().message().c_str());
 		send_reply(500);
 		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));

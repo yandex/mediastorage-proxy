@@ -140,8 +140,8 @@ std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::V
 	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
-std::map<std::string, elliptics::namespace_t> generate_namespaces(std::shared_ptr<mastermind::mastermind_t> &m_mastermind) {
-	std::map<std::string, elliptics::namespace_t> res;
+std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::shared_ptr<mastermind::mastermind_t> &m_mastermind) {
+	std::map<std::string, elliptics::namespace_ptr_t> res;
 	auto nms = m_mastermind->get_namespaces_settings();
 
 	for (auto it = nms.begin(); it != nms.end(); ++it) {
@@ -166,7 +166,8 @@ std::map<std::string, elliptics::namespace_t> generate_namespaces(std::shared_pt
 			throw std::runtime_error(oss.str());
 		}
 
-		res.insert(std::map<std::string, elliptics::namespace_t>::value_type(item.name, item));
+		res.insert(std::map<std::string, elliptics::namespace_ptr_t>::value_type(
+			item.name, std::make_shared<elliptics::namespace_t>(item)));
 	}
 
 	return res;
@@ -417,7 +418,14 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 
 void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
+		auto query_list = req.url().query();
+
 		server()->mastermind()->cache_force_update();
+		if (query_list.has_item("with-namespaces")) {
+			auto namespaces = generate_namespaces(server()->mastermind());
+			std::lock_guard<std::mutex> lock(server()->m_namespaces_mutex);
+			server()->m_namespaces.swap(namespaces);
+		}
 		send_reply(200);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
@@ -513,7 +521,7 @@ ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
 }
 
-const namespace_t &proxy::get_namespace(const std::string &scriptname) {
+namespace_ptr_t proxy::get_namespace(const std::string &scriptname) {
 	auto namespace_end = scriptname.find('/', 1);
 	auto namespace_beg = scriptname.rfind('-', namespace_end);
 
@@ -528,6 +536,7 @@ const namespace_t &proxy::get_namespace(const std::string &scriptname) {
 		}
 	}
 
+	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
 	auto it = m_namespaces.find(str_namespace);
 	if (it == m_namespaces.end()) {
 		throw std::runtime_error("Cannot detect namespace");
@@ -544,16 +553,17 @@ int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size) {
-	if (!name_space.static_couple.empty())
-		return name_space.static_couple;
-	return m_mastermind->get_metabalancer_groups(name_space.groups_count, name_space.name, size);
+std::vector<int> proxy::groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size) {
+	if (!name_space->static_couple.empty())
+		return name_space->static_couple;
+	return m_mastermind->get_metabalancer_groups(name_space->groups_count, name_space->name, size);
 }
 
-std::pair<std::string, elliptics::namespace_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
+std::pair<std::string, namespace_ptr_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
 	auto p = get_filename(req);
+	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
 	auto it = m_namespaces.find(p.second);
-	auto nm = (it != m_namespaces.end() ? it->second : elliptics::namespace_t());
+	auto nm = (it != m_namespaces.end() ? it->second : std::make_shared<elliptics::namespace_t>());
 	return std::make_pair(p.first, nm);
 }
 
@@ -597,13 +607,13 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	return prepare_session(url, ns);
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const std::string &url, const namespace_t &ns) {
+std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
 	auto session = get_session();
 
 	std::vector<int> groups;
 	std::string filename;
 
-	if (ns.static_couple.empty()) {
+	if (ns->static_couple.empty()) {
 		auto bg = url.find('/', 1) + 1;
 		auto eg = url.find('/', bg);
 		auto bf = eg + 1;
@@ -621,11 +631,11 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		auto bf = url.find('/', 1) + 1;
 		auto ef = url.find('?', bf);
 		url.substr(bf, ef - bf).swap(filename);
-		groups = ns.static_couple;
+		groups = ns->static_couple;
 	}
 
 	session.set_groups(groups);
-	return std::make_pair(session, ioremap::elliptics::key(ns.name + '.' + filename));;
+	return std::make_pair(session, ioremap::elliptics::key(ns->name + '.' + filename));;
 }
 
 ioremap::swarm::logger &proxy::logger() {

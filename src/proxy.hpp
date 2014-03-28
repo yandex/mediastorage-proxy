@@ -19,6 +19,7 @@
 #include <map>
 #include <chrono>
 #include <vector>
+#include <mutex>
 
 namespace elliptics {
 
@@ -41,6 +42,8 @@ struct namespace_t {
 	std::string auth_key;
 	std::vector<int> static_couple;
 };
+
+typedef std::shared_ptr<namespace_t> namespace_ptr_t;
 
 class proxy : public ioremap::thevoid::server<proxy>
 {
@@ -146,14 +149,14 @@ public:
 
 protected:
 	ioremap::elliptics::session get_session();
-	const namespace_t &get_namespace(const std::string &scriptname);
+	namespace_ptr_t get_namespace(const std::string &scriptname);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
 	int die_limit() const;
-	std::pair<std::string, elliptics::namespace_t> get_file_info(const ioremap::swarm::http_request &req);
+	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req);
-	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_t &ns);
-	std::vector<int> groups_for_upload(const elliptics::namespace_t &name_space, uint64_t size);
+	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_ptr_t &ns);
+	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
 	ioremap::swarm::logger &logger();
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
@@ -172,7 +175,8 @@ private:
 	int m_write_chunk_size;
 	int m_read_chunk_size;
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
-	std::map<std::string, namespace_t> m_namespaces;
+	std::map<std::string, namespace_ptr_t> m_namespaces;
+	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 };
 

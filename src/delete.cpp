@@ -4,7 +4,7 @@ namespace elliptics {
 void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().to_string().c_str());
-		namespace_t ns;
+		namespace_ptr_t ns;
 		const auto &url_str = req.url().to_string();
 		try {
 			ns = server()->get_namespace(url_str);
@@ -18,12 +18,12 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			return;
 		}
 
-		if (!server()->check_basic_auth(ns.name, ns.auth_key, req.headers().get("Authorization"))) {
+		if (!server()->check_basic_auth(ns->name, ns->auth_key, req.headers().get("Authorization"))) {
 			ioremap::swarm::http_response reply;
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
-			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns.name + "\"");
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
 			return;
