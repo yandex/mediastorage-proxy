@@ -252,6 +252,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_get>(options::prefix_match("/get"));
 	on<req_delete>(options::prefix_match("/delete"));
 	on<req_download_info>(options::prefix_match("/downloadinfo"));
+	on<req_download_info>(options::prefix_match("/download-info"));
 	on<req_stat_log>(options::exact_match("/stat-log"));
 	on<req_stat_log>(options::exact_match("/stat_log"));
 	on<req_ping>(options::exact_match("/ping"));
@@ -499,8 +500,8 @@ ioremap::elliptics::session proxy::get_session() {
 }
 
 const namespace_t &proxy::get_namespace(const std::string &scriptname) {
-	auto namespace_beg = scriptname.find('-');
 	auto namespace_end = scriptname.find('/', 1);
+	auto namespace_beg = scriptname.rfind('-', namespace_end);
 
 	std::string str_namespace;
 
