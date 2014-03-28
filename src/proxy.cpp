@@ -226,6 +226,11 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_eblob_style_path = get_bool(config, "eblob-style-path", true);
 		m_direction_bit_num = get_int(config, "direction-bit-num", 16);
 		m_base_port = get_int(config, "base-port", 1024);
+		m_namespaces_auto_update = get_bool(config, "namespaces-auto-update", false);
+
+		if (m_namespaces_auto_update) {
+			mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
+		}
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
@@ -670,6 +675,12 @@ bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key,
 	g_free(base64);
 
 	return !result;
+}
+
+void proxy::namespaces_auto_update() {
+	auto namespaces = generate_namespaces(mastermind());
+	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
+	m_namespaces.swap(namespaces);
 }
 
 } // namespace elliptics

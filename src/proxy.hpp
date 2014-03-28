@@ -161,6 +161,8 @@ protected:
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 
+	void namespaces_auto_update();
+
 private:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
@@ -176,6 +178,7 @@ private:
 	int m_read_chunk_size;
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::map<std::string, namespace_ptr_t> m_namespaces;
+	bool m_namespaces_auto_update;
 	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 };
