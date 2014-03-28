@@ -258,6 +258,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_ping>(options::exact_match("/ping"));
 	on<req_ping>(options::exact_match("/stat"));
 	on<req_cache>(options::exact_match("/cache"));
+	on<req_cache_update>(options::exact_match("/cache-update"));
 
 	return true;
 }
@@ -405,6 +406,19 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 		reply.set_headers(headers);
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Cache: sending response");
 		send_reply(std::move(reply), std::move(res_str));
+	} catch (const std::exception &ex) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
+		send_reply(500);
+	} catch (...) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: unknown");
+		send_reply(500);
+	}
+}
+
+void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+	try {
+		server()->mastermind()->cache_force_update();
+		send_reply(200);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
 		send_reply(500);

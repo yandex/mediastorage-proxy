@@ -137,6 +137,13 @@ public:
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
+	struct req_cache_update
+		: public ioremap::thevoid::simple_request_stream<proxy>
+		, public std::enable_shared_from_this<req_cache_update>
+	{
+		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+	};
+
 protected:
 	ioremap::elliptics::session get_session();
 	const namespace_t &get_namespace(const std::string &scriptname);
