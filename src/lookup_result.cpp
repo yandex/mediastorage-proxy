@@ -26,11 +26,9 @@ file_backend_get_dir(const unsigned char *id, uint64_t bit_num, char *dst) {
 
 namespace elliptics {
 
-lookup_result::lookup_result(const ioremap::elliptics::lookup_result_entry &entry, bool eblob_style_path, int base_port, int directory_bit_num)
+lookup_result::lookup_result(const ioremap::elliptics::lookup_result_entry &entry, std::string sign_port)
 	: m_entry(entry)
-	, m_eblob_style_path(eblob_style_path)
-	, m_base_port(base_port)
-	, m_directory_bit_num(directory_bit_num)
+	, m_sign_port(sign_port)
 {
 }
 
@@ -45,7 +43,13 @@ const std::string &lookup_result::host() const
 			throw std::runtime_error("can not make dns lookup");
 		}
 
-		m_host.reset(hbuf);
+		std::ostringstream oss;
+		oss << hbuf;
+		if (!m_sign_port.empty()) {
+			oss << ':' << m_sign_port;
+		}
+
+		m_host.reset(oss.str());
 	}
 
 	return *m_host;
@@ -89,25 +93,12 @@ const std::string &lookup_result::path() const
 	if (!m_path) {
 		std::string p;
 		struct dnet_file_info *info = m_entry.file_info();
-		if (m_eblob_style_path) {
-			p = m_entry.file_path();
-			p = p.substr(p.find_last_of("/\\") + 1);
-			std::ostringstream oss;
-			oss << '/' << (port() - m_base_port) << '/'
-				<< p << ':' << info->offset
-				<< ':' << info->size;
-			m_path.reset(oss.str());
-		} else {
-			char id[2 * DNET_ID_SIZE + 1];
-			char hex_dir[2 * DNET_ID_SIZE + 1];
-
-			dnet_dump_id_len_raw(m_entry.command()->id.id, DNET_ID_SIZE, id);
-			file_backend_get_dir(m_entry.command()->id.id, m_directory_bit_num, hex_dir);
-
-			std::ostringstream oss;
-			oss << '/' << boost::lexical_cast<std::string>(port() - m_base_port) << '/' << hex_dir << '/' << id;
-			m_path.reset(oss.str());
-		}
+		p = m_entry.file_path();
+		std::ostringstream oss;
+		oss
+			<< p << ':' << info->offset
+			<< ':' << info->size;
+		m_path.reset(oss.str());
 	}
 
 	return *m_path;

@@ -14,6 +14,9 @@
 
 #include <swarm/url_query.hpp>
 
+#include <crypto++/hmac.h>
+#include <crypto++/sha.h>
+
 #include <memory>
 #include <utility>
 #include <map>
@@ -41,6 +44,9 @@ struct namespace_t {
 	ioremap::elliptics::result_checker result_checker;
 	std::string auth_key;
 	std::vector<int> static_couple;
+	std::string sign_token;
+	std::string sign_path_prefix;
+	std::string sign_port;
 };
 
 typedef std::shared_ptr<namespace_t> namespace_ptr_t;
@@ -76,6 +82,7 @@ public:
 		std::chrono::system_clock::time_point m_beg_time;
 		std::vector<int> m_bad_groups;
 		bool m_is_static_ns;
+		namespace_ptr_t ns;
 	};
 
 	struct req_get
@@ -116,6 +123,9 @@ public:
 	{
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
+
+	private:
+		namespace_ptr_t ns;
 	};
 
 	struct req_ping
@@ -150,7 +160,7 @@ public:
 protected:
 	ioremap::elliptics::session get_session();
 	namespace_ptr_t get_namespace(const std::string &scriptname);
-	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry);
+	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
 	int die_limit() const;
 	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
@@ -160,6 +170,7 @@ protected:
 	ioremap::swarm::logger &logger();
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
+	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 
 	void namespaces_auto_update();
 
@@ -181,6 +192,8 @@ private:
 	bool m_namespaces_auto_update;
 	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
+
+	typedef CryptoPP::HMAC<CryptoPP::SHA512> hmac_type;
 };
 
 } // namespace elliptics

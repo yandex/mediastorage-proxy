@@ -34,6 +34,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	}
 
 	auto file_info = server()->get_file_info(req);
+	ns = file_info.second;
 
 	{
 		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key, req.headers().get("Authorization"))) {
@@ -262,7 +263,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 	size_t written = 0;
 	std::vector<int> wrote_into_groups;
 	for (auto it = swr.begin(); it != swr.end(); ++it) {
-		auto pl = server()->parse_lookup(*it);
+		auto pl = server()->parse_lookup(*it, ns);
 		if (pl.status() == 0)
 			written += 1;
 		oss << "<complete addr=\"" << pl.addr() << "\" path=\"" <<

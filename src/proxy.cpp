@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <utility>
 #include <cstring>
+#include <cstdio>
 
 #include <boost/lexical_cast.hpp>
 
@@ -147,12 +148,15 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 	for (auto it = nms.begin(); it != nms.end(); ++it) {
 		elliptics::namespace_t item;
 
-		item.name = it->name;
-		item.groups_count = it->groups_count;
-		item.auth_key = it->auth_key;
-		item.static_couple = it->static_couple;
+		item.name = it->name();
+		item.groups_count = it->groups_count();
+		item.auth_key = it->auth_key();
+		item.static_couple = it->static_couple();
+		item.sign_token = it->sign_token();
+		item.sign_path_prefix = it->sign_path_prefix();
+		item.sign_port = it->sign_port();
 
-		const std::string &scn = it->success_copies_num;
+		const std::string &scn = it->success_copies_num();
 
 		if (scn == "all") {
 			item.result_checker = ioremap::elliptics::checkers::all;
@@ -272,7 +276,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().to_string().c_str());
-		auto &&prep_session = server()->prepare_session(req);
+		const auto &url = req.url().to_string();
+		ns = server()->get_namespace(url);
+		auto &&prep_session = server()->prepare_session(url, ns);
 		auto &&session = prep_session.first;
 
 		if (session.get_groups().empty()) {
@@ -311,20 +317,56 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
 				std::string region = "-1";
 				
-				auto entry = server()->parse_lookup(*it);
+				auto entry = server()->parse_lookup(*it, ns);
 				
+				// path: /var/blob/s1/data-0.1
+				// scheme://hostname/blob/s1/data-0.1:offset:size?time=unix-timestamp
+				// HMAC(url, token)
+
+				std::string sign;
 				long time;
-				{
-					using namespace std::chrono;
-					time = duration_cast<microseconds>(
-						system_clock::now().time_since_epoch()
-						).count();
+				std::string tmp_debug;
+				bool use_sign = !ns->sign_token.empty();
+				std::string entry_path;
+
+				if (use_sign) {
+					{
+						entry_path = entry.path();
+						const auto &path_prefix = ns->sign_path_prefix;
+						if (strncmp(entry_path.c_str(), path_prefix.c_str(), path_prefix.size())) {
+							server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+									"Download-info: path_prefix does not match: prefix=%s path=%s",
+									path_prefix.c_str(), entry_path.c_str());
+						} else {
+							entry_path.substr(path_prefix.size()).swap(entry_path);
+						}
+					}
+					{
+						using namespace std::chrono;
+						time = duration_cast<seconds>(
+									system_clock::now().time_since_epoch()).count();
+					}
+
+					{
+						using namespace std::chrono;
+						std::ostringstream oss;
+						oss << "scheme://" << entry.host() << '/' << entry_path << "?time=" << time;
+						tmp_debug = oss.str();
+						server()->hmac(oss.str(), ns).swap(sign);
+					}
 				}
 
 				oss << "<download-info>";
 				oss << "<host>" << entry.host() << "</host>";
-				oss << "<path>" << entry.path() << "</path>";
+				oss << "<path>" << entry_path << "</path>";
+				if (use_sign) {
+					oss << "<ts>" << time << "</ts>";
+				}
 				oss << "<region>" << region << "</region>";
+				if (use_sign) {
+					oss << "<s>" << sign << "</s>";
+					oss << "<debug>" << tmp_debug << "</debug>";
+				}
 				oss << "</download-info>";
 
 				const std::string &str = oss.str();
@@ -550,8 +592,8 @@ namespace_ptr_t proxy::get_namespace(const std::string &scriptname) {
 	return it->second;
 }
 
-elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry) {
-	return elliptics::lookup_result(entry, m_eblob_style_path, m_base_port, m_direction_bit_num);
+elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns) {
+	return elliptics::lookup_result(entry, ns->sign_port);
 }
 
 int proxy::die_limit() const {
@@ -675,6 +717,22 @@ bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key,
 	g_free(base64);
 
 	return !result;
+}
+
+std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
+	using namespace CryptoPP;
+
+	HMAC<SHA512> hmac((const byte *)ns->sign_token.data(), ns->sign_token.size());
+	hmac.Update((const byte *)data.data(), data.size());
+	std::vector<byte> res(hmac.DigestSize());
+	hmac.Final(res.data());
+
+	std::ostringstream oss;
+	oss << std::hex;
+	for (auto it = res.begin(), end = res.end(); it != end; ++it) {
+		oss << std::setfill('0') << std::setw(2) << static_cast<int>(*it);
+	}
+	return oss.str();
 }
 
 void proxy::namespaces_auto_update() {
