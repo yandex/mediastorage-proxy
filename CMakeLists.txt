@@ -19,6 +19,7 @@ set(REQUIRED_LIBRARIES
 	msgpack
 	magic
 	${GLIB_LIBRARY}
+	crypto++
 	)
 
 set(SOURCE
