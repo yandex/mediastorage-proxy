@@ -1,3 +1,17 @@
+mediastorage-proxy (0.32) lucid; urgency=low
+
+  * Always use magic type detection, not only for small files
+  * Added hello-message on start
+  * Added hanler download-info
+  * Added handler cache-update for force cache updating
+  * Added cache-update with 'with-namespaces'
+  * Added auto updating for namespaces
+  * Removed logrotate.d
+  * Added sign for download-info
+  * Removed embeds
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 03 Apr 2014 19:19:54 +0400
+
 mediastorage-proxy (0.31) lucid; urgency=low
 
   * Do not parse embeds if user_flags does not have corresponding bit
