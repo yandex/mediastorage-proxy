@@ -319,13 +319,8 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				
 				auto entry = server()->parse_lookup(*it, ns);
 				
-				// path: /var/blob/s1/data-0.1
-				// scheme://hostname/blob/s1/data-0.1:offset:size?time=unix-timestamp
-				// HMAC(url, token)
-
 				std::string sign;
 				long time;
-				std::string tmp_debug;
 				bool use_sign = !ns->sign_token.empty();
 				std::string entry_path;
 
@@ -351,7 +346,6 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 						using namespace std::chrono;
 						std::ostringstream oss;
 						oss << "scheme://" << entry.host() << '/' << entry_path << "?time=" << time;
-						tmp_debug = oss.str();
 						server()->hmac(oss.str(), ns).swap(sign);
 					}
 				}
@@ -365,7 +359,6 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				oss << "<region>" << region << "</region>";
 				if (use_sign) {
 					oss << "<s>" << sign << "</s>";
-					oss << "<debug>" << tmp_debug << "</debug>";
 				}
 				oss << "</download-info>";
 
