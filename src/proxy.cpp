@@ -400,7 +400,12 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().to_string().c_str());
 		int code = 200;
 		auto session = server()->get_session();
-		if (session.state_num() < server()->die_limit()) {
+		auto state_num = session.state_num();
+		auto die_limit = server()->die_limit();
+		if (state_num < die_limit) {
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+					"Ping request error: state_num too small state_num=%d",
+					static_cast<int>(state_num));
 			code = 500;
 		}
 		send_reply(code);
