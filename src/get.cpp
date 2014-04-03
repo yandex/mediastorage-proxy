@@ -36,15 +36,12 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	m_first_chunk = true;
 	m_chunk_size = server()->m_read_chunk_size;
 
-	if (m_size == 0) {
-		auto alr = m_session->lookup(m_key);
-		alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-	} else {
-		read_chunk();
-	}
+	// Read 1 byte to get total_size of file cause lookup doesn't look up into cache
+	auto alr = m_session->read_data(m_key, 0, 1);
+	alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
 
-void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
+void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: on_lookup: file %s not found", m_key.remote().c_str());
@@ -56,7 +53,19 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr
 		return;
 	}
 	const auto &entry = slr.front();
-	m_size = entry.file_info()->size;
+	auto total_size = entry.io_attribute()->total_size;
+
+	if (m_offset >= total_size) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: offset greater than total_size");
+		send_reply(400);
+		return;
+	}
+
+	total_size -= m_offset;
+
+	if (m_size == 0 || m_size > total_size) {
+		m_size = total_size;
+	}
 
 	std::vector<int> groups;
 	groups.push_back(entry.command()->id.group_id);
@@ -84,6 +93,7 @@ void proxy::req_get::read_chunk() {
 	}
 
 	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: read_chunk: reading of chunks is starting");
+	m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);
 	arr.connect(std::bind(&proxy::req_get::on_read_chunk, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
