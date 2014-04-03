@@ -1,3 +1,9 @@
+mediastorage-proxy (0.33) lucid; urgency=low
+
+  * Added support for X-Regional-Host
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 03 Apr 2014 22:05:22 +0400
+
 mediastorage-proxy (0.32) lucid; urgency=low
 
   * Always use magic type detection, not only for small files
