@@ -281,6 +281,13 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 		auto &&prep_session = server()->prepare_session(url, ns);
 		auto &&session = prep_session.first;
 
+		{
+			const auto &headers = req.headers();
+			if (const auto &xrh = headers.get("X-Regional-Host")) {
+				x_regional_host = *xrh;
+			}
+		}
+
 		if (session.get_groups().empty()) {
 			send_reply(404);
 			return;
@@ -351,8 +358,11 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				}
 
 				oss << "<download-info>";
+				if (!x_regional_host.empty()) {
+					oss << "<regional-host>" << x_regional_host << "</regional-host>";
+				}
 				oss << "<host>" << entry.host() << "</host>";
-				oss << "<path>" << entry_path << "</path>";
+				oss << "<path>/" << entry_path << "</path>";
 				if (use_sign) {
 					oss << "<ts>" << time << "</ts>";
 				}

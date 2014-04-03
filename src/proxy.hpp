@@ -126,6 +126,7 @@ public:
 
 	private:
 		namespace_ptr_t ns;
+		std::string x_regional_host;
 	};
 
 	struct req_ping
