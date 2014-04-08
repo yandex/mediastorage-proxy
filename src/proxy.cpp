@@ -22,6 +22,21 @@
 
 #include <iostream>
 
+namespace elliptics {
+
+const std::string proxy::req_download_info_1::handler_name = "/downloadinfo";
+const std::string proxy::req_download_info_2::handler_name = "/download-info";
+
+proxy::req_download_info_1::req_download_info_1()
+	: req_download_info(handler_name)
+{}
+
+proxy::req_download_info_2::req_download_info_2()
+	: req_download_info(handler_name)
+{}
+
+} // namespace elliptics
+
 namespace {
 
 int get_int(const rapidjson::Value &config, const char *name, int def_val = 0) {
@@ -261,8 +276,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_upload>(options::prefix_match("/upload"));
 	on<req_get>(options::prefix_match("/get"));
 	on<req_delete>(options::prefix_match("/delete"));
-	on<req_download_info>(options::prefix_match("/downloadinfo"));
-	on<req_download_info>(options::prefix_match("/download-info"));
+	on<req_download_info_1>(options::prefix_match(req_download_info_1::handler_name));
+	on<req_download_info_2>(options::prefix_match(req_download_info_2::handler_name));
 	on<req_stat_log>(options::exact_match("/stat-log"));
 	on<req_stat_log>(options::exact_match("/stat_log"));
 	on<req_ping>(options::exact_match("/ping"));
@@ -273,11 +288,24 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	return true;
 }
 
+proxy::req_download_info::req_download_info(const std::string &handler_name_)
+	: handler_name(handler_name_)
+{}
+
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().to_string().c_str());
 		const auto &url = req.url().to_string();
-		ns = server()->get_namespace(url);
+		try {
+			ns = server()->get_namespace(url, handler_name);
+		} catch (const std::exception &ex) {
+			server()->logger().log(
+				ioremap::swarm::SWARM_LOG_INFO,
+				"Download info: request = \"%s\"; err: \"%s\"",
+				url.c_str(), ex.what());
+			send_reply(400);
+			return;
+		}
 		auto &&prep_session = server()->prepare_session(url, ns);
 		auto &&session = prep_session.first;
 
@@ -576,19 +604,27 @@ ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
 }
 
-namespace_ptr_t proxy::get_namespace(const std::string &scriptname) {
-	auto namespace_end = scriptname.find('/', 1);
-	auto namespace_beg = scriptname.rfind('-', namespace_end);
+namespace_ptr_t proxy::get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name) {
+	const auto &url = req.url();
+	return get_namespace(url.to_string(), handler_name);
+}
 
+namespace_ptr_t proxy::get_namespace(const std::string &scriptname, const std::string &handler_name) {
+	if (strncmp(scriptname.c_str(), handler_name.c_str(), handler_name.size())) {
+		throw std::runtime_error("Cannot detect namespace");
+	}
 	std::string str_namespace;
-
-	if (namespace_beg == std::string::npos) {
+	if (scriptname[handler_name.size()] == '-') {
+		auto namespace_end = scriptname.find('/', 1);
+		auto namespace_beg = handler_name.size() + 1;
+		if (namespace_beg == namespace_end) {
+			throw std::runtime_error("Cannot detect namespace");
+		}
+		scriptname.substr(namespace_beg, namespace_end - namespace_beg).swap(str_namespace);
+	} else if (scriptname[handler_name.size()] == '/'){
 		str_namespace = "default";
 	} else {
-		namespace_beg += 1;
-		if (namespace_beg < namespace_end) {
-			str_namespace = scriptname.substr(namespace_beg, namespace_end - namespace_beg);
-		}
+		throw std::runtime_error("Cannot detect namespace");
 	}
 
 	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
@@ -656,10 +692,13 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 	return res;
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const ioremap::swarm::http_request &req) {
-	const auto &url = req.url().to_string();
-	const auto &ns = get_namespace(url);
-	return prepare_session(url, ns);
+std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(
+		const ioremap::swarm::http_request &req,
+		const std::string &handler_name) {
+	const auto &url = req.url();
+	const auto &str_url = url.to_string();
+	const auto &ns = get_namespace(str_url, handler_name);
+	return prepare_session(str_url, ns);
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {

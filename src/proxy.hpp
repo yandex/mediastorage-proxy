@@ -121,12 +121,24 @@ public:
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_download_info>
 	{
+		req_download_info(const std::string &handler_name_);
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 
 	private:
 		namespace_ptr_t ns;
 		std::string x_regional_host;
+		std::string handler_name;
+	};
+
+	struct req_download_info_1 : public req_download_info {
+		req_download_info_1();
+		static const std::string handler_name;
+	};
+
+	struct req_download_info_2 : public req_download_info {
+		req_download_info_2();
+		static const std::string handler_name;
 	};
 
 	struct req_ping
@@ -160,12 +172,13 @@ public:
 
 protected:
 	ioremap::elliptics::session get_session();
-	namespace_ptr_t get_namespace(const std::string &scriptname);
+	namespace_ptr_t get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name);
+	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
 	int die_limit() const;
 	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::swarm::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
-	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req);
+	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req, const std::string &handler_name);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_ptr_t &ns);
 	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
 	ioremap::swarm::logger &logger();

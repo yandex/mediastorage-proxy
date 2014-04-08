@@ -11,7 +11,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	m_beg_time = std::chrono::system_clock::now();
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", req.url().to_string().c_str());
 	try {
-		auto &&prep_session = server()->prepare_session(req);
+		auto &&prep_session = server()->prepare_session(req, "/get");
 		m_session = prep_session.first;
 		m_key = prep_session.second;
 	} catch (const std::exception &ex) {

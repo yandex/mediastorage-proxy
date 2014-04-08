@@ -7,7 +7,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 		namespace_ptr_t ns;
 		const auto &url_str = req.url().to_string();
 		try {
-			ns = server()->get_namespace(url_str);
+			ns = server()->get_namespace(url_str, "/delete");
 		} catch (const std::exception &ex) {
 			server()->logger().log(
 				ioremap::swarm::SWARM_LOG_INFO,
