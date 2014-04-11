@@ -380,7 +380,13 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 					{
 						using namespace std::chrono;
 						std::ostringstream oss;
-						oss << "scheme://" << entry.host() << '/' << entry_path << "?time=" << time;
+						oss << "scheme://";
+						if (!x_regional_host.empty()) {
+							oss << x_regional_host;
+						} else {
+							oss << entry.host();
+						}
+						oss << '/' << entry_path << "?time=" << time;
 						server()->hmac(oss.str(), ns).swap(sign);
 					}
 				}
