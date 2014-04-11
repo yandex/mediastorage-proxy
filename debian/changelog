@@ -1,3 +1,9 @@
+mediastorage-proxy (0.36) lucid; urgency=low
+
+  * Improved signature for using regional host
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 11 Apr 2014 19:58:46 +0400
+
 mediastorage-proxy (0.35) lucid; urgency=low
 
   * Fixed namespace detection
