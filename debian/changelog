@@ -1,3 +1,9 @@
+mediastorage-proxy (0.38) lucid; urgency=low
+
+  * Fixed misprint
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 21 Apr 2014 17:21:51 +0400
+
 mediastorage-proxy (0.37) lucid; urgency=low
 
   * Added ping info log with alive nodes
