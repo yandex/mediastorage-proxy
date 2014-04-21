@@ -452,7 +452,7 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 
 		{
 			const auto &msg = oss.str();
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", msg.c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
 		}
 		send_reply(code);
 	} catch (const std::exception &ex) {
