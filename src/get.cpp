@@ -9,7 +9,8 @@ namespace elliptics {
 
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	m_beg_time = std::chrono::system_clock::now();
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", req.url().to_string().c_str());
+	url_str = req.url().to_string();
+	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
 	try {
 		auto &&prep_session = server()->prepare_session(req, "/get");
 		m_session = prep_session.first;
@@ -47,7 +48,7 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: on_lookup: file %s not found", m_key.remote().c_str());
 			send_reply(404);
 		} else {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get: on_lookup: %s", error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get %s: on_lookup: %s", url_str.c_str(), error.message().c_str());
 			send_reply(500);
 		}
 		return;
@@ -100,7 +101,7 @@ void proxy::req_get::read_chunk() {
 
 void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get: on_read_chunk: %s", error.message().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get %s: on_read_chunk: %s", url_str.c_str(), error.message().c_str());
 		send_reply(500);
 		return;
 	}
@@ -151,7 +152,7 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 
 void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "get: on_sent_chunk: %s", error.message().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "get %s: on_sent_chunk: %s", url_str.c_str(), error.message().c_str());
 		get_reply()->close(error);
 		return;
 	}

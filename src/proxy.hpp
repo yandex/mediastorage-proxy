@@ -107,6 +107,7 @@ public:
 		bool m_first_chunk;
 
 		std::chrono::system_clock::time_point m_beg_time;
+		std::string url_str;
 	};
 
 	struct req_delete
