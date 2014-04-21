@@ -432,15 +432,27 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().to_string().c_str());
+		std::ostringstream oss;
+		oss << "Stats: done; nodes alive: ";
 		int code = 200;
 		auto session = server()->get_session();
 		auto state_num = session.state_num();
 		auto die_limit = server()->die_limit();
+		oss << state_num;
+		oss << "; die-limit: ";
 		if (state_num < die_limit) {
 			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR,
 					"Ping request error: state_num too small state_num=%d",
 					static_cast<int>(state_num));
 			code = 500;
+			oss << "Bad";
+		} else {
+			oss << "Ok";
+		}
+
+		{
+			const auto &msg = oss.str();
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", msg.c_str());
 		}
 		send_reply(code);
 	} catch (const std::exception &ex) {
@@ -483,6 +495,11 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 		if (query_list.has_item("namespaces-settings")) {
 			if (g) oss << ',' << std::endl;
 			oss << "\"namespaces-settings\" : " << server()->mastermind()->json_namespaces_settings();
+			g = true;
+		}
+		if (query_list.has_item("metabalancer-info")) {
+			if (g) oss << ',' << std::endl;
+			oss << "\"metabalancer-info\" : " << server()->mastermind()->json_metabalancer_info();
 			g = true;
 		}
 		if (g) oss << std::endl;
