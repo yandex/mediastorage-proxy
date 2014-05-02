@@ -266,17 +266,26 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		auto pl = server()->parse_lookup(*it, ns);
 		if (pl.status() == 0)
 			written += 1;
-		oss << "<complete addr=\"" << pl.addr() << "\" path=\"";
-		
+		oss << "<complete addr=\"";
+
 		if (pl.status() == 0) {
-			oss << pl.full_path();
-		} else {
-			oss << "";
+			oss << pl.addr();
 		}
 
-		oss << "\" group=\"" << pl.group() <<
-			"\" status=\"" << pl.status() << "\"/>\n";
-		wrote_into_groups.push_back(pl.group());
+		oss << "\" path=\"";
+	
+		if (pl.status() == 0) {
+			oss << pl.full_path();
+		}
+
+		oss << "\" group=\"";
+		
+		if (pl.status() == 0) {
+			oss << pl.group();
+			wrote_into_groups.push_back(pl.group());
+		}
+
+		oss << "\" status=\"" << pl.status() << "\"/>\n";
 	}
 
 	oss
