@@ -1,3 +1,9 @@
+mediastorage-proxy (0.39) lucid; urgency=low
+
+  * Prints path only for successfull records in upload handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 02 May 2014 09:55:28 +0400
+
 mediastorage-proxy (0.38) lucid; urgency=low
 
   * Fixed misprint
