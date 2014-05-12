@@ -1,3 +1,9 @@
+mediastorage-proxy (0.41) lucid; urgency=low
+
+  * Logs size of removing object
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 12 May 2014 13:42:56 +0400
+
 mediastorage-proxy (0.40) lucid; urgency=low
 
   * Don't use any methods of lookup_result if status != 0
