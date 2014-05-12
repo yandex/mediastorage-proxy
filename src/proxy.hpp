@@ -115,7 +115,14 @@ public:
 		, public std::enable_shared_from_this<req_delete>
 	{
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error);
 		void on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error);
+
+	private:
+		std::string url_str;
+		ioremap::elliptics::key key;
+		boost::optional<ioremap::elliptics::session> session;
+		size_t total_size;
 	};
 
 	struct req_download_info
