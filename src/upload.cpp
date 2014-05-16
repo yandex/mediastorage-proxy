@@ -20,6 +20,13 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		return;
 	}
 
+	if (m_size == 0) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: Content-Length must be greater than zero");
+		send_reply(400);
+		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
+		return;
+	}
+
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %lu",
 		req.url().to_string().c_str(), m_size);
 
