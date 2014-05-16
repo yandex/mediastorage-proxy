@@ -15,6 +15,8 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 		auto &&prep_session = server()->prepare_session(req, "/get");
 		m_session = prep_session.first;
 		m_key = prep_session.second;
+		m_key.transform(*m_session);
+		m_key.set_id(m_key.id());
 	} catch (const std::exception &ex) {
 		server()->logger().log(
 			ioremap::swarm::SWARM_LOG_INFO,
@@ -25,7 +27,9 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	}
 
 	if (m_session->get_groups().empty()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: on_request: cannot find couple of groups for the request");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+				, "Get %s: on_request: cannot find couple of groups for the request"
+				, url_str.c_str());
 		send_reply(404);
 		return;
 	}
@@ -38,6 +42,19 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	m_chunk_size = server()->m_read_chunk_size;
 
 	// Read 1 byte to get total_size of file cause lookup doesn't look up into cache
+	{
+		std::ostringstream oss;
+		oss << "Get " << m_key.remote() << " " << m_key.to_string()
+			<< ": lookup(read 1 byte) from groups [";
+		const auto &groups = m_session->get_groups();
+		for (auto bit = groups.begin(), it = bit, end = groups.end(); it != end; ++it) {
+			if (it != bit) oss << ", ";
+			oss << *it;
+		}
+		oss << ']';
+		auto msg = oss.str();
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+	}
 	auto alr = m_session->read_data(m_key, 0, 1);
 	alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
@@ -45,10 +62,14 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: on_lookup: file %s not found", m_key.remote().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+					, "Get %s %s: on_lookup: file not found"
+					, m_key.remote().c_str(), m_key.to_string().c_str());
 			send_reply(404);
 		} else {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get %s: on_lookup: %s", url_str.c_str(), error.message().c_str());
+			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+					, "Get %s %s: on_lookup: %s"
+					, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
 			send_reply(500);
 		}
 		return;
@@ -57,7 +78,10 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 	auto total_size = entry.io_attribute()->total_size;
 
 	if (m_offset >= total_size) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: offset greater than total_size");
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+				, "Get %s %s: offset greater than total_size"
+				, m_key.remote().c_str()
+				, m_key.to_string().c_str());
 		send_reply(400);
 		return;
 	}
@@ -79,7 +103,8 @@ void proxy::req_get::read_chunk() {
 	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
 		std::ostringstream oss;
 		oss
-			<< "Get: read_chunk: chunk_size=" << m_chunk_size
+			<< "Get " << m_key.remote() << " " << m_key.to_string()
+			<< ": read_chunk: chunk_size=" << m_chunk_size
 			<< " file_size=" << m_size << " offset=" << m_offset
 			<< " data_left=" << (m_size - m_offset)
 			<< " groups: [";
@@ -93,7 +118,6 @@ void proxy::req_get::read_chunk() {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: read_chunk: reading of chunks is starting");
 	m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);
 	arr.connect(std::bind(&proxy::req_get::on_read_chunk, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
@@ -101,12 +125,16 @@ void proxy::req_get::read_chunk() {
 
 void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Get %s: on_read_chunk: %s", url_str.c_str(), error.message().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+				, "Get %s %s: on_read_chunk: %s"
+				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
 		send_reply(500);
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Get: on_read_chunk: got a chunk");
+	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+			, "Get %s %s: on_read_chunk: chunk was read"
+			, m_key.remote().c_str(), m_key.to_string().c_str());
 
 	const auto &rr = srr.front();
 	auto file = rr.file();
@@ -152,10 +180,16 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 
 void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "get %s: on_sent_chunk: %s", url_str.c_str(), error.message().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+				, "Get %s %s: on_sent_chunk: %s"
+				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
 		get_reply()->close(error);
 		return;
 	}
+
+	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+			, "Get %s %s: chunk was sent"
+			, m_key.remote().c_str(), m_key.to_string().c_str());
 
 	if (m_offset < m_size) {
 		read_chunk();
@@ -168,7 +202,8 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 
 		std::ostringstream oss;
 		oss
-			<< "Get: on_finished: request=" << request().url().to_string() << " spent_time=" << spent_time
+			<< "Get " << m_key.remote() << " " << m_key.to_string()
+			<< ": on_finished: request=" << request().url().to_string() << " spent_time=" << spent_time
 			<< " file_size=" << m_size;
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
