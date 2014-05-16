@@ -1,3 +1,10 @@
+mediastorage-proxy (0.42) lucid; urgency=low
+
+  * Added chech into upload handler for Content-Length > 0
+  * Improved upload and get logs
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 16 May 2014 11:49:03 +0400
+
 mediastorage-proxy (0.41) lucid; urgency=low
 
   * Logs size of removing object
