@@ -183,14 +183,13 @@ void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &sw
 	}
 
 	std::vector<int> good_groups;
-	std::vector<int> bad_groups;
 
 	for (auto it = swr.begin(); it != swr.end(); ++it) {
 		int group = it->command()->id.group_id;
 		if (!it->error()) {
 			good_groups.push_back(group);
 		} else {
-			bad_groups.push_back(group);
+			m_bad_groups.push_back(group);
 		}
 	}
 
@@ -202,7 +201,7 @@ void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &sw
 			oss << *it;
 		}
 		oss << "] uploading will not use bad groups [";
-		for (auto itb = bad_groups.begin(), it = itb; it != bad_groups.end(); ++it) {
+		for (auto itb = m_bad_groups.begin(), it = itb; it != m_bad_groups.end(); ++it) {
 			if (it != itb) oss << ", ";
 			oss << *it;
 		}
@@ -290,6 +289,8 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		if (pl.status() == 0) {
 			oss << pl.group();
 			wrote_into_groups.push_back(pl.group());
+		} else {
+			m_bad_groups.push_back(pl.group());
 		}
 
 		oss << "\" status=\"" << pl.status() << "\"/>\n";
@@ -321,6 +322,11 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			<< "; wrote into groups: [";
 		for (auto itb = wrote_into_groups.begin(), it = itb; it != wrote_into_groups.end(); ++it) {
 			if (it != itb) oss << ", ";
+			oss << *it;
+		}
+		oss << "] failed to write into groups: [";
+		for (auto bit = m_bad_groups.begin(), it = bit, end = m_bad_groups.end(); it != end; ++it) {
+			if (it != bit) oss << ", ";
 			oss << *it;
 		}
 		oss << ']';
