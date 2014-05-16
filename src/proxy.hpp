@@ -203,9 +203,6 @@ private:
 	boost::optional<ioremap::swarm::logger> m_proxy_logger;
 	boost::optional<ioremap::swarm::logger> m_mastermind_logger;
 	int m_die_limit;
-	bool m_eblob_style_path;
-	int m_direction_bit_num;
-	int m_base_port;
 	int m_groups_count;
 	int m_write_chunk_size;
 	int m_read_chunk_size;
@@ -214,6 +211,17 @@ private:
 	bool m_namespaces_auto_update;
 	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
+
+	struct {
+		int def;
+		int read;
+		int write;
+	} timeout;
+
+	struct {
+		int data_flow_rate;
+		int for_commit;
+	} timeout_coef;
 
 	typedef CryptoPP::HMAC<CryptoPP::SHA512> hmac_type;
 };

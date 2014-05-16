@@ -14,6 +14,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	try {
 		auto &&prep_session = server()->prepare_session(req, "/get");
 		m_session = prep_session.first;
+		m_session->set_timeout(server()->timeout.read);
 		m_key = prep_session.second;
 		m_key.transform(*m_session);
 		m_key.set_id(m_key.id());
@@ -55,8 +56,14 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 		auto msg = oss.str();
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
 	}
-	auto alr = m_session->read_data(m_key, 0, 1);
-	alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	{
+		auto ioflags = m_session->get_ioflags();
+		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
+		auto alr = m_session->read_data(m_key, 0, 1);
+		alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(),
+					std::placeholders::_1, std::placeholders::_2));
+		m_session->set_ioflags(ioflags);
+	}
 }
 
 void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error) {
@@ -118,7 +125,15 @@ void proxy::req_get::read_chunk() {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
-	m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
+	if (m_first_chunk) {
+		if (server()->timeout_coef.data_flow_rate) {
+			m_session->set_timeout(
+					m_session->get_timeout() + m_size / server()->timeout_coef.data_flow_rate);
+		}
+	} else {
+		m_session->set_timeout(server()->timeout.read);
+		m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
+	}
 	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);
 	arr.connect(std::bind(&proxy::req_get::on_read_chunk, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }

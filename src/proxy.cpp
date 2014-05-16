@@ -67,7 +67,10 @@ ioremap::swarm::logger generate_logger(const rapidjson::Value &config, const std
 	return ioremap::swarm::logger(log_path.c_str(), log_mask);
 }
 
-ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &logger) {
+// TODO: Tatars dont look at the code they write, so a cant use get_native() method of node:
+// >> error: invalid use of incomplete type ‘struct dnet_node’
+ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &logger
+		, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -75,6 +78,7 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::
 		const auto &timeouts = config["timeouts"];
 		if (timeouts.HasMember("wait"))
 			dnet_conf.wait_timeout = timeouts["wait"].GetInt();
+
 		if (timeouts.HasMember("check"))
 			dnet_conf.check_timeout = timeouts["check"].GetInt();
 	}
@@ -236,16 +240,32 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts");
 		m_elliptics_logger.reset(elliptics_logger_t(generate_logger(config, "elliptics")));
 		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
-		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger));
+		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger, timeout.def));
+
+		if (timeout.def == 0) {
+			timeout.def = 10;
+		}
+
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
 		m_namespaces = generate_namespaces(m_mastermind);
 
 		m_die_limit = get_int(config, "die-limit", 1);
-		m_eblob_style_path = get_bool(config, "eblob-style-path", true);
-		m_direction_bit_num = get_int(config, "direction-bit-num", 16);
-		m_base_port = get_int(config, "base-port", 1024);
 		m_namespaces_auto_update = get_bool(config, "namespaces-auto-update", false);
+
+		if (config.HasMember("timeouts")) {
+			const auto &json_timeout = config["timeouts"];
+
+			timeout.read = get_int(json_timeout, "read", timeout.def);
+			timeout.write = get_int(json_timeout, "write", timeout.def);
+		}
+
+		if (config.HasMember("timeout-coefs")) {
+			const auto &json = config["timeout-coefs"];
+
+			timeout_coef.data_flow_rate = get_int(json, "data-flow-rate", 0);
+			timeout_coef.for_commit = get_int(json, "for-commit", 0);
+		}
 
 		if (m_namespaces_auto_update) {
 			mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));

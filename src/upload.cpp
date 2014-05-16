@@ -65,6 +65,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	set_chunk_size(server()->m_write_chunk_size);
 
 	m_session = server()->get_session();
+	m_session->set_timeout(server()->timeout.write);
 
 	if (m_session->state_num() < server()->die_limit()) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
@@ -358,6 +359,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 }
 
 ioremap::elliptics::async_write_result proxy::req_upload::write(unsigned int flags) {
+	m_session->set_timeout(server()->timeout.write);
 	if (flags == single_chunk) {
 		return m_session->write_data(m_key, m_content, m_offset);
 	}
@@ -365,6 +367,7 @@ ioremap::elliptics::async_write_result proxy::req_upload::write(unsigned int fla
 		return m_session->write_prepare(m_key, m_content, m_offset, m_size);
 	}
 	if (flags & last_chunk) {
+		m_session->set_timeout(server()->timeout.write * server()->timeout_coef.for_commit);
 		return m_session->write_commit(m_key, m_content, m_offset, m_size);
 	}
 	return m_session->write_plain(m_key, m_content, m_offset);
