@@ -326,8 +326,18 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 			send_reply(400);
 			return;
 		}
-		auto &&prep_session = server()->prepare_session(url, ns);
-		auto &&session = prep_session.first;
+		boost::optional<ioremap::elliptics::session> session;
+		boost::optional<ioremap::elliptics::key> key;
+
+		try {
+			auto &&prep_session = server()->prepare_session(url, ns);
+			session.reset(prep_session.first);
+			key.reset(prep_session.second);
+		} catch (const std::exception &ex) {
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info request error: %s", ex.what());
+			send_reply(400);
+			return;
+		}
 
 		{
 			const auto &headers = req.headers();
@@ -336,16 +346,15 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 			}
 		}
 
-		if (session.get_groups().empty()) {
+		if (session->get_groups().empty()) {
 			send_reply(404);
 			return;
 		}
 
-		session.set_filter(ioremap::elliptics::filters::all);
+		session->set_filter(ioremap::elliptics::filters::all);
 
-		auto &&key = prep_session.second;
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: looking up");
-		auto alr = session.lookup(key);
+		auto alr = session->lookup(*key);
 
 		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
