@@ -1,3 +1,10 @@
+mediastorage-proxy (0.44) lucid; urgency=low
+
+  * Downloadinfo responses 400 instead of 500 if url is incorrect
+  * Downloadinfo sets path-tag for each request
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 20 May 2014 19:07:50 +0400
+
 mediastorage-proxy (0.43) lucid; urgency=low
 
   * Removed unused options and annd new options
