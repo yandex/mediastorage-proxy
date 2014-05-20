@@ -386,11 +386,10 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				std::string sign;
 				long time;
 				bool use_sign = !ns->sign_token.empty();
-				std::string entry_path;
+				std::string entry_path = entry.path();
 
 				if (use_sign) {
 					{
-						entry_path = entry.path();
 						const auto &path_prefix = ns->sign_path_prefix;
 						if (strncmp(entry_path.c_str(), path_prefix.c_str(), path_prefix.size())) {
 							server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
@@ -398,6 +397,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 									path_prefix.c_str(), entry_path.c_str());
 						} else {
 							entry_path.substr(path_prefix.size()).swap(entry_path);
+							entry_path = '/' + entry_path;
 						}
 					}
 					{
@@ -415,7 +415,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 						} else {
 							oss << entry.host();
 						}
-						oss << '/' << entry_path << "?time=" << time;
+						oss << entry_path << "?time=" << time;
 						server()->hmac(oss.str(), ns).swap(sign);
 					}
 				}
@@ -425,7 +425,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 					oss << "<regional-host>" << x_regional_host << "</regional-host>";
 				}
 				oss << "<host>" << entry.host() << "</host>";
-				oss << "<path>/" << entry_path << "</path>";
+				oss << "<path>" << entry_path << "</path>";
 				if (use_sign) {
 					oss << "<ts>" << time << "</ts>";
 				}
