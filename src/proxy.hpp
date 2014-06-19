@@ -191,6 +191,7 @@ protected:
 	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
 	ioremap::swarm::logger &logger();
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
+	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 

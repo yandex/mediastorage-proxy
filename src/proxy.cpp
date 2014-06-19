@@ -792,6 +792,18 @@ std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {
 	return m_mastermind;
 }
 
+std::string proxy::get_auth_token(const boost::optional<std::string> &auth_header) {
+	if (!auth_header) {
+		return "";
+	}
+
+	if (auth_header->compare(0, sizeof("Basic ") - 1, "Basic ") == 0) {
+		return auth_header->substr(sizeof ("Basic ") - 1);
+	}
+
+	return "";
+}
+
 bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header) {
 	if (auth_key.empty()) {
 		return true;

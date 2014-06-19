@@ -50,6 +50,10 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 
 	{
 		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key, req.headers().get("Authorization"))) {
+			auto token = server()->get_auth_token(req.headers().get("Authorization"));
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+					"%s: invalid token \"%s\""
+					, str_url.c_str(), token.empty() ? "<none>" : token.c_str());
 			ioremap::swarm::http_response reply;
 			ioremap::swarm::http_headers headers;
 
