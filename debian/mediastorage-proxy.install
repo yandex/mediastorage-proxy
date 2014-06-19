@@ -1,4 +1,0 @@
-usr/bin/mediastorage-proxy
-etc/init.d/mediastorage-proxy
-etc/ubic/service/mediastorage-proxy.ini
-usr/share/perl5/Ubic/Service/MDSProxy.pm
