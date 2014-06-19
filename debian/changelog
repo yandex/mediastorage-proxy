@@ -1,3 +1,10 @@
+mediastorage-proxy (0.45) lucid; urgency=low
+
+  * Added "Content-Length: 0" header to 401 response of delete handler
+  * Added log for requests with invalid authorization token
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 19 Jun 2014 19:26:19 +0400
+
 mediastorage-proxy (0.44) lucid; urgency=low
 
   * Downloadinfo responses 400 instead of 500 if url is incorrect
