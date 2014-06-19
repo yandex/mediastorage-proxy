@@ -24,6 +24,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 
 			reply.set_code(401);
 			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+			headers.add("Content-Length", "0");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
 			return;
