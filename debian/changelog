@@ -1,3 +1,11 @@
+mediastorage-proxy (0.46) lucid; urgency=low
+
+  * Added debug symbols into common package
+  * Added support for read&write auth-keys
+  * Build-Depends: libmastermind-dev (>= 8.6)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 20 Jun 2014 19:25:00 +0400
+
 mediastorage-proxy (0.45) lucid; urgency=low
 
   * Added "Content-Length: 0" header to 401 response of delete handler
