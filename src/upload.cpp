@@ -49,7 +49,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	ns = file_info.second;
 
 	{
-		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key, req.headers().get("Authorization"))) {
+		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key_for_write, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
 					"%s: invalid token \"%s\""

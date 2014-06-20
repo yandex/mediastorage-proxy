@@ -42,7 +42,8 @@ struct namespace_t {
 	std::string name;
 	int groups_count;
 	ioremap::elliptics::result_checker result_checker;
-	std::string auth_key;
+	std::string auth_key_for_write;
+	std::string auth_key_for_read;
 	std::vector<int> static_couple;
 	std::string sign_token;
 	std::string sign_path_prefix;

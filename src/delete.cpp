@@ -18,7 +18,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			return;
 		}
 
-		if (!server()->check_basic_auth(ns->name, ns->auth_key, req.headers().get("Authorization"))) {
+		if (!server()->check_basic_auth(ns->name, ns->auth_key_for_write, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
 					"%s: invalid token \"%s\""

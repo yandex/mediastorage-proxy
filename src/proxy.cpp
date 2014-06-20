@@ -169,7 +169,8 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 
 		item.name = it->name();
 		item.groups_count = it->groups_count();
-		item.auth_key = it->auth_key();
+		item.auth_key_for_write = it->auth_key_for_write();
+		item.auth_key_for_read = it->auth_key_for_read();
 		item.static_couple = it->static_couple();
 		item.sign_token = it->sign_token();
 		item.sign_path_prefix = it->sign_path_prefix();

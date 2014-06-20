@@ -11,8 +11,10 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	m_beg_time = std::chrono::system_clock::now();
 	url_str = req.url().to_string();
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
+	namespace_ptr_t ns;
 	try {
-		auto &&prep_session = server()->prepare_session(req, "/get");
+		ns = server()->get_namespace(url_str, "/get");
+		auto &&prep_session = server()->prepare_session(url_str, ns);
 		m_session = prep_session.first;
 		m_session->set_timeout(server()->timeout.read);
 		m_key = prep_session.second;
@@ -24,6 +26,22 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 			"Get: request = \"%s\"; err: \"%s\"",
 			req.url().to_string().c_str(), ex.what());
 		send_reply(400);
+		return;
+	}
+
+	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read, req.headers().get("Authorization"))) {
+		auto token = server()->get_auth_token(req.headers().get("Authorization"));
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+				"%s: invalid token \"%s\""
+				, url_str.c_str(), token.empty() ? "<none>" : token.c_str());
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
+
+		reply.set_code(401);
+		headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+		headers.add("Content-Length", "0");
+		reply.set_headers(headers);
+		send_reply(std::move(reply));
 		return;
 	}
 
