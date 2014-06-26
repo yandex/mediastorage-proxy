@@ -1,3 +1,9 @@
+mediastorage-proxy (0.47) lucid; urgency=low
+
+  * namespaces-auto-update now is always true
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 26 Jun 2014 18:33:33 +0400
+
 mediastorage-proxy (0.46) lucid; urgency=low
 
   * Added debug symbols into common package
