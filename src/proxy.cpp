@@ -252,7 +252,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_namespaces = generate_namespaces(m_mastermind);
 
 		m_die_limit = get_int(config, "die-limit", 1);
-		m_namespaces_auto_update = get_bool(config, "namespaces-auto-update", false);
 
 		if (config.HasMember("timeouts")) {
 			const auto &json_timeout = config["timeouts"];
@@ -268,9 +267,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout_coef.for_commit = get_int(json, "for-commit", 0);
 		}
 
-		if (m_namespaces_auto_update) {
-			mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
-		}
+		mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
