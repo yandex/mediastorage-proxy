@@ -1,3 +1,9 @@
+mediastorage-proxy (0.48) lucid; urgency=low
+
+  * Uses url::path instead of url::to_string
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 01 Jul 2014 17:59:16 +0400
+
 mediastorage-proxy (0.47) lucid; urgency=low
 
   * namespaces-auto-update now is always true
