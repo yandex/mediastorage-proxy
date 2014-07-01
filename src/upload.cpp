@@ -10,7 +10,7 @@ namespace elliptics {
 
 void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	m_beg_time = std::chrono::system_clock::now();
-	const auto &str_url = req.url().to_string();
+	const auto &str_url = req.url().path();
 
 	if (const auto &arg = req.headers().content_length()) {
 		m_size = *arg;
@@ -33,7 +33,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	}
 
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %lu",
-		req.url().to_string().c_str(), m_size);
+		req.url().path().c_str(), m_size);
 
 	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG) {
 		std::ostringstream oss;
@@ -132,7 +132,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
 		std::ostringstream oss;
 		oss
-			<< "Upload: starts request=" << req.url().to_string()
+			<< "Upload: starts request=" << req.url().path()
 			<< " filename=" << m_filename
 			<< " key=" << m_key.remote() << ":" << m_key.to_string()
 			<< " embed=" << m_embed

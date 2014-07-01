@@ -9,7 +9,7 @@ namespace elliptics {
 
 void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	m_beg_time = std::chrono::system_clock::now();
-	url_str = req.url().to_string();
+	url_str = req.url().path();
 	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
 	namespace_ptr_t ns;
 	try {
@@ -24,7 +24,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 		server()->logger().log(
 			ioremap::swarm::SWARM_LOG_INFO,
 			"Get: request = \"%s\"; err: \"%s\"",
-			req.url().to_string().c_str(), ex.what());
+			req.url().path().c_str(), ex.what());
 		send_reply(400);
 		return;
 	}
@@ -236,7 +236,7 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 		std::ostringstream oss;
 		oss
 			<< "Get " << m_key.remote() << " " << m_key.to_string()
-			<< ": on_finished: request=" << request().url().to_string() << " spent_time=" << spent_time
+			<< ": on_finished: request=" << request().url().path() << " spent_time=" << spent_time
 			<< " file_size=" << m_size;
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());

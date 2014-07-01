@@ -198,7 +198,7 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 }
 
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_request &req) {
-	auto scriptname = req.url().to_string();
+	auto scriptname = req.url().path();
 	auto begin = scriptname.find('/', 1) + 1;
 	auto end = scriptname.find('?', begin);
 	auto filename = scriptname.substr(begin, end - begin);
@@ -312,8 +312,8 @@ proxy::req_download_info::req_download_info(const std::string &handler_name_)
 
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().to_string().c_str());
-		const auto &url = req.url().to_string();
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().path().c_str());
+		const auto &url = req.url().path();
 		try {
 			ns = server()->get_namespace(url, handler_name);
 		} catch (const std::exception &ex) {
@@ -458,7 +458,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().to_string().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().path().c_str());
 		std::ostringstream oss;
 		oss << "Stats: done; nodes alive: ";
 		int code = 200;
@@ -493,7 +493,7 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 
 void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Cache: handle request: %s", req.url().to_string().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Cache: handle request: %s", req.url().path().c_str());
 		auto query_list = req.url().query();
 
 		bool g = false;
@@ -571,7 +571,7 @@ void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req
 
 void proxy::req_stat_log::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().to_string().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().path().c_str());
 		auto session = server()->get_session();
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
@@ -656,7 +656,7 @@ ioremap::elliptics::session proxy::get_session() {
 
 namespace_ptr_t proxy::get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name) {
 	const auto &url = req.url();
-	return get_namespace(url.to_string(), handler_name);
+	return get_namespace(url.path(), handler_name);
 }
 
 namespace_ptr_t proxy::get_namespace(const std::string &scriptname, const std::string &handler_name) {
@@ -746,7 +746,7 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 		const ioremap::swarm::http_request &req,
 		const std::string &handler_name) {
 	const auto &url = req.url();
-	const auto &str_url = url.to_string();
+	const auto &str_url = url.path();
 	const auto &ns = get_namespace(str_url, handler_name);
 	return prepare_session(str_url, ns);
 }

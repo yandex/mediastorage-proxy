@@ -3,9 +3,9 @@
 namespace elliptics {
 void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().to_string().c_str());
+		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().path().c_str());
 		namespace_ptr_t ns;
-		url_str = req.url().to_string();
+		url_str = req.url().path();
 		try {
 			ns = server()->get_namespace(url_str, "/delete");
 		} catch (const std::exception &ex) {
