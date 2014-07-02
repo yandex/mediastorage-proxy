@@ -1,3 +1,9 @@
+mediastorage-proxy (0.49) lucid; urgency=low
+
+  * Added lookup and remove timeouts options
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 03 Jul 2014 02:49:56 +0400
+
 mediastorage-proxy (0.48) lucid; urgency=low
 
   * Uses url::path instead of url::to_string
