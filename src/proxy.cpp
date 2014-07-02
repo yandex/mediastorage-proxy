@@ -83,6 +83,8 @@ ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::
 			dnet_conf.check_timeout = timeouts["check"].GetInt();
 	}
 
+	timeout_def = dnet_conf.wait_timeout;
+
 	if (config.HasMember("cfg-flags"))
 		dnet_conf.flags = config["cfg-flags"].GetInt();
 
@@ -258,6 +260,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 			timeout.read = get_int(json_timeout, "read", timeout.def);
 			timeout.write = get_int(json_timeout, "write", timeout.def);
+			timeout.lookup = get_int(json_timeout, "lookup", timeout.def);
+			timeout.remove = get_int(json_timeout, "remove", timeout.def);
 		}
 
 		if (config.HasMember("timeout-coefs")) {
@@ -350,6 +354,7 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 		}
 
 		session->set_filter(ioremap::elliptics::filters::all);
+		session->set_timeout(server()->timeout.lookup);
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: looking up");
 		auto alr = session->lookup(*key);

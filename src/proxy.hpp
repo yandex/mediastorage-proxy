@@ -218,6 +218,8 @@ private:
 		int def;
 		int read;
 		int write;
+		int lookup;
+		int remove;
 	} timeout;
 
 	struct {

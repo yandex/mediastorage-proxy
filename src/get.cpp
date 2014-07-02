@@ -77,6 +77,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	{
 		auto ioflags = m_session->get_ioflags();
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
+		m_session->set_timeout(server()->timeout.lookup);
 		auto alr = m_session->read_data(m_key, 0, 1);
 		alr.connect(std::bind(&proxy::req_get::on_lookup, shared_from_this(),
 					std::placeholders::_1, std::placeholders::_2));
@@ -143,13 +144,13 @@ void proxy::req_get::read_chunk() {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
+	m_session->set_timeout(server()->timeout.read);
 	if (m_first_chunk) {
 		if (server()->timeout_coef.data_flow_rate) {
 			m_session->set_timeout(
 					m_session->get_timeout() + m_size / server()->timeout_coef.data_flow_rate);
 		}
 	} else {
-		m_session->set_timeout(server()->timeout.read);
 		m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	}
 	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);

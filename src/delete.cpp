@@ -42,6 +42,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			throw std::runtime_error("Too low number of existing states");
 		}
 
+		session->set_timeout(server()->timeout.lookup);
 		auto alr = session->read_data(key, 0, 1);
 		alr.connect(std::bind(&proxy::req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2));
@@ -66,6 +67,7 @@ void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_read_result &sl
 	total_size = entry.io_attribute()->total_size;
 
 	session->set_filter(ioremap::elliptics::filters::all);
+	session->set_timeout(server()->timeout.remove);
 
 	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete: removing data");
 	session->remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
