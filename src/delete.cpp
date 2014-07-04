@@ -8,6 +8,10 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 		url_str = req.url().path();
 		try {
 			ns = server()->get_namespace(url_str, "/delete");
+
+			auto &&prep_session = server()->prepare_session(url_str, ns);
+			session.reset(prep_session.first);
+			key = prep_session.second;
 		} catch (const std::exception &ex) {
 			server()->logger().log(
 				ioremap::swarm::SWARM_LOG_INFO,
@@ -33,10 +37,6 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			send_reply(std::move(reply));
 			return;
 		}
-
-		auto &&prep_session = server()->prepare_session(url_str, ns);
-		session.reset(prep_session.first);
-		key = prep_session.second;
 
 		if (session->state_num() < server()->die_limit()) {
 			throw std::runtime_error("Too low number of existing states");
