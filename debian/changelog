@@ -1,3 +1,9 @@
+mediastorage-proxy (0.50~ell25-0) lucid; urgency=low
+
+  * Rebuild with elliptics 25
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 09 Jul 2014 16:54:46 +0400
+
 mediastorage-proxy (0.50) lucid; urgency=low
 
   * Response is 400 in case of group is missing in url
