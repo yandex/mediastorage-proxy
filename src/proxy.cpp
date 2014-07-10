@@ -243,15 +243,26 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts");
 		m_elliptics_logger.reset(elliptics_logger_t(generate_logger(config, "elliptics")));
 		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
+
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics node");
 		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger, timeout.def));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
 			timeout.def = 10;
 		}
 
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
 		m_namespaces = generate_namespaces(m_mastermind);
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
 
@@ -271,7 +282,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout_coef.for_commit = get_int(json, "for-commit", 0);
 		}
 
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
 		mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
@@ -294,6 +307,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 		return false;
 	}
+	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize handlers");
 
 	on<req_upload>(options::prefix_match("/upload"));
 	on<req_get>(options::prefix_match("/get"));
@@ -306,6 +320,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_ping>(options::exact_match("/stat"));
 	on<req_cache>(options::exact_match("/cache"));
 	on<req_cache_update>(options::exact_match("/cache-update"));
+	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
 
 	return true;
 }
