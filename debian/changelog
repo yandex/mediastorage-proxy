@@ -1,8 +1,13 @@
-mediastorage-proxy (0.50~ell25-0) lucid; urgency=low
+mediastorage-proxy (0.51~ell25-0) lucid; urgency=low
 
   * Rebuild with elliptics 25
 
  -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 09 Jul 2014 16:54:46 +0400
+mediastorage-proxy (0.51) lucid; urgency=low
+
+  * Added log for initialization process
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 10 Jul 2014 18:48:53 +0400
 
 mediastorage-proxy (0.50) lucid; urgency=low
 

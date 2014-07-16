@@ -180,6 +180,8 @@ public:
 	};
 
 protected:
+	ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
+		, int &timeout_def);
 	ioremap::elliptics::session get_session();
 	namespace_ptr_t get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name);
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
