@@ -67,58 +67,6 @@ ioremap::swarm::logger generate_logger(const rapidjson::Value &config, const std
 	return ioremap::swarm::logger(log_path.c_str(), log_mask);
 }
 
-// TODO: Tatars dont look at the code they write, so a cant use get_native() method of node:
-// >> error: invalid use of incomplete type ‘struct dnet_node’
-ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &logger
-		, int &timeout_def) {
-	struct dnet_config dnet_conf;
-	memset(&dnet_conf, 0, sizeof(dnet_conf));
-
-	if (config.HasMember("timeouts")) {
-		const auto &timeouts = config["timeouts"];
-		if (timeouts.HasMember("wait"))
-			dnet_conf.wait_timeout = timeouts["wait"].GetInt();
-
-		if (timeouts.HasMember("check"))
-			dnet_conf.check_timeout = timeouts["check"].GetInt();
-	}
-
-	timeout_def = dnet_conf.wait_timeout;
-
-	if (config.HasMember("cfg-flags"))
-		dnet_conf.flags = config["cfg-flags"].GetInt();
-
-	if (config.HasMember("elliptics-threads")) {
-		const auto &ell_threads = config["elliptics-threads"];
-		if (ell_threads.HasMember("io-thread-num"))
-			dnet_conf.io_thread_num = ell_threads["io-thread-num"].GetInt();
-		if (ell_threads.HasMember("net-thread-num"))
-			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
-	}
-
-	ioremap::elliptics::node node(logger, dnet_conf);
-
-	if (config.HasMember("remotes") == false) {
-		throw std::runtime_error("You should set a list of remote addresses");
-	}
-
-	{
-		auto &conf_remotes = config["remotes"];
-		for (auto it = conf_remotes.Begin(); it != conf_remotes.End(); ++it) {
-			const std::string &host = it->GetString();
-			try {
-				node.add_remote(host.c_str());
-			} catch (const std::exception &ex) {
-				std::ostringstream oss;
-				oss << "Can\'t connect to remote node " << host << " : " << ex.what();
-				logger.log(DNET_LOG_INFO, oss.str().c_str());
-			}
-		}
-	}
-
-	return node;
-}
-
 ioremap::elliptics::session generate_session(const ioremap::elliptics::node &node) {
 	ioremap::elliptics::session session(node);
 
@@ -236,6 +184,75 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	dnet_dump_id_len_raw(id.id, DNET_ID_SIZE, str);
 	return std::string(str);
 }
+
+ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
+		, int &timeout_def) {
+	struct dnet_config dnet_conf;
+	memset(&dnet_conf, 0, sizeof(dnet_conf));
+
+	if (config.HasMember("timeouts")) {
+		const auto &timeouts = config["timeouts"];
+		if (timeouts.HasMember("wait"))
+			dnet_conf.wait_timeout = timeouts["wait"].GetInt();
+
+		if (timeouts.HasMember("check"))
+			dnet_conf.check_timeout = timeouts["check"].GetInt();
+	}
+
+	timeout_def = dnet_conf.wait_timeout;
+
+	if (config.HasMember("cfg-flags"))
+		dnet_conf.flags = config["cfg-flags"].GetInt();
+
+	if (config.HasMember("elliptics-threads")) {
+		const auto &ell_threads = config["elliptics-threads"];
+		if (ell_threads.HasMember("io-thread-num"))
+			dnet_conf.io_thread_num = ell_threads["io-thread-num"].GetInt();
+		if (ell_threads.HasMember("net-thread-num"))
+			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
+	}
+
+	ioremap::elliptics::node node(ell_logger, dnet_conf);
+
+	if (config.HasMember("remotes") == false) {
+		throw std::runtime_error("You should set a list of remote addresses");
+	}
+
+	{
+		auto &conf_remotes = config["remotes"];
+		for (auto it = conf_remotes.Begin(); it != conf_remotes.End(); ++it) {
+			const std::string &host = it->GetString();
+			{
+				std::ostringstream oss;
+				oss << "Mediastorage-proxy starts: add_remote " << host;
+				auto msg = oss.str();
+				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+			}
+			auto ts_beg = std::chrono::system_clock::now();
+
+			try {
+				node.add_remote(host.c_str());
+			} catch (const std::exception &ex) {
+				std::ostringstream oss;
+				oss << "Mediastorage-proxy starts: Can\'t connect to remote node " << host << " : " << ex.what();
+				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+			}
+
+			auto ts_end = std::chrono::system_clock::now();
+			{
+				std::ostringstream oss;
+				oss << "Mediastorage-proxy starts add_remote is finished in "
+					<< std::chrono::duration_cast<std::chrono::microseconds>(ts_end - ts_beg).count()
+					<< "us";
+				auto msg = oss.str();
+				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+			}
+		}
+	}
+
+	return node;
+}
+
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
