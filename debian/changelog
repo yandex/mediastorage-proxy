@@ -1,3 +1,18 @@
+mmediastorage-proxy (0.52) lucid; urgency=low
+
+  * Destroy mastermind_t before dtor of proxy is done
+  * Improved delete handler
+  * * added url path to each log line; the reason is we still don't have request-id
+  * * added extra log with error message for each elliptics error except
+  * * client errors (see ELL-250 for detail)
+  * * new logic for http response code:
+  * * 500 -- there were errors other than -ENOENT
+  * * 404 -- all responses are -ENOENT
+  * * 200 -- there were at least one good response and there were no errors
+  * * except -ENOENT
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 18 Jul 2014 21:22:25 +0400
+
 mediastorage-proxy (0.51) lucid; urgency=low
 
   * Added log for initialization process
