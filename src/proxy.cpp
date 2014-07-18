@@ -253,6 +253,9 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, io
 	return node;
 }
 
+proxy::~proxy() {
+	m_mastermind.reset();
+}
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
@@ -883,9 +886,12 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 }
 
 void proxy::namespaces_auto_update() {
-	auto namespaces = generate_namespaces(mastermind());
-	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-	m_namespaces.swap(namespaces);
+	auto &&m = mastermind();
+	if (m) {
+		auto namespaces = generate_namespaces(m);
+		std::lock_guard<std::mutex> lock(m_namespaces_mutex);
+		m_namespaces.swap(namespaces);
+	}
 }
 
 } // namespace elliptics

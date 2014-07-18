@@ -55,6 +55,7 @@ typedef std::shared_ptr<namespace_t> namespace_ptr_t;
 class proxy : public ioremap::thevoid::server<proxy>
 {
 public:
+	~proxy();
 
 	bool initialize(const rapidjson::Value &config);
 
