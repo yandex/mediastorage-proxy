@@ -117,7 +117,7 @@ public:
 		, public std::enable_shared_from_this<req_delete>
 	{
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error);
+		void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 		void on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error);
 
 	private:
