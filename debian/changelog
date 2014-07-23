@@ -1,4 +1,4 @@
-mmediastorage-proxy (0.52) lucid; urgency=low
+mediastorage-proxy (0.52) lucid; urgency=low
 
   * Destroy mastermind_t before dtor of proxy is done
   * Improved delete handler
