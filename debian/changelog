@@ -1,3 +1,10 @@
+mediastorage-proxy (0.52~ell25-1) lucid; urgency=low
+
+  * Added statistics handler
+  * Added spent time log for state_num
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 04 Aug 2014 17:27:16 +0400
+
 mediastorage-proxy (0.52~ell25-0) lucid; urgency=low
 
   * Destroy mastermind_t before dtor of proxy is done
