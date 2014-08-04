@@ -280,10 +280,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
 		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
-		m_namespaces = generate_namespaces(m_mastermind);
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
-
 		m_die_limit = get_int(config, "die-limit", 1);
 
 		if (config.HasMember("timeouts")) {
@@ -304,6 +300,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
 		mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+
+		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
+		m_namespaces = generate_namespaces(m_mastermind);
 		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		if (config.HasMember("chunk-size") == false) {
@@ -340,6 +340,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	on<req_ping>(options::exact_match("/stat"));
 	on<req_cache>(options::exact_match("/cache"));
 	on<req_cache_update>(options::exact_match("/cache-update"));
+	on<req_statistics>(options::prefix_match("/statistics"));
 	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
 
@@ -504,7 +505,9 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 		oss << "Stats: done; nodes alive: ";
 		int code = 200;
 		auto session = server()->get_session();
+		auto beg_state_num = std::chrono::system_clock::now();
 		auto state_num = session.state_num();
+		auto end_state_num = std::chrono::system_clock::now();
 		auto die_limit = server()->die_limit();
 		oss << state_num;
 		oss << "; die-limit: ";
@@ -517,6 +520,11 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 		} else {
 			oss << "Ok";
 		}
+
+		oss
+			<< "; state_num spent time: "
+			<< std::chrono::duration_cast<std::chrono::microseconds>(end_state_num - beg_state_num).count()
+			<< "us";
 
 		{
 			const auto &msg = oss.str();
@@ -606,6 +614,29 @@ void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req
 		send_reply(500);
 	} catch (...) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: unknown");
+		send_reply(500);
+	}
+}
+
+void proxy::req_statistics::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+	try {
+		auto ns = server()->get_namespace(req, "/statistics");
+		auto json = server()->mastermind()->json_namespace_statistics(ns->name);
+
+		ioremap::swarm::http_response reply;
+		ioremap::swarm::http_headers headers;
+
+		reply.set_code(200);
+		headers.set_content_length(json.size());
+		headers.set_content_type("text/json");
+		reply.set_headers(headers);
+
+		send_reply(std::move(reply), std::move(json));
+	} catch (const std::exception &ex) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Statistics request error: %s", ex.what());
+		send_reply(500);
+	} catch (...) {
+		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Statistics request error: unknown");
 		send_reply(500);
 	}
 }

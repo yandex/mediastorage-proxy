@@ -180,6 +180,13 @@ public:
 		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
+	struct req_statistics
+		: public ioremap::thevoid::simple_request_stream<proxy>
+		, public std::enable_shared_from_this<req_statistics>
+	{
+		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+	};
+
 protected:
 	ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
 		, int &timeout_def);
