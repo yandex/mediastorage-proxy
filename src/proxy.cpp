@@ -500,17 +500,39 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
+		auto begin_request = std::chrono::system_clock::now();
+
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().path().c_str());
 		std::ostringstream oss;
+
 		oss << "Stats: done; nodes alive: ";
 		int code = 200;
+
 		auto session = server()->get_session();
-		auto beg_state_num = std::chrono::system_clock::now();
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: session is copied"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
+
 		auto state_num = session.state_num();
-		auto end_state_num = std::chrono::system_clock::now();
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: state_num was computed"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
+
 		auto die_limit = server()->die_limit();
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: got a die_limit"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
+
 		oss << state_num;
 		oss << "; die-limit: ";
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: check die_limit"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
+
 		if (state_num < die_limit) {
 			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR,
 					"Ping request error: state_num too small state_num=%d",
@@ -521,16 +543,20 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 			oss << "Ok";
 		}
 
-		oss
-			<< "; state_num spent time: "
-			<< std::chrono::duration_cast<std::chrono::microseconds>(end_state_num - beg_state_num).count()
-			<< "us";
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: die_limit is checked"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
+
+		send_reply(code);
+
+		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: request was sent"
+				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
+						std::chrono::system_clock::now() - begin_request).count()));
 
 		{
 			const auto &msg = oss.str();
 			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
 		}
-		send_reply(code);
 	} catch (const std::exception &ex) {
 		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Ping request error: %s", ex.what());
 		send_reply(500);
