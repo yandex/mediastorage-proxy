@@ -1,3 +1,9 @@
+mediastorage-proxy (0.52~ell25-2) lucid; urgency=low
+
+  * Added debug log for ping handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 05 Aug 2014 13:09:31 +0400
+
 mediastorage-proxy (0.52~ell25-1) lucid; urgency=low
 
   * Added statistics handler
