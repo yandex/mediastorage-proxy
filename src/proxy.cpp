@@ -501,37 +501,44 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		auto begin_request = std::chrono::system_clock::now();
+		std::ostringstream ts_oss;
+
+		ts_oss << "start: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().path().c_str());
+
+		ts_oss << "print greating log: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
+
 		std::ostringstream oss;
 
 		oss << "Stats: done; nodes alive: ";
 		int code = 200;
 
+		ts_oss << "init oss and code: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
+
 		auto session = server()->get_session();
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: session is copied"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "session is copied: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		auto state_num = session.state_num();
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: state_num was computed"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "state_num was computed: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		auto die_limit = server()->die_limit();
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: got a die_limit"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "got a die_limit: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		oss << state_num;
 		oss << "; die-limit: ";
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: check die_limit"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "check die_limit: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		if (state_num < die_limit) {
 			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR,
@@ -543,15 +550,18 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 			oss << "Ok";
 		}
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: die_limit is checked"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "die_limit is checked: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		send_reply(code);
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Ping %dus: request was sent"
-				, static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(
-						std::chrono::system_clock::now() - begin_request).count()));
+		ts_oss << "request was send: " << std::chrono::duration_cast<std::chrono::microseconds>(
+				std::chrono::system_clock::now() - begin_request).count() << "us; ";
+
+		{
+			const auto &msg = ts_oss.str();
+			server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", msg.c_str());
+		}
 
 		{
 			const auto &msg = oss.str();
