@@ -1,4 +1,23 @@
-mediastorage-proxy (0.52) lucid; urgency=low
+mediastorage-proxy (0.52~ell25-3) lucid; urgency=low
+
+  * Improved ping debug logs
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 08 Aug 2014 15:24:53 +0400
+
+mediastorage-proxy (0.52~ell25-2) lucid; urgency=low
+
+  * Added debug log for ping handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 05 Aug 2014 13:09:31 +0400
+
+mediastorage-proxy (0.52~ell25-1) lucid; urgency=low
+
+  * Added statistics handler
+  * Added spent time log for state_num
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 04 Aug 2014 17:27:16 +0400
+
+mediastorage-proxy (0.52~ell25-0) lucid; urgency=low
 
   * Destroy mastermind_t before dtor of proxy is done
   * Improved delete handler
@@ -11,8 +30,13 @@ mediastorage-proxy (0.52) lucid; urgency=low
   * * 200 -- there were at least one good response and there were no errors
   * * except -ENOENT
 
- -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 18 Jul 2014 21:22:25 +0400
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 18 Jul 2014 21:25:13 +0400
 
+mediastorage-proxy (0.51~ell25-0) lucid; urgency=low
+
+  * Rebuild with elliptics 25
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 09 Jul 2014 16:54:46 +0400
 mediastorage-proxy (0.51) lucid; urgency=low
 
   * Added log for initialization process
