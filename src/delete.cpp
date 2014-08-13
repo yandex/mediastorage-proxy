@@ -124,7 +124,7 @@ void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" remove is done"
+	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete request=\"%s\" remove is done"
 			, url_str.c_str());
 	send_reply(200);
 	return;
