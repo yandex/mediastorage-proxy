@@ -1,3 +1,10 @@
+mediastorage-proxy (0.54) lucid; urgency=low
+
+  * Fixed typo of log level in delete handler
+  * Split getting path of url from log to debug ping handler
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 13 Aug 2014 16:44:36 +0400
+
 mediastorage-proxy (0.53) lucid; urgency=low
 
   * Added header option to filter requests. MDS-54
