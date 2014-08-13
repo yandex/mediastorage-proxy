@@ -5,78 +5,86 @@
 #include <cocaine/framework/logging.hpp>
 #include <elliptics/session.hpp>
 
+#define MDS_LOG_ERROR(log, ...) BH_LOG((log), SWARM_LOG_ERROR, __VA_ARGS__)
+#define MDS_LOG_WARNING(log, ...) BH_LOG((log), SWARM_LOG_WARNING, __VA_ARGS__)
+#define MDS_LOG_INFO(log, ...) BH_LOG((log), SWARM_LOG_INFO, __VA_ARGS__)
+#define MDS_LOG_NOTICE(log, ...) BH_LOG((log), SWARM_LOG_NOTICE, __VA_ARGS__)
+#define MDS_LOG_DEBUG(log, ...) BH_LOG((log), SWARM_LOG_DEBUG, __VA_ARGS__)
+
 class cocaine_logger_t : public cocaine::framework::logger_t {
 public:
-	cocaine_logger_t(const ioremap::swarm::logger &logger)
-		: m_logger(logger)
+	cocaine_logger_t(ioremap::swarm::logger logger_)
+		: logger(std::move(logger_))
 	{}
 
 	void emit(cocaine::logging::priorities priority, const std::string& message) {
-		int lvl = level(priority);
-		m_logger.log(lvl, "%s", message.c_str());
+		//int lvl = level(priority);
+		//m_logger.log(lvl, "%s", message.c_str());
+		BH_LOG(logger, level(priority), message);
 	}
 
 	cocaine::logging::priorities verbosity() const {
 		using namespace cocaine::logging;
-		switch(m_logger.level()) {
-		case ioremap::swarm::SWARM_LOG_DATA:
-			return priorities::ignore;
-		case ioremap::swarm::SWARM_LOG_ERROR:
+		return priorities::debug;
+		/*switch(m_logger.log().verbosity()) {
+		case blackhole::defaults::severity::error:
 			return priorities::error;
-		case ioremap::swarm::SWARM_LOG_INFO:
+		case blackhole::defaults::severity::info:
 			return priorities::info;
-		case ioremap::swarm::SWARM_LOG_NOTICE:
+		case blackhole::defaults::severity::notice:
 			return priorities::info;
 		default:
 			return priorities::debug;
-		}
+		}*/
 	}
 
 private:
-	int level(cocaine::logging::priorities priority) {
+	blackhole::defaults::severity level(cocaine::logging::priorities priority) {
 		using namespace cocaine::logging;
 		switch(priority) {
 		case priorities::ignore:
-			return ioremap::swarm::SWARM_LOG_DATA;
+			return blackhole::defaults::severity::error;
 		case priorities::error:
-			return ioremap::swarm::SWARM_LOG_ERROR;
+			return blackhole::defaults::severity::error;
 		case priorities::warning:
-			return ioremap::swarm::SWARM_LOG_ERROR;
+			return blackhole::defaults::severity::warning;
 		case priorities::info:
-			return ioremap::swarm::SWARM_LOG_INFO;
+			return blackhole::defaults::severity::info;
 		default:
-			return ioremap::swarm::SWARM_LOG_DEBUG;
+			return blackhole::defaults::severity::debug;
 		}
 	}
 
-	ioremap::swarm::logger m_logger;
+	ioremap::swarm::logger logger;
 };
 
-class swarm_logger_interface : public ioremap::elliptics::logger_interface {
+class elliptics_logger_interface_t : public ioremap::elliptics::logger_interface {
 public:
-	swarm_logger_interface(const ioremap::swarm::logger &logger)
-		: m_logger(logger)
-	{
-	}
+	elliptics_logger_interface_t(ioremap::swarm::logger logger_)
+		: logger(std::move(logger_))
+	{}
 
-	~swarm_logger_interface()
-	{
-	}
-
-	virtual void log(const int level, const char *msg)
-	{
-		m_logger.log(level, "%s", msg);
+	void log(const int priority, const char *msg) {
+		BH_LOG(logger, level(priority), msg);
 	}
 
 private:
-	ioremap::swarm::logger m_logger;
-};
-
-class elliptics_logger_t : public ioremap::elliptics::logger {
-public:
-	elliptics_logger_t(const ioremap::swarm::logger &logger) : ioremap::elliptics::logger(new swarm_logger_interface(logger), DNET_LOG_INFO)
-	{
+	blackhole::defaults::severity level(int priority) {
+		switch(priority) {
+		case 0:
+			return blackhole::defaults::severity::error;
+		case 1:
+			return blackhole::defaults::severity::warning;
+		case 2:
+			return blackhole::defaults::severity::info;
+		case 3:
+			return blackhole::defaults::severity::notice;
+		default:
+			return blackhole::defaults::severity::debug;
+		}
 	}
+
+	ioremap::swarm::logger logger;
 };
 
 #endif /* SRC__LOGGERS_HPP */

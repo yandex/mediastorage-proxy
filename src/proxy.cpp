@@ -51,63 +51,12 @@ std::string get_string(const rapidjson::Value &config, const char *name, const s
 	return config.HasMember(name) ? config[name].GetString() : def_val;
 }
 
-ioremap::swarm::logger generate_logger(const rapidjson::Value &config, const std::string &name) {
-	std::string log_path("/dev/stderr");
-	int log_mask(DNET_LOG_INFO | DNET_LOG_ERROR);
-
-	if (config.HasMember((name + "-log").c_str())) {
-		const auto &log = config[(name + "-log").c_str()];
-
-		if (log.HasMember("path"))
-			log_path = log["path"].GetString();
-		if (log.HasMember("level"))
-			log_mask = log["level"].GetInt();
-	}
-
-	return ioremap::swarm::logger(log_path.c_str(), log_mask);
-}
-
 ioremap::elliptics::session generate_session(const ioremap::elliptics::node &node) {
 	ioremap::elliptics::session session(node);
 
 	session.set_error_handler(ioremap::elliptics::error_handlers::none);
 
 	return session;
-}
-
-std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config, const cocaine_logger_t &logger) {
-	if (config.HasMember("mastermind") == false) {
-		throw std::runtime_error("You should set settings for mastermind");
-	}
-	
-	const auto &mastermind = config["mastermind"];
-
-	if (mastermind.HasMember("nodes") == false) {
-		throw std::runtime_error("You should set at least one node to connect to mastermind");
-	}
-
-	const auto &nodes = mastermind["nodes"];
-
-	mastermind::mastermind_t::remotes_t remotes;
-	auto sp_lg = std::make_shared<cocaine_logger_t>(logger);
-
-	for (auto it = nodes.Begin(); it != nodes.End(); ++it) {
-		const auto &node = *it;
-
-		if (node.HasMember("host") == false) {
-			//this->logger()->(ioremap::swarm::LOG_INFO, "You should set a host address in each node of mastermind settings");
-			COCAINE_LOG_INFO(sp_lg, "You should set a host address in each node of mastermind settings");
-			continue;
-		}
-
-		auto host = node["host"].GetString();
-		auto port = get_int(node, "port", 10053);
-		remotes.emplace_back(host, port);
-	}
-
-	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
-
-	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
 std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::shared_ptr<mastermind::mastermind_t> &m_mastermind) {
@@ -185,8 +134,7 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	return std::string(str);
 }
 
-ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
-		, int &timeout_def) {
+ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -212,7 +160,10 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, io
 			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
 	}
 
-	ioremap::elliptics::node node(ell_logger, dnet_conf);
+	ioremap::swarm::logger elliptics_logger = ioremap::swarm::logger(logger(),
+			blackhole::log::attributes_t({blackhole::attribute::make("component", "elliptics")}));
+	ioremap::elliptics::node node(
+			ioremap::elliptics::logger(new elliptics_logger_interface_t(std::move(elliptics_logger)), 5), dnet_conf);
 
 	if (config.HasMember("remotes") == false) {
 		throw std::runtime_error("You should set a list of remote addresses");
@@ -226,7 +177,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, io
 				std::ostringstream oss;
 				oss << "Mediastorage-proxy starts: add_remote " << host;
 				auto msg = oss.str();
-				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+				BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
 			}
 			auto ts_beg = std::chrono::system_clock::now();
 
@@ -235,7 +186,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, io
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Mediastorage-proxy starts: Can\'t connect to remote node " << host << " : " << ex.what();
-				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+				BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 			}
 
 			auto ts_end = std::chrono::system_clock::now();
@@ -245,12 +196,49 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, io
 					<< std::chrono::duration_cast<std::chrono::microseconds>(ts_end - ts_beg).count()
 					<< "us";
 				auto msg = oss.str();
-				logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+				BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
 			}
 		}
 	}
 
 	return node;
+}
+
+std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapidjson::Value &config) {
+	if (config.HasMember("mastermind") == false) {
+		throw std::runtime_error("You should set settings for mastermind");
+	}
+	
+	const auto &mastermind = config["mastermind"];
+
+	if (mastermind.HasMember("nodes") == false) {
+		throw std::runtime_error("You should set at least one node to connect to mastermind");
+	}
+
+	const auto &nodes = mastermind["nodes"];
+
+	mastermind::mastermind_t::remotes_t remotes;
+	ioremap::swarm::logger libmastermind_logger = ioremap::swarm::logger(logger(),
+			blackhole::log::attributes_t({blackhole::attribute::make("component", "libmastermind")}));
+	auto sp_lg = std::make_shared<cocaine_logger_t>(cocaine_logger_t(std::move(libmastermind_logger)));
+
+	for (auto it = nodes.Begin(); it != nodes.End(); ++it) {
+		const auto &node = *it;
+
+		if (node.HasMember("host") == false) {
+			//this->logger()->(ioremap::swarm::LOG_INFO, "You should set a host address in each node of mastermind settings");
+			COCAINE_LOG_INFO(sp_lg, "You should set a host address in each node of mastermind settings");
+			continue;
+		}
+
+		auto host = node["host"].GetString();
+		auto port = get_int(node, "port", 10053);
+		remotes.emplace_back(host, port);
+	}
+
+	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
+
+	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
 }
 
 proxy::~proxy() {
@@ -259,26 +247,23 @@ proxy::~proxy() {
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
-		m_proxy_logger.reset(generate_logger(config, "proxy"));
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts");
-		m_elliptics_logger.reset(elliptics_logger_t(generate_logger(config, "elliptics")));
-		m_mastermind_logger.reset(generate_logger(config, "mastermind"));
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts");
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics node");
-		m_elliptics_node.reset(generate_node(config, *m_elliptics_logger, timeout.def));
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics node");
+		m_elliptics_node.reset(generate_node(config, timeout.def));
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
 			timeout.def = 10;
 		}
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics session");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
-		m_mastermind = generate_mastermind(config, cocaine_logger_t(*m_mastermind_logger));
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
+		m_mastermind = generate_mastermind(config);
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
 
@@ -295,19 +280,19 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			const auto &json_hp = config["header-protector"];
 
 			if (json_hp.HasMember("name") == false) {
-				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+				BH_LOG(logger(), SWARM_LOG_ERROR,
 						"header-protector is set but header-protector/name is missed");
 				return false;
 			}
 
 			if (json_hp.HasMember("value") == false) {
-				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+				BH_LOG(logger(), SWARM_LOG_ERROR,
 						"header-protector is set but header-protector/value is missed");
 				return false;
 			}
 
 			if (json_hp.HasMember("handlers") == false) {
-				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+				BH_LOG(logger(), SWARM_LOG_ERROR,
 						"header-protector is set but header-protector/handlers are missed");
 				return false;
 			}
@@ -328,13 +313,13 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout_coef.for_commit = get_int(json, "for-commit", 0);
 		}
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
 		mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
 		m_namespaces = generate_namespaces(m_mastermind);
-		logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
@@ -350,14 +335,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 	} catch(const std::exception &ex) {
-		if (m_proxy_logger) {
-			m_proxy_logger->log(ioremap::swarm::SWARM_LOG_ERROR, "%s", ex.what());
-		} else {
-			std::cerr << ex.what() << std::endl;
-		}
+		BH_LOG(logger(), SWARM_LOG_ERROR, "%s", ex.what());
 		return false;
 	}
-	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize handlers");
+	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize handlers");
 
 	register_handler<req_upload>("upload", false);
 	register_handler<req_get>("get", false);
@@ -372,8 +353,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	register_handler<req_cache_update>("cache-update", true);
 	register_handler<req_statistics>("statistics", false);
 
-	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
-	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
+	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
 
 	return true;
 }
@@ -382,15 +363,14 @@ proxy::req_download_info::req_download_info(const std::string &handler_name_)
 	: handler_name('/' + handler_name_)
 {}
 
-void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info: handle request: %s", req.url().path().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "Download info: handle request: %s", req.url().path().c_str());
 		const auto &url = req.url().path();
 		try {
 			ns = server()->get_namespace(url, handler_name);
 		} catch (const std::exception &ex) {
-			server()->logger().log(
-				ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 				"Download info: request = \"%s\"; err: \"%s\"",
 				url.c_str(), ex.what());
 			send_reply(400);
@@ -404,7 +384,7 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 			session.reset(prep_session.first);
 			key.reset(prep_session.second);
 		} catch (const std::exception &ex) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Download info request error: %s", ex.what());
+			BH_LOG(logger(), SWARM_LOG_INFO, "Download info request error: %s", ex.what());
 			send_reply(400);
 			return;
 		}
@@ -424,24 +404,24 @@ void proxy::req_download_info::on_request(const ioremap::swarm::http_request &re
 		session->set_filter(ioremap::elliptics::filters::all);
 		session->set_timeout(server()->timeout.lookup);
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: looking up");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: looking up");
 		auto alr = session->lookup(*key);
 
 		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: prepare response");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: prepare response");
 		if (error) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
+			BH_LOG(logger(), SWARM_LOG_ERROR, "%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -463,7 +443,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 					{
 						const auto &path_prefix = ns->sign_path_prefix;
 						if (strncmp(entry_path.c_str(), path_prefix.c_str(), path_prefix.size())) {
-							server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+							BH_LOG(logger(), SWARM_LOG_INFO,
 									"Download-info: path_prefix does not match: prefix=%s path=%s",
 									path_prefix.c_str(), entry_path.c_str());
 						} else {
@@ -508,7 +488,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 				const std::string &str = oss.str();
 
-				ioremap::swarm::http_response reply;
+				ioremap::thevoid::http_response reply;
 				ioremap::swarm::http_headers headers;
 				reply.set_code(200);
 				headers.set_content_length(str.size());
@@ -518,18 +498,18 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				return;
 			}
 		}
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Download info: sending response");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: sending response");
 		send_reply(503);  
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info finish error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Download info finish error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info finish error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		auto begin_request = std::chrono::system_clock::now();
 		std::ostringstream ts_oss;
@@ -541,7 +521,7 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 			const auto &path = req.url().path();
 			ts_oss << "got url path: " << std::chrono::duration_cast<std::chrono::microseconds>(
 					std::chrono::system_clock::now() - begin_request).count() << "us; ";
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", path.c_str());
+			BH_LOG(logger(), SWARM_LOG_INFO, "Ping: handle request: %s", path.c_str());
 		}
 
 		ts_oss << "print greating log: " << std::chrono::duration_cast<std::chrono::microseconds>(
@@ -577,7 +557,7 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		if (state_num < die_limit) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+			BH_LOG(logger(), SWARM_LOG_ERROR,
 					"Ping request error: state_num too small state_num=%d",
 					static_cast<int>(state_num));
 			code = 500;
@@ -596,25 +576,25 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 
 		{
 			const auto &msg = ts_oss.str();
-			server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", msg.c_str());
+			BH_LOG(logger(), SWARM_LOG_DEBUG, "%s", msg.c_str());
 		}
 
 		{
 			const auto &msg = oss.str();
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+			BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
 		}
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Ping request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Ping request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Ping request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Ping request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Cache: handle request: %s", req.url().path().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "Cache: handle request: %s", req.url().path().c_str());
 		auto query_list = req.url().query();
 
 		bool g = false;
@@ -653,24 +633,24 @@ void proxy::req_cache::on_request(const ioremap::swarm::http_request &req, const
 		if (g) oss << std::endl;
 		oss << '}' << std::endl;
 		auto res_str = oss.str();
-		ioremap::swarm::http_response reply;
+		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
 		headers.set_content_length(res_str.size());
 		headers.set_content_type("text/plain");
 		reply.set_headers(headers);
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Cache: sending response");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Cache: sending response");
 		send_reply(std::move(reply), std::move(res_str));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		auto query_list = req.url().query();
 
@@ -682,20 +662,20 @@ void proxy::req_cache_update::on_request(const ioremap::swarm::http_request &req
 		}
 		send_reply(200);
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cache request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_statistics::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		auto ns = server()->get_namespace(req, "/statistics");
 		auto json = server()->mastermind()->json_namespace_statistics(ns->name);
 
-		ioremap::swarm::http_response reply;
+		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 
 		reply.set_code(200);
@@ -705,37 +685,37 @@ void proxy::req_statistics::on_request(const ioremap::swarm::http_request &req, 
 
 		send_reply(std::move(reply), std::move(json));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Statistics request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Statistics request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Statistics request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Statistics request error: unknown");
 		send_reply(500);
 	}
 }
 
-void proxy::req_stat_log::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_stat_log::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().path().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().path().c_str());
 		auto session = server()->get_session();
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
 		auto asr = session.stat_log();
 
 		asr.connect(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log request error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: prepare response");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: prepare response");
 		if (error) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", error.message().c_str());
+			BH_LOG(logger(), SWARM_LOG_ERROR, "%s", error.message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -777,19 +757,19 @@ void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result
 		oss << "</data>";
 
 		const std::string &body = oss.str();
-		ioremap::swarm::http_response reply;
+		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
 		headers.set_content_type("text/xml");
 		headers.set_content_length(body.size());
 		reply.set_headers(headers);
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Stat log: sending response");
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: sending response");
 		send_reply(std::move(reply), std::move(body));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Stat log finish error: unknown");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: unknown");
 		send_reply(500);
 	}
 }
@@ -798,7 +778,7 @@ ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
 }
 
-namespace_ptr_t proxy::get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name) {
+namespace_ptr_t proxy::get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name) {
 	const auto &url = req.url();
 	return get_namespace(url.path(), handler_name);
 }
@@ -844,7 +824,7 @@ std::vector<int> proxy::groups_for_upload(const elliptics::namespace_ptr_t &name
 	return m_mastermind->get_metabalancer_groups(name_space->groups_count, name_space->name, size);
 }
 
-std::pair<std::string, namespace_ptr_t> proxy::get_file_info(const ioremap::swarm::http_request &req) {
+std::pair<std::string, namespace_ptr_t> proxy::get_file_info(const ioremap::thevoid::http_request &req) {
 	auto p = get_filename(req);
 	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
 	auto it = m_namespaces.find(p.second);
@@ -864,10 +844,11 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
 		res.swap(vec_groups1);
 	} catch (...) {
-		logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Cannot to determine groups");
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Cannot to determine groups");
 	}
 
-	if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO) {
+	// TODO: if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 
 		auto &groups = res;
@@ -879,15 +860,15 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 		}
 		oss << "]";
 
-		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
-		m_proxy_logger->log(ioremap::swarm::SWARM_LOG_INFO, "filename: %s", filename.c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "filename: %s", filename.c_str());
 	}
 
 	return res;
 }
 
 std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(
-		const ioremap::swarm::http_request &req,
+		const ioremap::thevoid::http_request &req,
 		const std::string &handler_name) {
 	const auto &url = req.url();
 	const auto &str_url = url.path();
@@ -924,10 +905,6 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 
 	session.set_groups(groups);
 	return std::make_pair(session, ioremap::elliptics::key(ns->name + '.' + filename));;
-}
-
-ioremap::swarm::logger &proxy::logger() {
-	return *m_proxy_logger;
 }
 
 std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {

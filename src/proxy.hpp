@@ -63,7 +63,7 @@ public:
 		: public ioremap::thevoid::buffered_request_stream<proxy>
 		, public std::enable_shared_from_this<req_upload>
 	{
-		void on_request(const ioremap::swarm::http_request &req);
+		void on_request(const ioremap::thevoid::http_request &req);
 		void on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags);
 		void on_error(const boost::system::error_code &err);
 
@@ -91,7 +91,7 @@ public:
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_get>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error);
 		void read_chunk();
 		void on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error);
@@ -116,7 +116,7 @@ public:
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_delete>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 		void on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error);
 
@@ -132,7 +132,7 @@ public:
 		, public std::enable_shared_from_this<req_download_info>
 	{
 		req_download_info(const std::string &handler_name_);
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 
 	private:
@@ -155,14 +155,14 @@ public:
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_ping>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
 	struct req_stat_log
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_stat_log>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 		void on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error);
 	};
 
@@ -170,41 +170,40 @@ public:
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_cache>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
 	struct req_cache_update
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_cache_update>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
 	struct req_statistics
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_statistics>
 	{
-		void on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer);
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
 protected:
-	ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
-		, int &timeout_def);
-
 	template <typename T>
 	void register_handler(const std::string &name, bool exact_match);
 
+	ioremap::elliptics::node generate_node(const rapidjson::Value &config, int &timeout_def);
+	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
+
 	ioremap::elliptics::session get_session();
-	namespace_ptr_t get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name);
+	namespace_ptr_t get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name);
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
 	int die_limit() const;
-	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::swarm::http_request &req);
+	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::thevoid::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
-	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::swarm::http_request &req, const std::string &handler_name);
+	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::thevoid::http_request &req, const std::string &handler_name);
 	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_ptr_t &ns);
 	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
-	ioremap::swarm::logger &logger();
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
@@ -215,9 +214,6 @@ protected:
 private:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
-	boost::optional<elliptics_logger_t> m_elliptics_logger;
-	boost::optional<ioremap::swarm::logger> m_proxy_logger;
-	boost::optional<ioremap::swarm::logger> m_mastermind_logger;
 	int m_die_limit;
 	int m_groups_count;
 	int m_write_chunk_size;
@@ -264,7 +260,7 @@ void proxy::register_handler(const std::string &name, bool exact_match) {
 		options::header(header_protector.name, header_protector.value)(&opts);
 	}
 
-	base_server::on(std::move(opts), std::make_shared<ioremap::thevoid::stream_factory<proxy, T>>(shared_from_this()));
+	base_server::on(std::move(opts), std::make_shared<ioremap::thevoid::stream_factory<proxy, T>>(this));
 }
 
 } // namespace elliptics

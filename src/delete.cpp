@@ -1,9 +1,9 @@
 #include "proxy.hpp"
 
 namespace elliptics {
-void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete: handle request: %s", req.url().path().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "Delete: handle request: %s", req.url().path().c_str());
 		namespace_ptr_t ns;
 		url_str = req.url().path();
 		try {
@@ -13,8 +13,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 			session.reset(prep_session.first);
 			key = prep_session.second;
 		} catch (const std::exception &ex) {
-			server()->logger().log(
-				ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 				"Delete: request = \"%s\", err = \"%s\"",
 				url_str.c_str(), ex.what()
 				);
@@ -24,10 +23,10 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 
 		if (!server()->check_basic_auth(ns->name, ns->auth_key_for_write, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 					"%s: invalid token \"%s\""
 					, url_str.c_str(), token.empty() ? "<none>" : token.c_str());
-			ioremap::swarm::http_response reply;
+			ioremap::thevoid::http_response reply;
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
@@ -47,11 +46,11 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 		alr.connect(std::bind(&proxy::req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	} catch (const std::exception &ex) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" error: %s"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" error: %s"
 				, url_str.c_str(), ex.what());
 		send_reply(500);
 	} catch (...) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" error: unknown"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" error: unknown"
 				, url_str.c_str());
 		send_reply(500);
 	}
@@ -60,7 +59,7 @@ void proxy::req_delete::on_request(const ioremap::swarm::http_request &req, cons
 void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" lookup error: %s"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" lookup error: %s"
 				, url_str.c_str(), error.message().c_str());
 		send_reply(error.code() == -ENOENT ? 404 : 500);
 		return;
@@ -73,7 +72,7 @@ void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &
 	session->set_filter(ioremap::elliptics::filters::all_with_ack);
 	session->set_timeout(server()->timeout.remove);
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "Delete %s: data size %d"
+	BH_LOG(logger(), SWARM_LOG_DEBUG, "Delete %s: data size %d"
 			, url_str.c_str(), static_cast<int>(total_size));
 	session->remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
@@ -89,7 +88,7 @@ void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result
 		int group = it->command()->id.group_id;
 		const auto &err = it->error();
 		if (status != 0) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 					"Delete request=\"%s\" group=%d status=%d error=\"%s\""
 					, url_str.c_str(), group, status, err.message().c_str());
 			if (status != -ENOENT) {
@@ -98,33 +97,33 @@ void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result
 				enoent_count += 1;
 			}
 		} else {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 					"Delete request=\"%s\" group=%d status=0", url_str.c_str(), group);
 		}
 	}
 
 	// The reason for this check: ELL-250
 	if (srr.size() != session->get_groups().size()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" unknown client errors"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" unknown client errors"
 				, url_str.c_str());
 		has_bad_response = true;
 	}
 
 	if (has_bad_response) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" remove is failed"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" remove is failed"
 				, url_str.c_str());
 		send_reply(500);
 		return;
 	}
 
 	if (enoent_count == srr.size()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Delete request=\"%s\" key not found"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" key not found"
 				, url_str.c_str());
 		send_reply(404);
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Delete request=\"%s\" remove is done"
+	BH_LOG(logger(), SWARM_LOG_INFO, "Delete request=\"%s\" remove is done"
 			, url_str.c_str());
 	send_reply(200);
 	return;

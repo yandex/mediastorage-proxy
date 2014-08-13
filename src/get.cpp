@@ -7,10 +7,10 @@
 
 namespace elliptics {
 
-void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
+void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	m_beg_time = std::chrono::system_clock::now();
 	url_str = req.url().path();
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
+	BH_LOG(logger(), SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
 	namespace_ptr_t ns;
 	try {
 		ns = server()->get_namespace(url_str, "/get");
@@ -21,8 +21,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 		m_key.transform(*m_session);
 		m_key.set_id(m_key.id());
 	} catch (const std::exception &ex) {
-		server()->logger().log(
-			ioremap::swarm::SWARM_LOG_INFO,
+		BH_LOG(logger(), SWARM_LOG_INFO,
 			"Get: request = \"%s\"; err: \"%s\"",
 			req.url().path().c_str(), ex.what());
 		send_reply(400);
@@ -31,10 +30,10 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 
 	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read, req.headers().get("Authorization"))) {
 		auto token = server()->get_auth_token(req.headers().get("Authorization"));
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+		BH_LOG(logger(), SWARM_LOG_INFO,
 				"%s: invalid token \"%s\""
 				, url_str.c_str(), token.empty() ? "<none>" : token.c_str());
-		ioremap::swarm::http_response reply;
+		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 
 		reply.set_code(401);
@@ -46,7 +45,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 	}
 
 	if (m_session->get_groups().empty()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+		BH_LOG(logger(), SWARM_LOG_INFO
 				, "Get %s: on_request: cannot find couple of groups for the request"
 				, url_str.c_str());
 		send_reply(404);
@@ -72,7 +71,7 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 		}
 		oss << ']';
 		auto msg = oss.str();
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", msg.c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
 	}
 	{
 		auto ioflags = m_session->get_ioflags();
@@ -88,12 +87,12 @@ void proxy::req_get::on_request(const ioremap::swarm::http_request &req, const b
 void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+			BH_LOG(logger(), SWARM_LOG_INFO
 					, "Get %s %s: on_lookup: file not found"
 					, m_key.remote().c_str(), m_key.to_string().c_str());
 			send_reply(404);
 		} else {
-			server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+			BH_LOG(logger(), SWARM_LOG_ERROR
 					, "Get %s %s: on_lookup: %s"
 					, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
 			send_reply(500);
@@ -104,7 +103,7 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 	auto total_size = entry.io_attribute()->total_size;
 
 	if (m_offset >= total_size) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+		BH_LOG(logger(), SWARM_LOG_INFO
 				, "Get %s %s: offset greater than total_size"
 				, m_key.remote().c_str()
 				, m_key.to_string().c_str());
@@ -126,7 +125,8 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 }
 
 void proxy::req_get::read_chunk() {
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 		oss
 			<< "Get " << m_key.remote() << " " << m_key.to_string()
@@ -141,7 +141,7 @@ void proxy::req_get::read_chunk() {
 		}
 		oss << ']';
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
 	m_session->set_timeout(server()->timeout.read);
@@ -159,14 +159,14 @@ void proxy::req_get::read_chunk() {
 
 void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+		BH_LOG(logger(), SWARM_LOG_ERROR
 				, "Get %s %s: on_read_chunk: %s"
 				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
 		send_reply(500);
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+	BH_LOG(logger(), SWARM_LOG_INFO
 			, "Get %s %s: on_read_chunk: chunk was read"
 			, m_key.remote().c_str(), m_key.to_string().c_str());
 
@@ -178,7 +178,7 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 	if (m_first_chunk) {
 		m_first_chunk = false;
 
-		ioremap::swarm::http_response reply;
+		ioremap::thevoid::http_response reply;
 		reply.set_code(200);
 		reply.headers().set_content_length(m_size);
 
@@ -214,14 +214,14 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 
 void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 	if (error) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+		BH_LOG(logger(), SWARM_LOG_ERROR
 				, "Get %s %s: on_sent_chunk: %s"
 				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
-		get_reply()->close(error);
+		reply()->close(error);
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+	BH_LOG(logger(), SWARM_LOG_INFO
 			, "Get %s %s: chunk was sent"
 			, m_key.remote().c_str(), m_key.to_string().c_str());
 
@@ -230,7 +230,8 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 		return;
 	}
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		auto end_time = std::chrono::system_clock::now();
 		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count();
 
@@ -240,10 +241,10 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 			<< ": on_finished: request=" << request().url().path() << " spent_time=" << spent_time
 			<< " file_size=" << m_size;
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
-	get_reply()->close(error);
+	reply()->close(error);
 }
 
 }

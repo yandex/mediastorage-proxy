@@ -8,41 +8,40 @@
 
 namespace elliptics {
 
-void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
+void proxy::req_upload::on_request(const ioremap::thevoid::http_request &req) {
 	m_beg_time = std::chrono::system_clock::now();
 	const auto &str_url = req.url().path();
 
 	if (const auto &arg = req.headers().content_length()) {
 		m_size = *arg;
 	} else {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+		BH_LOG(logger(), SWARM_LOG_INFO
 				, "Upload %s: missing Content-Length"
 				, str_url.c_str());
 		send_reply(400);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
 	if (m_size == 0) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+		BH_LOG(logger(), SWARM_LOG_INFO
 				, "Upload %s: Content-Length must be greater than zero"
 				, str_url.c_str());
 		send_reply(400);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
-	server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Upload: handle request: %s; body size: %lu",
+	BH_LOG(logger(), SWARM_LOG_INFO, "Upload: handle request: %s; body size: %lu",
 		req.url().path().c_str(), m_size);
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG) {
+	// TODO: if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG)
+	{
 		std::ostringstream oss;
 		const auto &headers = req.headers().all();
 		oss << "Headers for " << str_url << ":" << std::endl;
 		for (auto it = headers.begin(); it != headers.end(); ++it) {
 			oss << it->first << ": " << it->second << std::endl;
 		}
-		server()->logger().log(ioremap::swarm::SWARM_LOG_DEBUG, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_DEBUG, "%s", oss.str().c_str());
 	}
 
 	auto file_info = server()->get_file_info(req);
@@ -51,17 +50,17 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	{
 		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key_for_write, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
-			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO,
+			BH_LOG(logger(), SWARM_LOG_INFO,
 					"%s: invalid token \"%s\""
 					, str_url.c_str(), token.empty() ? "<none>" : token.c_str());
-			ioremap::swarm::http_response reply;
+			ioremap::thevoid::http_response reply;
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
 			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second->name + "\"");
+			headers.add("Content-Length", "0");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
-			get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 			return;
 		}
 	}
@@ -72,20 +71,18 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	m_session->set_timeout(server()->timeout.write);
 
 	if (m_session->state_num() < server()->die_limit()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+		BH_LOG(logger(), SWARM_LOG_ERROR
 				, "Upload %s: too low number of existing states"
 				, str_url.c_str());
 		send_reply(503);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
 	if (file_info.second->name.empty()) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO
+		BH_LOG(logger(), SWARM_LOG_INFO
 				, "Upload %s: cannot determine a namespace"
 				, str_url.c_str());
 		send_reply(400);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 
@@ -99,24 +96,22 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 	try {
 		m_session->set_groups(server()->groups_for_upload(file_info.second, m_size));
 	} catch (const mastermind::not_enough_memory_error &e) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
 			, m_key.remote().c_str()
 			, m_key.to_string().c_str()
 			, static_cast<int>(file_info.second->groups_count)
 			, file_info.second->name.c_str()
 			, e.code().message().c_str());
 		send_reply(507);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	} catch (const std::system_error &e) {
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
+		BH_LOG(logger(), SWARM_LOG_ERROR, "Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
 			, m_key.remote().c_str()
 			, m_key.to_string().c_str()
 			, static_cast<int>(file_info.second->groups_count)
 			, file_info.second->name.c_str()
 			, e.code().message().c_str());
 		send_reply(500);
-		get_reply()->close(boost::system::errc::make_error_code(boost::system::errc::operation_not_permitted));
 		return;
 	}
 	m_session->set_filter(ioremap::elliptics::filters::all);
@@ -129,7 +124,8 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		m_timestamp.tnsec = 0;
 	}
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 		oss
 			<< "Upload: starts request=" << req.url().path()
@@ -146,7 +142,7 @@ void proxy::req_upload::on_request(const ioremap::swarm::http_request &req) {
 		}
 		oss << ']';
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 }
 
@@ -162,7 +158,8 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 		, boost::asio::buffer_size(buffer)
 		);
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 		oss
 			<< "Upload " << m_key.remote() << " " << m_key.to_string()
@@ -175,7 +172,7 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 		else if (flags & last_chunk) oss << "commit";
 		else oss << "plain";
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
 	auto awr = write(flags);
@@ -193,7 +190,7 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 }
 
 void proxy::req_upload::on_error(const boost::system::error_code &err) {
-	server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR
+	BH_LOG(logger(), SWARM_LOG_ERROR
 			, "Upload %s %s on_error: %s"
 			, m_key.remote().c_str()
 			, m_key.to_string().c_str()
@@ -218,7 +215,8 @@ void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &sw
 		}
 	}
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO) {
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 		oss << "Upload " << m_key.remote() << " " << m_key.to_string()
 			<< ": on_wrote: chunk was written into groups [";
@@ -233,7 +231,7 @@ void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &sw
 		}
 		oss << ']';
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 
 	m_session->set_groups(good_groups);
@@ -269,7 +267,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 		}
 		oss << ']';
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_ERROR, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_ERROR, "%s", oss.str().c_str());
 
 		send_reply(500);
 		return;
@@ -329,7 +327,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 
 	auto res_str = oss.str();
 
-	ioremap::swarm::http_response reply;
+	ioremap::thevoid::http_response reply;
 	ioremap::swarm::http_headers headers;
 
 	reply.set_code(200);
@@ -341,7 +339,8 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 
 	auto end_time = std::chrono::system_clock::now();
 
-	if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO){
+	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	{
 		std::ostringstream oss;
 		oss
 			<< "Upload " << m_key.remote() << " " << m_key.to_string()
@@ -358,7 +357,7 @@ void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result 
 			oss << *it;
 		}
 		oss << ']';
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "%s", oss.str().c_str());
+		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 	}
 }
 
