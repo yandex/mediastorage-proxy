@@ -537,7 +537,12 @@ void proxy::req_ping::on_request(const ioremap::swarm::http_request &req, const 
 		ts_oss << "start: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
-		server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", req.url().path().c_str());
+		{
+			const auto &path = req.url().path();
+			ts_oss << "got url path: " << std::chrono::duration_cast<std::chrono::microseconds>(
+					std::chrono::system_clock::now() - begin_request).count() << "us; ";
+			server()->logger().log(ioremap::swarm::SWARM_LOG_INFO, "Ping: handle request: %s", path.c_str());
+		}
 
 		ts_oss << "print greating log: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
