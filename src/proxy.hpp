@@ -190,6 +190,10 @@ public:
 protected:
 	ioremap::elliptics::node generate_node(const rapidjson::Value &config, ioremap::elliptics::logger &ell_logger
 		, int &timeout_def);
+
+	template <typename T>
+	void register_handler(const std::string &name, bool exact_match);
+
 	ioremap::elliptics::session get_session();
 	namespace_ptr_t get_namespace(const ioremap::swarm::http_request &req, const std::string &handler_name);
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
@@ -238,7 +242,30 @@ private:
 	} timeout_coef;
 
 	typedef CryptoPP::HMAC<CryptoPP::SHA512> hmac_type;
+
+	struct {
+		std::string name;
+		std::string value;
+
+		std::set<std::string> handlers;
+	} header_protector;
 };
+
+template <typename T>
+void proxy::register_handler(const std::string &name, bool exact_match) {
+	options opts;
+	if (exact_match) {
+		options::exact_match('/' + name)(&opts);
+	} else {
+		options::prefix_match('/' + name)(&opts);
+	}
+
+	if (header_protector.handlers.count(name)) {
+		options::header(header_protector.name, header_protector.value)(&opts);
+	}
+
+	base_server::on(std::move(opts), std::make_shared<ioremap::thevoid::stream_factory<proxy, T>>(shared_from_this()));
+}
 
 } // namespace elliptics
 

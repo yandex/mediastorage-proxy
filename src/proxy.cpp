@@ -24,8 +24,8 @@
 
 namespace elliptics {
 
-const std::string proxy::req_download_info_1::handler_name = "/downloadinfo";
-const std::string proxy::req_download_info_2::handler_name = "/download-info";
+const std::string proxy::req_download_info_1::handler_name = "downloadinfo";
+const std::string proxy::req_download_info_2::handler_name = "download-info";
 
 proxy::req_download_info_1::req_download_info_1()
 	: req_download_info(handler_name)
@@ -291,6 +291,36 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout.remove = get_int(json_timeout, "remove", timeout.def);
 		}
 
+		if (config.HasMember("header-protector")) {
+			const auto &json_hp = config["header-protector"];
+
+			if (json_hp.HasMember("name") == false) {
+				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+						"header-protector is set but header-protector/name is missed");
+				return false;
+			}
+
+			if (json_hp.HasMember("value") == false) {
+				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+						"header-protector is set but header-protector/value is missed");
+				return false;
+			}
+
+			if (json_hp.HasMember("handlers") == false) {
+				logger().log(ioremap::swarm::SWARM_LOG_ERROR,
+						"header-protector is set but header-protector/handlers are missed");
+				return false;
+			}
+
+			header_protector.name = get_string(json_hp, "name");
+			header_protector.value = get_string(json_hp, "value");
+
+			auto &json_handlers = json_hp["handlers"];
+			for (auto it = json_handlers.Begin(); it != json_handlers.End(); ++it) {
+				header_protector.handlers.insert(it->GetString());
+			}
+		}
+
 		if (config.HasMember("timeout-coefs")) {
 			const auto &json = config["timeout-coefs"];
 
@@ -329,18 +359,19 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	}
 	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize handlers");
 
-	on<req_upload>(options::prefix_match("/upload"));
-	on<req_get>(options::prefix_match("/get"));
-	on<req_delete>(options::prefix_match("/delete"));
-	on<req_download_info_1>(options::prefix_match(req_download_info_1::handler_name));
-	on<req_download_info_2>(options::prefix_match(req_download_info_2::handler_name));
-	on<req_stat_log>(options::exact_match("/stat-log"));
-	on<req_stat_log>(options::exact_match("/stat_log"));
-	on<req_ping>(options::exact_match("/ping"));
-	on<req_ping>(options::exact_match("/stat"));
-	on<req_cache>(options::exact_match("/cache"));
-	on<req_cache_update>(options::exact_match("/cache-update"));
-	on<req_statistics>(options::prefix_match("/statistics"));
+	register_handler<req_upload>("upload", false);
+	register_handler<req_get>("get", false);
+	register_handler<req_delete>("delete", false);
+	register_handler<req_download_info_1>(req_download_info_1::handler_name, false);
+	register_handler<req_download_info_2>(req_download_info_2::handler_name, false);
+	register_handler<req_stat_log>("stat-log", true);
+	register_handler<req_stat_log>("stat_log", true);
+	register_handler<req_ping>("ping", true);
+	register_handler<req_ping>("stat", true);
+	register_handler<req_cache>("cache", true);
+	register_handler<req_cache_update>("cache-update", true);
+	register_handler<req_statistics>("statistics", false);
+
 	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 	logger().log(ioremap::swarm::SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
 
@@ -348,7 +379,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 }
 
 proxy::req_download_info::req_download_info(const std::string &handler_name_)
-	: handler_name(handler_name_)
+	: handler_name('/' + handler_name_)
 {}
 
 void proxy::req_download_info::on_request(const ioremap::swarm::http_request &req, const boost::asio::const_buffer &buffer) {
