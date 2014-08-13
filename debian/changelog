@@ -1,3 +1,21 @@
+mediastorage-proxy (0.53) lucid; urgency=low
+
+  * Added header option to filter requests. MDS-54
+  * * Example of config:
+  * *  "header-protector" : {
+  * *   "name" : "X-PROTECT-HEADER",
+  * *   "value" : "123",
+  * *   "handlers" : [
+  * *    "get", "delete", "downloadinfo", "download-info",
+  * *    "stat-log", "stat_log", "ping", "stat", "cache",
+  * *    "cache-update", "statistics"
+  * *   ]
+  * *  }
+  * * Response is 404 Not Found for each request for any handler
+  * * from "handlers" if request doesn't have header "name" with value "value"
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 13 Aug 2014 15:10:31 +0400
+
 mediastorage-proxy (0.52~ell25-3) lucid; urgency=low
 
   * Improved ping debug logs
