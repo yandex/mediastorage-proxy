@@ -92,7 +92,7 @@ public:
 		, public std::enable_shared_from_this<req_get>
 	{
 		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error);
+		void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 		void read_chunk();
 		void on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error);
 		void on_sent_chunk(const boost::system::error_code &error);

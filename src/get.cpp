@@ -59,11 +59,10 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 	m_first_chunk = true;
 	m_chunk_size = server()->m_read_chunk_size;
 
-	// Read 1 byte to get total_size of file cause lookup doesn't look up into cache
 	{
 		std::ostringstream oss;
 		oss << "Get " << m_key.remote() << " " << m_key.to_string()
-			<< ": lookup(read 1 byte) from groups [";
+			<< ": lookup from groups [";
 		const auto &groups = m_session->get_groups();
 		for (auto bit = groups.begin(), it = bit, end = groups.end(); it != end; ++it) {
 			if (it != bit) oss << ", ";
@@ -77,14 +76,15 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		auto ioflags = m_session->get_ioflags();
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
-		auto alr = m_session->read_data(m_key, 0, 1);
+		m_session->set_filter(ioremap::elliptics::filters::positive);
+		auto alr = m_session->quorum_lookup(m_key);
 		alr.connect(wrap(std::bind(&proxy::req_get::on_lookup, shared_from_this(),
 					std::placeholders::_1, std::placeholders::_2)));
 		m_session->set_ioflags(ioflags);
 	}
 }
 
-void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, const ioremap::elliptics::error_info &error) {
+void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
 			BH_LOG(logger(), SWARM_LOG_INFO
@@ -100,7 +100,7 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 		return;
 	}
 	const auto &entry = slr.front();
-	auto total_size = entry.io_attribute()->total_size;
+	auto total_size = entry.file_info()->size;
 
 	if (m_offset >= total_size) {
 		BH_LOG(logger(), SWARM_LOG_INFO
@@ -118,7 +118,9 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_read_result &slr, 
 	}
 
 	std::vector<int> groups;
-	groups.push_back(entry.command()->id.group_id);
+	for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
+		groups.push_back(it->command()->id.group_id);
+	}
 	m_session->set_groups(groups);
 
 	read_chunk();

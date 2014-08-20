@@ -42,7 +42,8 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 		}
 
 		session->set_timeout(server()->timeout.lookup);
-		auto alr = session->lookup(key);
+		session->set_filter(ioremap::elliptics::positive);
+		auto alr = session->quorum_lookup(key);
 		alr.connect(wrap(std::bind(&proxy::req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {

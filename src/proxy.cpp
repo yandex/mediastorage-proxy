@@ -405,7 +405,7 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		session->set_timeout(server()->timeout.lookup);
 
 		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: looking up");
-		auto alr = session->lookup(*key);
+		auto alr = session->quorum_lookup(*key);
 
 		alr.connect(wrap(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
