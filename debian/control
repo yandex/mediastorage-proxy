@@ -5,8 +5,8 @@ Maintainer: Artem Sokolov <derikon@yandex-team.ru>
 Build-Depends: debhelper (>=5),
  cmake (>= 2.6),
  cdbs,
- libthevoid2 (>= 0.7), libthevoid2 (<< 0.8),
- libthevoid-dev (>= 0.7), libthevoid-dev (<< 0.8),
+ libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8),
+ libthevoid-dev (>= 0.7.0.3), libthevoid-dev (<< 0.8),
  libmastermind-dev (>= 8.11),
  elliptics-dev (>= 2.25), elliptics-dev (<< 2.26),
  cocaine-framework-native (>= 0.11),
@@ -14,8 +14,8 @@ Build-Depends: debhelper (>=5),
  libcocaine-core2 (>= 0.11),
  libcocaine-dev (>= 0.11),
  libboost-system-dev,
- libswarm2 (>= 0.7), libswarm2 (<< 0.8),
- libswarm-dev (>= 0.7), libswarm-dev (<< 0.8),
+ libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8),
+ libswarm-dev (>= 0.7.0.3), libswarm-dev (<< 0.8),
  libboost-dev,
  libmsgpack-dev,
  libglib2.0-0,
@@ -26,6 +26,6 @@ Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7), libthevoid2 (<< 0.8), libswarm2 (>= 0.7), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl
+Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8), libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl
 Description: Proxy with elliptics support based on thevoid
 
