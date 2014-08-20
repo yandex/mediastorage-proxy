@@ -1,3 +1,10 @@
+mediastorage-proxy (0.55) lucid; urgency=low
+
+  * Use thevoid-0.7 and blackhole
+  * MDS-155: Use quorum_lookup to lookup keys
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 20 Aug 2014 17:17:32 +0400
+
 mediastorage-proxy (0.54) lucid; urgency=low
 
   * Fixed typo of log level in delete handler
