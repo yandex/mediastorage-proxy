@@ -182,9 +182,9 @@ void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsign
 		using namespace std::placeholders;
 
 		if (flags & last_chunk) {
-			awr.connect(std::bind(&req_upload::on_finished, shared_from_this(), _1, _2));
+			awr.connect(wrap(std::bind(&req_upload::on_finished, shared_from_this(), _1, _2)));
 		} else {
-			awr.connect(std::bind(&req_upload::on_wrote, shared_from_this(), _1, _2));
+			awr.connect(wrap(std::bind(&req_upload::on_wrote, shared_from_this(), _1, _2)));
 		}
 	}
 }

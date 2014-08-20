@@ -43,8 +43,8 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 
 		session->set_timeout(server()->timeout.lookup);
 		auto alr = session->lookup(key);
-		alr.connect(std::bind(&proxy::req_delete::on_lookup,
-					shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		alr.connect(wrap(std::bind(&proxy::req_delete::on_lookup,
+					shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
 		BH_LOG(logger(), SWARM_LOG_ERROR, "Delete request=\"%s\" error: %s"
 				, url_str.c_str(), ex.what());
@@ -74,7 +74,7 @@ void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &
 
 	BH_LOG(logger(), SWARM_LOG_DEBUG, "Delete %s: data size %d"
 			, url_str.c_str(), static_cast<int>(total_size));
-	session->remove(key).connect(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	session->remove(key).connect(wrap(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 }
 
 void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {

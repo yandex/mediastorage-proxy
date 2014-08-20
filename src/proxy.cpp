@@ -407,7 +407,7 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: looking up");
 		auto alr = session->lookup(*key);
 
-		alr.connect(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		alr.connect(wrap(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
 		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info request error: %s", ex.what());
 		send_reply(500);
@@ -701,7 +701,7 @@ void proxy::req_stat_log::on_request(const ioremap::thevoid::http_request &req, 
 		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
 		auto asr = session.stat_log();
 
-		asr.connect(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		asr.connect(wrap(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
 		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
 		send_reply(500);
