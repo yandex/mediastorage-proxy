@@ -17,6 +17,10 @@ public:
 		: logger(std::move(logger_))
 	{}
 
+	cocaine_logger_t(cocaine_logger_t &&other)
+		: logger(std::move(other.logger))
+	{}
+
 	void emit(cocaine::logging::priorities priority, const std::string& message) {
 		//int lvl = level(priority);
 		//m_logger.log(lvl, "%s", message.c_str());
