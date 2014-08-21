@@ -209,7 +209,7 @@ protected:
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 
-	void namespaces_auto_update();
+	void cache_update_callback();
 
 private:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;

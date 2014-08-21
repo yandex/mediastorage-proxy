@@ -165,34 +165,25 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 	ioremap::elliptics::node node(
 			ioremap::elliptics::logger(new elliptics_logger_interface_t(std::move(elliptics_logger)), 5), dnet_conf);
 
-	if (config.HasMember("remotes") == false) {
-		throw std::runtime_error("You should set a list of remote addresses");
-	}
-
 	{
-		auto &conf_remotes = config["remotes"];
-		for (auto it = conf_remotes.Begin(); it != conf_remotes.End(); ++it) {
-			const std::string &host = it->GetString();
-			{
-				std::ostringstream oss;
-				oss << "Mediastorage-proxy starts: add_remote " << host;
-				auto msg = oss.str();
-				BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
-			}
-			auto ts_beg = std::chrono::system_clock::now();
+		const auto &remotes = mastermind()->get_elliptics_remotes();
 
+		if (remotes.empty()) {
+			BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: nothing to put add to elliptics remotes");
+		} else {
+			auto ts_beg = std::chrono::system_clock::now();
+			BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: add_remotes");
 			try {
-				node.add_remote(host.c_str());
+				node.add_remote(mastermind()->get_elliptics_remotes());
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
-				oss << "Mediastorage-proxy starts: Can\'t connect to remote node " << host << " : " << ex.what();
+				oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
 				BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
 			}
-
 			auto ts_end = std::chrono::system_clock::now();
 			{
 				std::ostringstream oss;
-				oss << "Mediastorage-proxy starts add_remote is finished in "
+				oss << "Mediastorage-proxy starts: add_remotes is finished in "
 					<< std::chrono::duration_cast<std::chrono::microseconds>(ts_end - ts_beg).count()
 					<< "us";
 				auto msg = oss.str();
@@ -237,8 +228,12 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	}
 
 	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
+	auto cache_path = get_string(mastermind, "cache-path", "/var/cache/mediastorage-proxy/mastermind");
+	auto expired_time = get_int(mastermind, "expired-time", 0);
+	auto worker_name = get_string(mastermind, "worker-name", "mastermind");
 
-	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg, group_info_update_period);
+	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
+			group_info_update_period, cache_path, expired_time, worker_name);
 }
 
 proxy::~proxy() {
@@ -248,6 +243,10 @@ proxy::~proxy() {
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts");
+
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
+		m_mastermind = generate_mastermind(config);
+		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics node");
 		m_elliptics_node.reset(generate_node(config, timeout.def));
@@ -259,10 +258,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
-
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
-		m_mastermind = generate_mastermind(config);
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
@@ -314,7 +309,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
-		mastermind()->set_update_cache_callback(std::bind(&proxy::namespaces_auto_update, this));
+		mastermind()->set_update_cache_callback(std::bind(&proxy::cache_update_callback, this));
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
 
 		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
@@ -655,11 +650,7 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 		auto query_list = req.url().query();
 
 		server()->mastermind()->cache_force_update();
-		if (query_list.has_item("with-namespaces")) {
-			auto namespaces = generate_namespaces(server()->mastermind());
-			std::lock_guard<std::mutex> lock(server()->m_namespaces_mutex);
-			server()->m_namespaces.swap(namespaces);
-		}
+		server()->cache_update_callback();
 		send_reply(200);
 	} catch (const std::exception &ex) {
 		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
@@ -965,12 +956,26 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	return oss.str();
 }
 
-void proxy::namespaces_auto_update() {
+void proxy::cache_update_callback() {
 	auto &&m = mastermind();
 	if (m) {
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: starts");
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update namespaces");
 		auto namespaces = generate_namespaces(m);
 		std::lock_guard<std::mutex> lock(m_namespaces_mutex);
 		m_namespaces.swap(namespaces);
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update namespaces is done");
+
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update elliptics remotes");
+		try {
+			m_elliptics_node->add_remote(mastermind()->get_elliptics_remotes());
+		} catch (const std::exception &ex) {
+			std::ostringstream oss;
+			oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
+			BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+		}
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update elliptics remotes is done");
+		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater is done");
 	}
 }
 
