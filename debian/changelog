@@ -1,3 +1,16 @@
+mediastorage-proxy (0.56) lucid; urgency=low
+
+  * Use libmastermind-8.14
+  * * Added config options:
+  * * * mastermind/cache-path - path to the libmastermind cache (MDS-148)
+  * * * mastermind/expired-time - expire time for cache file in seconds (MDS-46)
+  * * * mastermind/worker-name - name of mastermind worker
+  * * Config list of elliptics remotes is not used anymore
+  * * Elliptics remote list is got from mastermind cache (MDS-78)
+  * * Build-Depends: libmastermind-dev (>= 8.14)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 21 Aug 2014 12:00:22 +0400
+
 mediastorage-proxy (0.55) lucid; urgency=low
 
   * Use thevoid-0.7 and blackhole
