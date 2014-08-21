@@ -1,3 +1,10 @@
+mediastorage-proxy (0.56~ell-2.26-1) lucid; urgency=low
+
+  * Build with elliptics >= 2.26.3.9
+  * Attention: /stat-log handler was removed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 21 Aug 2014 22:04:08 +0400
+
 mediastorage-proxy (0.56) lucid; urgency=low
 
   * Use libmastermind-8.14
