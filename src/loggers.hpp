@@ -62,33 +62,4 @@ private:
 	ioremap::swarm::logger logger;
 };
 
-class elliptics_logger_interface_t : public ioremap::elliptics::logger_interface {
-public:
-	elliptics_logger_interface_t(ioremap::swarm::logger logger_)
-		: logger(std::move(logger_))
-	{}
-
-	void log(const int priority, const char *msg) {
-		BH_LOG(logger, level(priority), msg);
-	}
-
-private:
-	blackhole::defaults::severity level(int priority) {
-		switch(priority) {
-		case 0:
-			return blackhole::defaults::severity::error;
-		case 1:
-			return blackhole::defaults::severity::warning;
-		case 2:
-			return blackhole::defaults::severity::info;
-		case 3:
-			return blackhole::defaults::severity::notice;
-		default:
-			return blackhole::defaults::severity::debug;
-		}
-	}
-
-	ioremap::swarm::logger logger;
-};
-
 #endif /* SRC__LOGGERS_HPP */

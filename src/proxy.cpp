@@ -162,8 +162,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 
 	ioremap::swarm::logger elliptics_logger = ioremap::swarm::logger(logger(),
 			blackhole::log::attributes_t({blackhole::attribute::make("component", "elliptics")}));
-	ioremap::elliptics::node node(
-			ioremap::elliptics::logger(new elliptics_logger_interface_t(std::move(elliptics_logger)), 5), dnet_conf);
+	ioremap::elliptics::node node(std::move(elliptics_logger), dnet_conf);
 
 	{
 		const auto &remotes = mastermind()->get_elliptics_remotes();
@@ -174,7 +173,14 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 			auto ts_beg = std::chrono::system_clock::now();
 			BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: add_remotes");
 			try {
-				node.add_remote(mastermind()->get_elliptics_remotes());
+				auto remotes = mastermind()->get_elliptics_remotes();
+				std::vector<ioremap::elliptics::address> addresses;
+
+				for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
+					addresses.emplace_back(*it);
+				}
+
+				node.add_remote(addresses);
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
@@ -340,8 +346,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	register_handler<req_delete>("delete", false);
 	register_handler<req_download_info_1>(req_download_info_1::handler_name, false);
 	register_handler<req_download_info_2>(req_download_info_2::handler_name, false);
-	register_handler<req_stat_log>("stat-log", true);
-	register_handler<req_stat_log>("stat_log", true);
 	register_handler<req_ping>("ping", true);
 	register_handler<req_ping>("stat", true);
 	register_handler<req_cache>("cache", true);
@@ -684,87 +688,6 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 	}
 }
 
-void proxy::req_stat_log::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
-	try {
-		BH_LOG(logger(), SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().path().c_str());
-		auto session = server()->get_session();
-
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
-		auto asr = session.stat_log();
-
-		asr.connect(wrap(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
-	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: unknown");
-		send_reply(500);
-	}
-}
-
-void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
-	try {
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: prepare response");
-		if (error) {
-			BH_LOG(logger(), SWARM_LOG_ERROR, "%s", error.message().c_str());
-			send_reply(500);
-			return;
-		}
-
-		char id_str[DNET_ID_SIZE * 2 + 1];
-		char addr_str[128];
-
-		std::ostringstream oss;
-		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
-		oss << "<data>\n";
-
-		for (auto it = ssr.begin(); it != ssr.end(); ++it) {
-			const ioremap::elliptics::stat_result_entry &data = *it;
-			struct dnet_addr *addr = data.address();
-			struct dnet_cmd *cmd = data.command();
-			struct dnet_stat *st = data.statistics();
-
-			dnet_server_convert_dnet_addr_raw(addr, addr_str, sizeof(addr_str));
-			dnet_dump_id_len_raw(cmd->id.id, DNET_ID_SIZE, id_str);
-
-			oss << "<stat addr=\"" << addr_str << "\" id=\"" << id_str << "\">";
-			oss << "<la>";
-			for (size_t i = 0; i != 3; ++i) {
-				oss << std::fixed << std::setprecision(2) << static_cast<float>(st->la[i]) / 100.0;
-				if (i != 2)
-					oss << ' ';
-			}
-			oss << "</la>";
-			oss << "<memtotal>" << st->vm_total << "</memtotal>";
-			oss << "<memfree>" << st->vm_free << "</memfree>";
-			oss << "<memcached>" << st->vm_cached << "</memcached>";
-			oss << "<storage_size>" << st->frsize * st->blocks / 1024 / 1024 << "</storage_size>";
-			oss << "<available_size>" << st->bavail * st->bsize / 1024 / 1024 << "</available_size>";
-			oss << "<files>" << st->files << "</files>";
-			oss << "<fsid>" << std::hex << st->fsid << "</fsid>";
-			oss << "</stat>";
-		}
-
-		oss << "</data>";
-
-		const std::string &body = oss.str();
-		ioremap::thevoid::http_response reply;
-		ioremap::swarm::http_headers headers;
-		reply.set_code(200);
-		headers.set_content_type("text/xml");
-		headers.set_content_length(body.size());
-		reply.set_headers(headers);
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: sending response");
-		send_reply(std::move(reply), std::move(body));
-	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: unknown");
-		send_reply(500);
-	}
-}
-
 ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
 }
@@ -968,7 +891,14 @@ void proxy::cache_update_callback() {
 
 		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update elliptics remotes");
 		try {
-			m_elliptics_node->add_remote(mastermind()->get_elliptics_remotes());
+			auto remotes = mastermind()->get_elliptics_remotes();
+			std::vector<ioremap::elliptics::address> addresses;
+
+			for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
+				addresses.emplace_back(*it);
+			}
+
+			m_elliptics_node->add_remote(addresses);
 		} catch (const std::exception &ex) {
 			std::ostringstream oss;
 			oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();

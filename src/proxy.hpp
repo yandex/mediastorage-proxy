@@ -158,14 +158,6 @@ public:
 		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
-	struct req_stat_log
-		: public ioremap::thevoid::simple_request_stream<proxy>
-		, public std::enable_shared_from_this<req_stat_log>
-	{
-		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error);
-	};
-
 	struct req_cache
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_cache>
