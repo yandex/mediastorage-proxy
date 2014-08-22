@@ -11,6 +11,8 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 
 			auto &&prep_session = server()->prepare_session(url_str, ns);
 			session.reset(prep_session.first);
+			session->set_trace_bit(req.trace_bit());
+			session->set_trace_id(req.request_id());
 			key = prep_session.second;
 		} catch (const std::exception &ex) {
 			BH_LOG(logger(), SWARM_LOG_INFO,

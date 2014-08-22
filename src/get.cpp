@@ -16,6 +16,8 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		ns = server()->get_namespace(url_str, "/get");
 		auto &&prep_session = server()->prepare_session(url_str, ns);
 		m_session = prep_session.first;
+		m_session->set_trace_bit(req.trace_bit());
+		m_session->set_trace_id(req.request_id());
 		m_session->set_timeout(server()->timeout.read);
 		m_key = prep_session.second;
 		m_key.transform(*m_session);

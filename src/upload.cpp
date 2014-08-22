@@ -68,6 +68,8 @@ void proxy::req_upload::on_request(const ioremap::thevoid::http_request &req) {
 	set_chunk_size(server()->m_write_chunk_size);
 
 	m_session = server()->get_session();
+	m_session->set_trace_bit(req.trace_bit());
+	m_session->set_trace_id(req.request_id());
 	m_session->set_timeout(server()->timeout.write);
 
 	if (m_session->state_num() < server()->die_limit()) {

@@ -381,6 +381,8 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		try {
 			auto &&prep_session = server()->prepare_session(url, ns);
 			session.reset(prep_session.first);
+			session->set_trace_bit(req.trace_bit());
+			session->set_trace_id(req.request_id());
 			key.reset(prep_session.second);
 		} catch (const std::exception &ex) {
 			BH_LOG(logger(), SWARM_LOG_INFO, "Download info request error: %s", ex.what());
@@ -535,6 +537,8 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		auto session = server()->get_session();
+		session.set_trace_bit(req.trace_bit());
+		session.set_trace_id(req.request_id());
 
 		ts_oss << "session is copied: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
