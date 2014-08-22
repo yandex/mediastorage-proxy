@@ -1,3 +1,9 @@
+mediastorage-proxy (0.56~ell-2.26-3) lucid; urgency=low
+
+  * Added elliptics trace_id and trace_bit
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 22 Aug 2014 17:59:53 +0400
+
 mediastorage-proxy (0.56~ell-2.26-2) lucid; urgency=low
 
   * Ubic rlimit_core = -1
