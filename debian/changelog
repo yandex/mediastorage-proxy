@@ -1,3 +1,9 @@
+mediastorage-proxy (0.56~ell-2.26-2) lucid; urgency=low
+
+  * Ubic rlimit_core = -1
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 22 Aug 2014 14:46:40 +0400
+
 mediastorage-proxy (0.56~ell-2.26-1) lucid; urgency=low
 
   * Build with elliptics >= 2.26.3.9
