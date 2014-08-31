@@ -24,11 +24,12 @@
 #include <cocaine/framework/logging.hpp>
 #include <elliptics/session.hpp>
 
-#define MDS_LOG_ERROR(log, ...) BH_LOG((log), SWARM_LOG_ERROR, __VA_ARGS__)
-#define MDS_LOG_WARNING(log, ...) BH_LOG((log), SWARM_LOG_WARNING, __VA_ARGS__)
-#define MDS_LOG_INFO(log, ...) BH_LOG((log), SWARM_LOG_INFO, __VA_ARGS__)
-#define MDS_LOG_NOTICE(log, ...) BH_LOG((log), SWARM_LOG_NOTICE, __VA_ARGS__)
-#define MDS_LOG_DEBUG(log, ...) BH_LOG((log), SWARM_LOG_DEBUG, __VA_ARGS__)
+#define MDS_LOG(verb, ...) BH_LOG(logger(), verb, __VA_ARGS__)
+#define MDS_LOG_ERROR(...) MDS_LOG(SWARM_LOG_ERROR, __VA_ARGS__)
+#define MDS_LOG_WARNING(...) MDS_LOG(SWARM_LOG_WARNING, __VA_ARGS__)
+#define MDS_LOG_INFO(...) MDS_LOG(SWARM_LOG_INFO, __VA_ARGS__)
+#define MDS_LOG_NOTICE(...) MDS_LOG(SWARM_LOG_NOTICE, __VA_ARGS__)
+#define MDS_LOG_DEBUG(...) MDS_LOG(SWARM_LOG_DEBUG, __VA_ARGS__)
 
 class cocaine_logger_t : public cocaine::framework::logger_t {
 public:

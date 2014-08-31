@@ -29,7 +29,7 @@ namespace elliptics {
 void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	m_beg_time = std::chrono::system_clock::now();
 	url_str = req.url().path();
-	BH_LOG(logger(), SWARM_LOG_INFO, "Get: handle request: %s", url_str.c_str());
+	MDS_LOG_INFO("Get: handle request: %s", url_str.c_str());
 	namespace_ptr_t ns;
 	try {
 		ns = server()->get_namespace(url_str, "/get");
@@ -42,18 +42,15 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		m_key.transform(*m_session);
 		m_key.set_id(m_key.id());
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_INFO,
-			"Get: request = \"%s\"; err: \"%s\"",
-			req.url().path().c_str(), ex.what());
+		MDS_LOG_INFO("Get: request = \"%s\"; err: \"%s\"", req.url().path().c_str(), ex.what());
 		send_reply(400);
 		return;
 	}
 
 	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read, req.headers().get("Authorization"))) {
 		auto token = server()->get_auth_token(req.headers().get("Authorization"));
-		BH_LOG(logger(), SWARM_LOG_INFO,
-				"%s: invalid token \"%s\""
-				, url_str.c_str(), token.empty() ? "<none>" : token.c_str());
+		MDS_LOG_INFO("%s: invalid token \"%s\"", url_str.c_str()
+				, token.empty() ? "<none>" : token.c_str());
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 
@@ -66,8 +63,7 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 	}
 
 	if (m_session->get_groups().empty()) {
-		BH_LOG(logger(), SWARM_LOG_INFO
-				, "Get %s: on_request: cannot find couple of groups for the request"
+		MDS_LOG_INFO("Get %s: on_request: cannot find couple of groups for the request"
 				, url_str.c_str());
 		send_reply(404);
 		return;
@@ -91,7 +87,7 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		}
 		oss << ']';
 		auto msg = oss.str();
-		BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
+		MDS_LOG_INFO("%s", msg.c_str());
 	}
 	{
 		auto ioflags = m_session->get_ioflags();
@@ -108,14 +104,12 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
-			BH_LOG(logger(), SWARM_LOG_INFO
-					, "Get %s %s: on_lookup: file not found"
+			MDS_LOG_INFO("Get %s %s: on_lookup: file not found"
 					, m_key.remote().c_str(), m_key.to_string().c_str());
 			send_reply(404);
 		} else {
-			BH_LOG(logger(), SWARM_LOG_ERROR
-					, "Get %s %s: on_lookup: %s"
-					, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
+			MDS_LOG_ERROR("Get %s %s: on_lookup: %s", m_key.remote().c_str()
+					, m_key.to_string().c_str(), error.message().c_str());
 			send_reply(500);
 		}
 		return;
@@ -124,10 +118,8 @@ void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr
 	auto total_size = entry.file_info()->size;
 
 	if (m_offset >= total_size) {
-		BH_LOG(logger(), SWARM_LOG_INFO
-				, "Get %s %s: offset greater than total_size"
-				, m_key.remote().c_str()
-				, m_key.to_string().c_str());
+		MDS_LOG_INFO("Get %s %s: offset greater than total_size"
+				, m_key.remote().c_str(), m_key.to_string().c_str());
 		send_reply(400);
 		return;
 	}
@@ -164,7 +156,7 @@ void proxy::req_get::read_chunk() {
 		}
 		oss << ']';
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+		MDS_LOG_INFO("%s", oss.str().c_str());
 	}
 
 	m_session->set_timeout(server()->timeout.read);
@@ -182,15 +174,13 @@ void proxy::req_get::read_chunk() {
 
 void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error) {
 	if (error) {
-		BH_LOG(logger(), SWARM_LOG_ERROR
-				, "Get %s %s: on_read_chunk: %s"
-				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
+		MDS_LOG_ERROR("Get %s %s: on_read_chunk: %s", m_key.remote().c_str()
+				, m_key.to_string().c_str(), error.message().c_str());
 		send_reply(500);
 		return;
 	}
 
-	BH_LOG(logger(), SWARM_LOG_INFO
-			, "Get %s %s: on_read_chunk: chunk was read"
+	MDS_LOG_INFO("Get %s %s: on_read_chunk: chunk was read"
 			, m_key.remote().c_str(), m_key.to_string().c_str());
 
 	const auto &rr = srr.front();
@@ -237,16 +227,13 @@ void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &s
 
 void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 	if (error) {
-		BH_LOG(logger(), SWARM_LOG_ERROR
-				, "Get %s %s: on_sent_chunk: %s"
-				, m_key.remote().c_str(), m_key.to_string().c_str(), error.message().c_str());
+		MDS_LOG_ERROR("Get %s %s: on_sent_chunk: %s", m_key.remote().c_str()
+				, m_key.to_string().c_str(), error.message().c_str());
 		reply()->close(error);
 		return;
 	}
 
-	BH_LOG(logger(), SWARM_LOG_INFO
-			, "Get %s %s: chunk was sent"
-			, m_key.remote().c_str(), m_key.to_string().c_str());
+	MDS_LOG_INFO("Get %s %s: chunk was sent", m_key.remote().c_str() , m_key.to_string().c_str());
 
 	if (m_offset < m_size) {
 		read_chunk();
@@ -264,7 +251,7 @@ void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
 			<< ": on_finished: request=" << request().url().path() << " spent_time=" << spent_time
 			<< " file_size=" << m_size;
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+		MDS_LOG_INFO("%s", oss.str().c_str());
 	}
 
 	reply()->close(error);
