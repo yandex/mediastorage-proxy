@@ -590,7 +590,7 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 
 		{
 			const auto &msg = ts_oss.str();
-			BH_LOG(logger(), SWARM_LOG_DEBUG, "%s", msg.c_str());
+			BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
 		}
 
 		{
