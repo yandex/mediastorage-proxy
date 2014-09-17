@@ -900,11 +900,13 @@ void proxy::cache_update_callback() {
 	auto &&m = mastermind();
 	if (m) {
 		MDS_LOG_INFO("cache updater: starts");
-		MDS_LOG_INFO("cache updater: update namespaces");
-		auto namespaces = generate_namespaces(m);
-		std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-		m_namespaces.swap(namespaces);
-		MDS_LOG_INFO("cache updater: update namespaces is done");
+		{
+			MDS_LOG_INFO("cache updater: update namespaces");
+			auto namespaces = generate_namespaces(m);
+			std::lock_guard<std::mutex> lock(m_namespaces_mutex);
+			m_namespaces.swap(namespaces);
+			MDS_LOG_INFO("cache updater: update namespaces is done");
+		}
 
 		MDS_LOG_INFO("cache updater: update elliptics remotes");
 		try {
