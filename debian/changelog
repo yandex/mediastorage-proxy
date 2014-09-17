@@ -1,3 +1,9 @@
+mediastorage-proxy (0.56~ell-2.26-5) lucid; urgency=low
+
+  * Release namespaces_mutex immediately after namespaces have updated
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 18 Sep 2014 02:13:18 +0400
+
 mediastorage-proxy (0.56~ell-2.26-4) lucid; urgency=low
 
   * Deps: elliptics-client(>= 2.26.3.13)
