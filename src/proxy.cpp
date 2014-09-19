@@ -181,23 +181,29 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 
 	ioremap::swarm::logger elliptics_logger = ioremap::swarm::logger(logger(),
 			blackhole::log::attributes_t({blackhole::attribute::make("component", "elliptics")}));
-	ioremap::elliptics::node node(
-			ioremap::elliptics::logger(new elliptics_logger_interface_t(std::move(elliptics_logger)), 5), dnet_conf);
+	ioremap::elliptics::node node(std::move(elliptics_logger), dnet_conf);
 
 	{
 		const auto &remotes = mastermind()->get_elliptics_remotes();
 
 		if (remotes.empty()) {
-			BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: nothing to put add to elliptics remotes");
+			MDS_LOG_INFO("Mediastorage-proxy starts: nothing to put add to elliptics remotes");
 		} else {
 			auto ts_beg = std::chrono::system_clock::now();
-			BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: add_remotes");
+			MDS_LOG_INFO("Mediastorage-proxy starts: add_remotes");
 			try {
-				node.add_remote(mastermind()->get_elliptics_remotes());
+				auto remotes = mastermind()->get_elliptics_remotes();
+				std::vector<ioremap::elliptics::address> addresses;
+
+				for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
+					addresses.emplace_back(*it);
+				}
+
+				node.add_remote(addresses);
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
-				BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+				MDS_LOG_INFO("%s", oss.str().c_str());
 			}
 			auto ts_end = std::chrono::system_clock::now();
 			{
@@ -206,7 +212,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 					<< std::chrono::duration_cast<std::chrono::microseconds>(ts_end - ts_beg).count()
 					<< "us";
 				auto msg = oss.str();
-				BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
+				MDS_LOG_INFO("%s", msg.c_str());
 			}
 		}
 	}
@@ -261,23 +267,23 @@ proxy::~proxy() {
 
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts");
+		MDS_LOG_INFO("Mediastorage-proxy starts");
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize libmastermind");
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize libmastermind");
 		m_mastermind = generate_mastermind(config);
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics node");
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics node");
 		m_elliptics_node.reset(generate_node(config, timeout.def));
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
 			timeout.def = 10;
 		}
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize elliptics session");
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
 
@@ -294,20 +300,17 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			const auto &json_hp = config["header-protector"];
 
 			if (json_hp.HasMember("name") == false) {
-				BH_LOG(logger(), SWARM_LOG_ERROR,
-						"header-protector is set but header-protector/name is missed");
+				MDS_LOG_ERROR("header-protector is set but header-protector/name is missed");
 				return false;
 			}
 
 			if (json_hp.HasMember("value") == false) {
-				BH_LOG(logger(), SWARM_LOG_ERROR,
-						"header-protector is set but header-protector/value is missed");
+				MDS_LOG_ERROR("header-protector is set but header-protector/value is missed");
 				return false;
 			}
 
 			if (json_hp.HasMember("handlers") == false) {
-				BH_LOG(logger(), SWARM_LOG_ERROR,
-						"header-protector is set but header-protector/handlers are missed");
+				MDS_LOG_ERROR("header-protector is set but header-protector/handlers are missed");
 				return false;
 			}
 
@@ -327,13 +330,13 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout_coef.for_commit = get_int(json, "for-commit", 0);
 		}
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize cache updater");
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cache updater");
 		mastermind()->set_update_cache_callback(std::bind(&proxy::cache_update_callback, this));
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize namespaces");
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize namespaces");
 		m_namespaces = generate_namespaces(m_mastermind);
-		BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
@@ -349,26 +352,24 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 	} catch(const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "%s", ex.what());
+		MDS_LOG_ERROR("%s", ex.what());
 		return false;
 	}
-	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialize handlers");
+	MDS_LOG_INFO("Mediastorage-proxy starts: initialize handlers");
 
 	register_handler<req_upload>("upload", false);
 	register_handler<req_get>("get", false);
 	register_handler<req_delete>("delete", false);
 	register_handler<req_download_info_1>(req_download_info_1::handler_name, false);
 	register_handler<req_download_info_2>(req_download_info_2::handler_name, false);
-	register_handler<req_stat_log>("stat-log", true);
-	register_handler<req_stat_log>("stat_log", true);
 	register_handler<req_ping>("ping", true);
 	register_handler<req_ping>("stat", true);
 	register_handler<req_cache>("cache", true);
 	register_handler<req_cache_update>("cache-update", true);
 	register_handler<req_statistics>("statistics", false);
 
-	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: done");
-	BH_LOG(logger(), SWARM_LOG_INFO, "Mediastorage-proxy starts: initialization is done");
+	MDS_LOG_INFO("Mediastorage-proxy starts: done");
+	MDS_LOG_INFO("Mediastorage-proxy starts: initialization is done");
 
 	return true;
 }
@@ -379,14 +380,12 @@ proxy::req_download_info::req_download_info(const std::string &handler_name_)
 
 void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		BH_LOG(logger(), SWARM_LOG_INFO, "Download info: handle request: %s", req.url().path().c_str());
+		MDS_LOG_INFO("Download info: handle request: %s", req.url().path().c_str());
 		const auto &url = req.url().path();
 		try {
 			ns = server()->get_namespace(url, handler_name);
 		} catch (const std::exception &ex) {
-			BH_LOG(logger(), SWARM_LOG_INFO,
-				"Download info: request = \"%s\"; err: \"%s\"",
-				url.c_str(), ex.what());
+			MDS_LOG_INFO("Download info: request = \"%s\"; err: \"%s\"", url.c_str(), ex.what());
 			send_reply(400);
 			return;
 		}
@@ -396,9 +395,11 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		try {
 			auto &&prep_session = server()->prepare_session(url, ns);
 			session.reset(prep_session.first);
+			session->set_trace_bit(req.trace_bit());
+			session->set_trace_id(req.request_id());
 			key.reset(prep_session.second);
 		} catch (const std::exception &ex) {
-			BH_LOG(logger(), SWARM_LOG_INFO, "Download info request error: %s", ex.what());
+			MDS_LOG_INFO("Download info request error: %s", ex.what());
 			send_reply(400);
 			return;
 		}
@@ -418,24 +419,24 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		session->set_filter(ioremap::elliptics::filters::all);
 		session->set_timeout(server()->timeout.lookup);
 
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: looking up");
+		MDS_LOG_DEBUG("Download info: looking up");
 		auto alr = session->quorum_lookup(*key);
 
 		alr.connect(wrap(std::bind(&req_download_info::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info request error: %s", ex.what());
+		MDS_LOG_ERROR("Download info request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info request error: unknown");
+		MDS_LOG_ERROR("Download info request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	try {
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: prepare response");
+		MDS_LOG_DEBUG("Download info: prepare response");
 		if (error) {
-			BH_LOG(logger(), SWARM_LOG_ERROR, "%s", error.message().c_str());
+			MDS_LOG_ERROR("%s", error.message().c_str());
 			send_reply(error.code() == -ENOENT ? 404 : 500);
 			return;
 		}
@@ -457,9 +458,9 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 					{
 						const auto &path_prefix = ns->sign_path_prefix;
 						if (strncmp(entry_path.c_str(), path_prefix.c_str(), path_prefix.size())) {
-							BH_LOG(logger(), SWARM_LOG_INFO,
-									"Download-info: path_prefix does not match: prefix=%s path=%s",
-									path_prefix.c_str(), entry_path.c_str());
+							MDS_LOG_INFO(
+									"Download-info: path_prefix does not match: prefix=%s path=%s"
+									, path_prefix.c_str(), entry_path.c_str());
 						} else {
 							entry_path.substr(path_prefix.size()).swap(entry_path);
 							entry_path = '/' + entry_path;
@@ -512,13 +513,13 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				return;
 			}
 		}
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Download info: sending response");
+		MDS_LOG_DEBUG("Download info: sending response");
 		send_reply(503);  
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info finish error: %s", ex.what());
+		MDS_LOG_ERROR("Download info finish error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Download info finish error: unknown");
+		MDS_LOG_ERROR("Download info finish error: unknown");
 		send_reply(500);
 	}
 }
@@ -535,7 +536,7 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 			const auto &path = req.url().path();
 			ts_oss << "got url path: " << std::chrono::duration_cast<std::chrono::microseconds>(
 					std::chrono::system_clock::now() - begin_request).count() << "us; ";
-			BH_LOG(logger(), SWARM_LOG_INFO, "Ping: handle request: %s", path.c_str());
+			MDS_LOG_INFO("Ping: handle request: %s", path.c_str());
 		}
 
 		ts_oss << "print greating log: " << std::chrono::duration_cast<std::chrono::microseconds>(
@@ -550,6 +551,8 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		auto session = server()->get_session();
+		session.set_trace_bit(req.trace_bit());
+		session.set_trace_id(req.request_id());
 
 		ts_oss << "session is copied: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
@@ -571,9 +574,8 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		if (state_num < die_limit) {
-			BH_LOG(logger(), SWARM_LOG_ERROR,
-					"Ping request error: state_num too small state_num=%d",
-					static_cast<int>(state_num));
+			MDS_LOG_ERROR("Ping request error: state_num too small state_num=%d"
+					, static_cast<int>(state_num));
 			code = 500;
 			oss << "Bad";
 		} else {
@@ -590,25 +592,25 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 
 		{
 			const auto &msg = ts_oss.str();
-			BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
+			MDS_LOG_INFO("%s", msg.c_str());
 		}
 
 		{
 			const auto &msg = oss.str();
-			BH_LOG(logger(), SWARM_LOG_INFO, "%s", msg.c_str());
+			MDS_LOG_INFO("%s", msg.c_str());
 		}
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Ping request error: %s", ex.what());
+		MDS_LOG_ERROR("Ping request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Ping request error: unknown");
+		MDS_LOG_ERROR("Ping request error: unknown");
 		send_reply(500);
 	}
 }
 
 void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		BH_LOG(logger(), SWARM_LOG_INFO, "Cache: handle request: %s", req.url().path().c_str());
+		MDS_LOG_INFO("Cache: handle request: %s", req.url().path().c_str());
 		auto query_list = req.url().query();
 
 		bool g = false;
@@ -653,13 +655,13 @@ void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, con
 		headers.set_content_length(res_str.size());
 		headers.set_content_type("text/plain");
 		reply.set_headers(headers);
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Cache: sending response");
+		MDS_LOG_DEBUG("Cache: sending response");
 		send_reply(std::move(reply), std::move(res_str));
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
+		MDS_LOG_ERROR("Cache request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: unknown");
+		MDS_LOG_ERROR("Cache request error: unknown");
 		send_reply(500);
 	}
 }
@@ -672,10 +674,10 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 		server()->cache_update_callback();
 		send_reply(200);
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: %s", ex.what());
+		MDS_LOG_ERROR("Cache request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Cache request error: unknown");
+		MDS_LOG_ERROR("Cache request error: unknown");
 		send_reply(500);
 	}
 }
@@ -695,91 +697,10 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 
 		send_reply(std::move(reply), std::move(json));
 	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Statistics request error: %s", ex.what());
+		MDS_LOG_ERROR("Statistics request error: %s", ex.what());
 		send_reply(500);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Statistics request error: unknown");
-		send_reply(500);
-	}
-}
-
-void proxy::req_stat_log::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
-	try {
-		BH_LOG(logger(), SWARM_LOG_INFO, "Stat log: handle request: %s", req.url().path().c_str());
-		auto session = server()->get_session();
-
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: process \'stat_log\'");
-		auto asr = session.stat_log();
-
-		asr.connect(wrap(std::bind(&req_stat_log::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
-	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log request error: unknown");
-		send_reply(500);
-	}
-}
-
-void proxy::req_stat_log::on_finished(const ioremap::elliptics::sync_stat_result &ssr, const ioremap::elliptics::error_info &error) {
-	try {
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: prepare response");
-		if (error) {
-			BH_LOG(logger(), SWARM_LOG_ERROR, "%s", error.message().c_str());
-			send_reply(500);
-			return;
-		}
-
-		char id_str[DNET_ID_SIZE * 2 + 1];
-		char addr_str[128];
-
-		std::ostringstream oss;
-		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
-		oss << "<data>\n";
-
-		for (auto it = ssr.begin(); it != ssr.end(); ++it) {
-			const ioremap::elliptics::stat_result_entry &data = *it;
-			struct dnet_addr *addr = data.address();
-			struct dnet_cmd *cmd = data.command();
-			struct dnet_stat *st = data.statistics();
-
-			dnet_server_convert_dnet_addr_raw(addr, addr_str, sizeof(addr_str));
-			dnet_dump_id_len_raw(cmd->id.id, DNET_ID_SIZE, id_str);
-
-			oss << "<stat addr=\"" << addr_str << "\" id=\"" << id_str << "\">";
-			oss << "<la>";
-			for (size_t i = 0; i != 3; ++i) {
-				oss << std::fixed << std::setprecision(2) << static_cast<float>(st->la[i]) / 100.0;
-				if (i != 2)
-					oss << ' ';
-			}
-			oss << "</la>";
-			oss << "<memtotal>" << st->vm_total << "</memtotal>";
-			oss << "<memfree>" << st->vm_free << "</memfree>";
-			oss << "<memcached>" << st->vm_cached << "</memcached>";
-			oss << "<storage_size>" << st->frsize * st->blocks / 1024 / 1024 << "</storage_size>";
-			oss << "<available_size>" << st->bavail * st->bsize / 1024 / 1024 << "</available_size>";
-			oss << "<files>" << st->files << "</files>";
-			oss << "<fsid>" << std::hex << st->fsid << "</fsid>";
-			oss << "</stat>";
-		}
-
-		oss << "</data>";
-
-		const std::string &body = oss.str();
-		ioremap::thevoid::http_response reply;
-		ioremap::swarm::http_headers headers;
-		reply.set_code(200);
-		headers.set_content_type("text/xml");
-		headers.set_content_length(body.size());
-		reply.set_headers(headers);
-		BH_LOG(logger(), SWARM_LOG_DEBUG, "Stat log: sending response");
-		send_reply(std::move(reply), std::move(body));
-	} catch (const std::exception &ex) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: %s", ex.what());
-		send_reply(500);
-	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Stat log finish error: unknown");
+		MDS_LOG_ERROR("Statistics request error: unknown");
 		send_reply(500);
 	}
 }
@@ -854,7 +775,7 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
 		res.swap(vec_groups1);
 	} catch (...) {
-		BH_LOG(logger(), SWARM_LOG_ERROR, "Cannot to determine groups");
+		MDS_LOG_ERROR("Cannot to determine groups");
 	}
 
 	// TODO: if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO)
@@ -870,8 +791,8 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 		}
 		oss << "]";
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
-		BH_LOG(logger(), SWARM_LOG_INFO, "filename: %s", filename.c_str());
+		MDS_LOG_INFO("%s", oss.str().c_str());
+		MDS_LOG_INFO("filename: %s", filename.c_str());
 	}
 
 	return res;
@@ -978,23 +899,32 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 void proxy::cache_update_callback() {
 	auto &&m = mastermind();
 	if (m) {
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: starts");
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update namespaces");
-		auto namespaces = generate_namespaces(m);
-		std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-		m_namespaces.swap(namespaces);
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update namespaces is done");
+		MDS_LOG_INFO("cache updater: starts");
+		{
+			MDS_LOG_INFO("cache updater: update namespaces");
+			auto namespaces = generate_namespaces(m);
+			std::lock_guard<std::mutex> lock(m_namespaces_mutex);
+			m_namespaces.swap(namespaces);
+			MDS_LOG_INFO("cache updater: update namespaces is done");
+		}
 
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update elliptics remotes");
+		MDS_LOG_INFO("cache updater: update elliptics remotes");
 		try {
-			m_elliptics_node->add_remote(mastermind()->get_elliptics_remotes());
+			auto remotes = mastermind()->get_elliptics_remotes();
+			std::vector<ioremap::elliptics::address> addresses;
+
+			for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
+				addresses.emplace_back(*it);
+			}
+
+			m_elliptics_node->add_remote(addresses);
 		} catch (const std::exception &ex) {
 			std::ostringstream oss;
 			oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
-			BH_LOG(logger(), SWARM_LOG_INFO, "%s", oss.str().c_str());
+			MDS_LOG_INFO("%s", oss.str().c_str());
 		}
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater: update elliptics remotes is done");
-		BH_LOG(logger(), SWARM_LOG_INFO, "cache updater is done");
+		MDS_LOG_INFO("cache updater: update elliptics remotes is done");
+		MDS_LOG_INFO("cache updater is done");
 	}
 }
 

@@ -1,8 +1,40 @@
-mediastorage-proxy (0.57) lucid; urgency=low
+mediastorage-proxy (0.58) lucid; urgency=low
 
+  * Merged ell-26 into master
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Fri, 19 Sep 2014 17:31:24 +0400
+
+mediastorage-proxy (0.56~ell-2.26-5) lucid; urgency=low
+
+  * Release namespaces_mutex immediately after namespaces have updated
   * Write ping' trace with info-verbose
 
- -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 01 Sep 2014 17:22:11 +0400
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 18 Sep 2014 02:13:18 +0400
+
+mediastorage-proxy (0.56~ell-2.26-4) lucid; urgency=low
+
+  * Deps: elliptics-client(>= 2.26.3.13)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 26 Aug 2014 17:13:58 +0400
+
+mediastorage-proxy (0.56~ell-2.26-3) lucid; urgency=low
+
+  * Added elliptics trace_id and trace_bit
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 22 Aug 2014 17:59:53 +0400
+
+mediastorage-proxy (0.56~ell-2.26-2) lucid; urgency=low
+
+  * Ubic rlimit_core = -1
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 22 Aug 2014 14:46:40 +0400
+
+mediastorage-proxy (0.56~ell-2.26-1) lucid; urgency=low
+
+  * Build with elliptics >= 2.26.3.9
+  * Attention: /stat-log handler was removed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 21 Aug 2014 22:04:08 +0400
 
 mediastorage-proxy (0.56) lucid; urgency=low
 
