@@ -1,3 +1,9 @@
+mediastorage-proxy (0.59) lucid; urgency=low
+
+  * Fix upload when data size == chunk size
+
+ -- Anton Kortunov <toshik@yandex-team.ru>  Fri, 19 Sep 2014 20:12:16 +0400
+
 mediastorage-proxy (0.58) lucid; urgency=low
 
   * Merged ell-26 into master
