@@ -159,6 +159,25 @@ void proxy::req_upload::on_request(const ioremap::thevoid::http_request &req) {
 }
 
 void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
+	// Fix flags to single_chunk if first chunk == data size 
+	if ((flags & last_chunk) && m_single_chunk && (boost::asio::buffer_size(buffer) == 0)) {
+		MDS_LOG_INFO("Upload %s %s: on_chunk: skipping empty commit",
+					m_key.remote().c_str,
+					m_key.to_string().c_str());
+		return;
+	}
+
+	if ((flags == first_chunk) && (boost::asio::buffer_size(buffer) == m_size)) {
+		MDS_LOG_INFO("Upload %s %s: on_chunk: fixing flags to single_chunk",
+					m_key.remote().c_str,
+					m_key.to_string().c_str());
+		flags = single_chunk;
+	}
+
+	if (flags == single_chunk) {
+		m_single_chunk = true;
+	}
+
 	if (flags & first_chunk) {
 		if (m_embed) {
 			m_session->set_timestamp(&m_timestamp);
