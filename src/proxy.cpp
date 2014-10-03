@@ -36,6 +36,7 @@
 #include <utility>
 #include <cstring>
 #include <cstdio>
+#include <limits>
 
 #include <boost/lexical_cast.hpp>
 
@@ -254,11 +255,16 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 
 	auto group_info_update_period = get_int(mastermind, "group-info-update-period", 60);
 	auto cache_path = get_string(mastermind, "cache-path", "/var/cache/mediastorage-proxy/mastermind");
-	auto expired_time = get_int(mastermind, "expired-time", 0);
+	auto warning_time = get_int(mastermind, "warning-time", std::numeric_limits<int>::max());
+	auto expire_time = get_int(mastermind, "expire-time", std::numeric_limits<int>::max());
 	auto worker_name = get_string(mastermind, "worker-name", "mastermind");
 
+	auto enqueue_timeout = get_int(mastermind, "enqueue-timeout", 4000);
+	auto reconnect_timeout = get_int(mastermind, "reconnect-timeout", 4000);
+
 	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
-			group_info_update_period, cache_path, expired_time, worker_name);
+			group_info_update_period, cache_path, warning_time, expire_time, worker_name,
+			enqueue_timeout, reconnect_timeout);
 }
 
 proxy::~proxy() {
@@ -268,6 +274,8 @@ proxy::~proxy() {
 bool proxy::initialize(const rapidjson::Value &config) {
 	try {
 		MDS_LOG_INFO("Mediastorage-proxy starts");
+
+		cache_is_expired = false;
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize libmastermind");
 		m_mastermind = generate_mastermind(config);
@@ -331,7 +339,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cache updater");
-		mastermind()->set_update_cache_callback(std::bind(&proxy::cache_update_callback, this));
+		mastermind()->set_update_cache_ext1_callback(std::bind(&proxy::cache_update_callback, this,
+					std::placeholders::_1));
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize namespaces");
@@ -526,6 +535,12 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
+		if (server()->cache_is_expired) {
+			MDS_LOG_ERROR("Ping: libmastermind cache is expired");
+			send_reply(500);
+			return;
+		}
+
 		auto begin_request = std::chrono::system_clock::now();
 		std::ostringstream ts_oss;
 
@@ -671,7 +686,6 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 		auto query_list = req.url().query();
 
 		server()->mastermind()->cache_force_update();
-		server()->cache_update_callback();
 		send_reply(200);
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Cache request error: %s", ex.what());
@@ -896,8 +910,11 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	return oss.str();
 }
 
-void proxy::cache_update_callback() {
+void proxy::cache_update_callback(bool cache_is_expired_) {
 	auto &&m = mastermind();
+
+	cache_is_expired = cache_is_expired_;
+
 	if (m) {
 		MDS_LOG_INFO("cache updater: starts");
 		{

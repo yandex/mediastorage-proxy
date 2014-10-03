@@ -42,6 +42,7 @@
 #include <chrono>
 #include <vector>
 #include <mutex>
+#include <atomic>
 
 namespace elliptics {
 
@@ -221,7 +222,7 @@ protected:
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 
-	void cache_update_callback();
+	void cache_update_callback(bool cache_is_expired_);
 
 private:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
@@ -235,6 +236,7 @@ private:
 	bool m_namespaces_auto_update;
 	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
+	std::atomic<bool> cache_is_expired;
 
 	struct {
 		int def;
