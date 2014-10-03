@@ -43,7 +43,7 @@
 #include <vector>
 #include <mutex>
 
-#ifdef HAVE_GCC46
+#if __GNUC__ == 4 && __GNUC_MINOR__ >= 6
 #include <atomic>
 #else
 #include <cstdatomic>
