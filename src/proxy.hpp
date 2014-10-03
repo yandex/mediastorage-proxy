@@ -42,7 +42,12 @@
 #include <chrono>
 #include <vector>
 #include <mutex>
+
+#ifdef HAVE_GCC46
 #include <atomic>
+#else
+#include <cstdatomic>
+#endif
 
 namespace elliptics {
 
