@@ -1,4 +1,4 @@
-mediastorage-proxy
+Mediastorage-proxy
 ==================
 
 Mediastorage-proxy is a HTTP proxy for mediastorage based on Elliptics. 
