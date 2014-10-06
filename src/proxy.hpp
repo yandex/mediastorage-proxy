@@ -23,6 +23,7 @@
 #include "lookup_result.hpp"
 #include "loggers.hpp"
 #include "magic_provider.hpp"
+#include "utils.hpp"
 
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
@@ -73,6 +74,8 @@ struct namespace_t {
 	std::string sign_token;
 	std::string sign_path_prefix;
 	std::string sign_port;
+
+	int success_copies_num;
 };
 
 typedef std::shared_ptr<namespace_t> namespace_ptr_t;
@@ -83,35 +86,6 @@ public:
 	~proxy();
 
 	bool initialize(const rapidjson::Value &config);
-
-	struct req_upload
-		: public ioremap::thevoid::buffered_request_stream<proxy>
-		, public std::enable_shared_from_this<req_upload>
-	{
-		void on_request(const ioremap::thevoid::http_request &req);
-		void on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags);
-		void on_error(const boost::system::error_code &err);
-
-		void on_wrote(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error);
-		void on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error);
-
-	private:
-		ioremap::elliptics::async_write_result write(unsigned int flags);
-
-		boost::optional<ioremap::elliptics::session> m_session;
-		size_t m_offset;
-		size_t m_size;
-		bool m_embed;
-		bool m_single_chunk;
-		dnet_time m_timestamp;
-		ioremap::elliptics::key m_key;
-		std::string m_filename;
-		ioremap::elliptics::data_pointer m_content;
-		std::chrono::system_clock::time_point m_beg_time;
-		std::vector<int> m_bad_groups;
-		bool m_is_static_ns;
-		namespace_ptr_t ns;
-	};
 
 	struct req_get
 		: public ioremap::thevoid::simple_request_stream<proxy>
@@ -206,6 +180,7 @@ public:
 	};
 
 protected:
+public:
 	template <typename T>
 	void register_handler(const std::string &name, bool exact_match);
 
@@ -213,6 +188,23 @@ protected:
 	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
 
 	ioremap::elliptics::session get_session();
+	
+	ioremap::elliptics::session
+	read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
+
+	ioremap::elliptics::session
+	write_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
+
+	ioremap::elliptics::session
+	remove_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
+
+	ioremap::elliptics::session
+	lookup_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
+
+	ioremap::elliptics::session
+	setup_session(ioremap::elliptics::session session
+			, const ioremap::thevoid::http_request &http_request, const couple_t &couple);
+
 	namespace_ptr_t get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name);
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
@@ -230,8 +222,15 @@ protected:
 	void cache_update_callback(bool cache_is_expired_);
 
 private:
+public:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
+
+	boost::optional<ioremap::elliptics::session> elliptics_read_session;
+	boost::optional<ioremap::elliptics::session> elliptics_write_session;
+	boost::optional<ioremap::elliptics::session> elliptics_remove_session;
+	boost::optional<ioremap::elliptics::session> elliptics_lookup_session;
+
 	int m_die_limit;
 	int m_groups_count;
 	int m_write_chunk_size;

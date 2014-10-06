@@ -21,387 +21,442 @@
 #include "data_container.hpp"
 #include "lookup_result.hpp"
 
+#include "upload.hpp"
+#include "upload_p.hpp"
+
 #include <swarm/url.hpp>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <cstdio>
+#include <cstring>
+
 #include <sstream>
+#include <fstream>
+#include <algorithm>
+#include <limits>
 
 namespace elliptics {
 
-void proxy::req_upload::on_request(const ioremap::thevoid::http_request &req) {
-	m_beg_time = std::chrono::system_clock::now();
-	const auto &str_url = req.url().path();
+void
+upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
+	size_t total_size = 0;
 
-	if (const auto &arg = req.headers().content_length()) {
-		m_size = *arg;
+	if (const auto &arg = http_request.headers().content_length()) {
+		total_size = *arg;
 	} else {
-		MDS_LOG_INFO("Upload %s: missing Content-Length", str_url.c_str());
+		MDS_LOG_INFO("missing Content-Length");
 		send_reply(400);
 		return;
 	}
 
-	if (m_size == 0) {
-		MDS_LOG_INFO("Upload %s: Content-Length must be greater than zero", str_url.c_str());
+	if (total_size == 0) {
+		MDS_LOG_INFO("Content-Length must be greater than zero");
 		send_reply(400);
 		return;
 	}
 
-	MDS_LOG_INFO("Upload: handle request: %s; body size: %lu",
-		req.url().path().c_str(), m_size);
+	MDS_LOG_INFO("body size: %lu", total_size);
 
-	// TODO: if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_DEBUG)
 	{
 		std::ostringstream oss;
-		const auto &headers = req.headers().all();
-		oss << "Headers for " << str_url << ":" << std::endl;
+		const auto &headers = http_request.headers().all();
+		oss << "Headers:" << std::endl;
 		for (auto it = headers.begin(); it != headers.end(); ++it) {
 			oss << it->first << ": " << it->second << std::endl;
 		}
 		MDS_LOG_DEBUG("%s", oss.str().c_str());
 	}
 
-	auto file_info = server()->get_file_info(req);
-	ns = file_info.second;
+	auto file_info = server()->get_file_info(http_request);
+
+	auto ns = file_info.second;
+
+	if (ns->name.empty()) {
+		MDS_LOG_INFO("cannot determine a namespace");
+		send_reply(400);
+		return;
+	}
 
 	{
-		if (!server()->check_basic_auth(file_info.second->name, file_info.second->auth_key_for_write, req.headers().get("Authorization"))) {
-			auto token = server()->get_auth_token(req.headers().get("Authorization"));
-			MDS_LOG_INFO("%s: invalid token \"%s\"", str_url.c_str()
-					, token.empty() ? "<none>" : token.c_str());
+		if (!server()->check_basic_auth(ns->name, ns->auth_key_for_write
+					, http_request.headers().get("Authorization"))) {
+			auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
+			MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
+
 			ioremap::thevoid::http_response reply;
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
-			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + file_info.second->name + "\"");
-			headers.add("Content-Length", "0");
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+			headers.set_content_length(0);
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
 			return;
 		}
 	}
 
-	set_chunk_size(server()->m_write_chunk_size);
+	couple_t couple;
 
-	m_session = server()->get_session();
-	m_session->set_trace_bit(req.trace_bit());
-	m_session->set_trace_id(req.request_id());
-	m_session->set_timeout(server()->timeout.write);
-
-	if (m_session->state_num() < server()->die_limit()) {
-		MDS_LOG_ERROR("Upload %s: too low number of existing states", str_url.c_str());
-		send_reply(503);
-		return;
-	}
-
-	if (file_info.second->name.empty()) {
-		MDS_LOG_INFO("Upload %s: cannot determine a namespace", str_url.c_str());
-		send_reply(400);
-		return;
-	}
-
-	m_is_static_ns = !file_info.second->static_couple.empty();
-	m_key = ioremap::elliptics::key(file_info.second->name + '.' + file_info.first);
-	m_key.transform(*m_session);
-	m_key.set_id(m_key.id());
-	m_filename = file_info.first;
-	m_session->set_checker(file_info.second->result_checker);
-	m_session->set_error_handler(ioremap::elliptics::error_handlers::remove_on_fail(*m_session));
 	try {
-		m_session->set_groups(server()->groups_for_upload(file_info.second, m_size));
+		couple = server()->groups_for_upload(ns, total_size);
 	} catch (const mastermind::not_enough_memory_error &e) {
-		MDS_LOG_ERROR("Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
-			, m_key.remote().c_str()
-			, m_key.to_string().c_str()
-			, static_cast<int>(file_info.second->groups_count)
-			, file_info.second->name.c_str()
-			, e.code().message().c_str());
+		MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+			, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
 		send_reply(507);
 		return;
 	} catch (const std::system_error &e) {
-		MDS_LOG_ERROR("Upload %s %s: cannot obtain any couple size=%d namespace=%s : %s"
-			, m_key.remote().c_str()
-			, m_key.to_string().c_str()
-			, static_cast<int>(file_info.second->groups_count)
-			, file_info.second->name.c_str()
-			, e.code().message().c_str());
+		MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+			, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
 		send_reply(500);
 		return;
 	}
-	m_session->set_filter(ioremap::elliptics::filters::all);
 
-	auto query_list = req.url().query();
-	m_offset = get_arg<uint64_t>(query_list, "offset", 0);
-	m_embed = query_list.has_item("embed") || query_list.has_item("embed_timestamp");
-	if (m_embed) {
-		m_timestamp.tsec = get_arg<uint64_t>(query_list, "timestamp", 0);
-		m_timestamp.tnsec = 0;
+	if (auto content_type_opt = http_request.headers().content_type()) {
+		int res = content_type_opt->compare(0, sizeof("multipart/form-data;") - 1
+				, "multipart/form-data;");
+
+		if (!res) {
+			request_stream = make_request_stream<upload_multipart_t>(server(), reply()
+					, std::move(ns), std::move(couple));
+		}
 	}
 
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
+	if (!request_stream) {
+		request_stream = make_request_stream<upload_simple_t>(server(), reply()
+				, std::move(ns), std::move(couple), std::move(file_info.first));
+	}
+
+	request_stream->on_headers(std::move(http_request));
+}
+
+size_t
+upload_t::on_data(const boost::asio::const_buffer &buffer) {
+	return request_stream->on_data(buffer);
+}
+
+void
+upload_t::on_close(const boost::system::error_code &error) {
+	request_stream->on_close(error);
+}
+
+upload_helper_t::upload_helper_t(ioremap::swarm::logger bh_logger_
+		, const ioremap::elliptics::session &session_, std::string key_
+		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
+		)
+	: bh_logger(std::move(bh_logger_))
+	, session(session_.clone())
+	, key(std::move(key_))
+	, total_size(total_size_)
+	, written_size(0)
+	, offset(offset_)
+	, commit_coef(commit_coef_)
+	, success_copies_num(success_copies_num_)
+	, start_time(std::chrono::system_clock::now())
+{
+	session.set_filter(ioremap::elliptics::filters::all_with_ack);
+	session.set_checker(ioremap::elliptics::checkers::at_least_one);
+
+	key.transform(session);
+	key.set_id(key.id());
+
 	{
 		std::ostringstream oss;
 		oss
-			<< "Upload: starts request=" << req.url().path()
-			<< " filename=" << m_filename
-			<< " key=" << m_key.remote() << ":" << m_key.to_string()
-			<< " embed=" << m_embed
-			<< " offset=" << m_offset
-			<< " size=" << m_size
-			<< " groups=[";
-		auto groups = m_session->get_groups();
-		for (auto itb = groups.begin(), it = itb; it != groups.end(); ++it) {
-			if (itb != it) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
+			<< "upload start:"
+			<< " key=" << key.remote()
+			// The only reason to print elliptics key is ioremap::elliptics::key::transform
+			// method doesn't log this information
+			<< " elliptics-key=" << key.to_string()
+			<< " offset=" << offset
+			<< " total-size=" << total_size
+			<< " groups=" << session.get_groups()
+			<< " success-copiens-num=" << success_copies_num;
 
-		MDS_LOG_INFO("%s", oss.str().c_str());
+		auto msg = oss.str();
+
+		MDS_LOG_INFO("%s", msg.c_str());
 	}
 }
 
-void proxy::req_upload::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
-	// Fix flags to single_chunk if first chunk == data size 
-	if ((flags & last_chunk) && m_single_chunk && (boost::asio::buffer_size(buffer) == 0)) {
-		MDS_LOG_INFO("Upload %s %s: on_chunk: skipping empty commit",
-					m_key.remote().c_str(),
-					m_key.to_string().c_str());
+void
+upload_helper_t::write(const char *data, size_t size, callback_t on_wrote, callback_t on_error) {
+	write(ioremap::elliptics::data_pointer::from_raw(
+			reinterpret_cast<void *>(const_cast<char *>(data)), size)
+			, std::move(on_wrote), std::move(on_error));
+}
+
+void
+upload_helper_t::write(const ioremap::elliptics::data_pointer &data_pointer
+		, callback_t on_wrote, callback_t on_error) {
+	if (written_size == 0 && data_pointer.size() >= total_size) {
+		log_chunk_upload("simple", data_pointer.size());
+		auto async_result = session.write_data(key, data_pointer, offset);
+		written_size = data_pointer.size();
+
+		async_result.connect(std::bind(&upload_helper_t::on_data_wrote
+					, shared_from_this(), std::placeholders::_1, std::placeholders::_2
+					, std::move(on_wrote), std::move(on_error)));
 		return;
 	}
 
-	if ((flags == first_chunk) && (boost::asio::buffer_size(buffer) == m_size)) {
-		MDS_LOG_INFO("Upload %s %s: on_chunk: fixing flags to single_chunk",
-					m_key.remote().c_str(),
-					m_key.to_string().c_str());
-		flags = single_chunk;
-	}
+	auto async_result = write_impl(data_pointer);
+	written_size += data_pointer.size();
+	offset += data_pointer.size();
 
-	if (flags == single_chunk) {
-		m_single_chunk = true;
-	}
+	async_result.connect(std::bind(&upload_helper_t::on_data_wrote
+				, shared_from_this(), std::placeholders::_1, std::placeholders::_2
+				, std::move(on_wrote), std::move(on_error)));
+}
 
-	if (flags & first_chunk) {
-		if (m_embed) {
-			m_session->set_timestamp(&m_timestamp);
-		}
-	}
+bool
+upload_helper_t::is_finished() const {
+	return written_size >= total_size;
+}
 
-	m_content = ioremap::elliptics::data_pointer::from_raw(
-		const_cast<char *>(boost::asio::buffer_cast<const char *>(buffer))
-		, boost::asio::buffer_size(buffer)
-		);
+const upload_helper_t::entries_info_t &
+upload_helper_t::upload_result() const {
+	return entries_info;
+}
 
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
-	{
-		std::ostringstream oss;
-		oss
-			<< "Upload " << m_key.remote() << " " << m_key.to_string()
-			<< ": on_chunk: writing chunk: chunk_size=" << chunk_size()
-			<< " file_size=" << m_size << " offset=" << m_offset << " data_size=" << boost::asio::buffer_size(buffer)
-			<< " data_left=" << (m_size - m_offset)
-			<< " write_type=";
-		if (flags == single_chunk) oss << "simple";
-		else if (flags & first_chunk)	oss << "prepare";
-		else if (flags & last_chunk) oss << "commit";
-		else oss << "plain";
+ioremap::swarm::logger &
+upload_helper_t::logger() {
+	return bh_logger;
+}
 
-		MDS_LOG_INFO("%s", oss.str().c_str());
-	}
-
-	auto awr = write(flags);
-	m_offset += m_content.size();
-
-	{
-		using namespace std::placeholders;
-
-		if (flags & last_chunk) {
-			awr.connect(wrap(std::bind(&req_upload::on_finished, shared_from_this(), _1, _2)));
+ioremap::elliptics::async_write_result
+upload_helper_t::write_impl(const ioremap::elliptics::data_pointer &data_pointer) {
+	if (written_size == 0) {
+		log_chunk_upload("prepare", data_pointer.size());
+		return session.write_prepare(key, data_pointer, offset, total_size);
+	} else {
+		size_t future_size = written_size + data_pointer.size();
+		if (future_size >= total_size) {
+			session.set_timeout(session.get_timeout() * commit_coef);
+			log_chunk_upload("commit", data_pointer.size());
+			return session.write_commit(key, data_pointer, offset, future_size);
 		} else {
-			awr.connect(wrap(std::bind(&req_upload::on_wrote, shared_from_this(), _1, _2)));
+			log_chunk_upload("plain", data_pointer.size());
+			return session.write_plain(key, data_pointer, offset);
 		}
 	}
 }
 
-void proxy::req_upload::on_error(const boost::system::error_code &err) {
-	MDS_LOG_ERROR("Upload %s %s on_error: %s", m_key.remote().c_str(), m_key.to_string().c_str()
-			, err.message().c_str());
-	send_reply(500);
+void
+upload_helper_t::log_chunk_upload(const std::string &write_type, size_t chunk_size) {
+	std::ostringstream oss;
+	oss
+		<< "upload chunk:"
+		<< " key=" << key.remote()
+		<< " total-size=" << total_size
+		<< " offset=" << offset
+		<< " chunk-size=" << chunk_size
+		<< " data-left=" << (total_size - offset)
+		<< " write-type=" << write_type;
+
+	auto msg = oss.str();
+
+	MDS_LOG_INFO("%s", msg.c_str());
 }
 
-void proxy::req_upload::on_wrote(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
-	if (error) {
-		on_finished(swr, error);
-		return;
-	}
-
+void
+upload_helper_t::update_groups(const ioremap::elliptics::sync_write_result &entries) {
 	std::vector<int> good_groups;
 
-	for (auto it = swr.begin(); it != swr.end(); ++it) {
-		int group = it->command()->id.group_id;
-		if (!it->error()) {
-			good_groups.push_back(group);
+	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
+		auto &entry = *it;
+
+		int group_id = entry.command()->id.group_id;
+
+		if (entry.status() == 0) {
+			good_groups.emplace_back(group_id);
 		} else {
-			m_bad_groups.push_back(group);
+			bad_groups.emplace_back(group_id);
 		}
 	}
 
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
-	{
-		std::ostringstream oss;
-		oss << "Upload " << m_key.remote() << " " << m_key.to_string()
-			<< ": on_wrote: chunk was written into groups [";
-		for (auto itb = good_groups.begin(), it = itb; it != good_groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << "] uploading will not use bad groups [";
-		for (auto itb = m_bad_groups.begin(), it = itb; it != m_bad_groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
+	session.set_groups(good_groups);
 
-		MDS_LOG_INFO("%s", oss.str().c_str());
-	}
-
-	m_session->set_groups(good_groups);
-
-	try_next_chunk();
-}
-
-void proxy::req_upload::on_finished(const ioremap::elliptics::sync_write_result &swr, const ioremap::elliptics::error_info &error) {
-	if (error) {
-		std::vector<int> good_groups;
-
-		for (auto it = swr.begin(); it != swr.end(); ++it) {
-			int group = it->command()->id.group_id;
-			if (!it->error()) {
-				good_groups.push_back(group);
-			} else {
-				m_bad_groups.push_back(group);
-			}
-		}
-
-		std::ostringstream oss;
-		oss << "Upload " << m_key.remote() << " " << m_key.to_string()
-			<< ": on_wrote: " << error.message().c_str();
-		oss << "; wrote into groups: [";
-		for (auto itb = good_groups.begin(), it = itb; it != good_groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << "]; failed to write into: [";
-		for (auto itb = m_bad_groups.begin(), it = itb; it != m_bad_groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
-
-		MDS_LOG_ERROR("%s", oss.str().c_str());
-
-		send_reply(500);
-		return;
-	}
-
-	std::ostringstream oss;
-
-	oss 
-		<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-		<< "<post obj=\"" << m_key.remote() << "\" id=\""
-		<< id_str(m_key, *m_session)
-		<< "\" groups=\"" << swr.size()
-		<< "\" size=\"" << m_size
-		<< "\" key=\"";
-
-	if (!m_is_static_ns) {
-		auto groups = m_session->get_groups();
-		auto git = std::min_element(groups.begin(), groups.end());
-		oss << *git << '/';
-	}
-
-	oss << m_filename << "\">\n";
-
-	size_t written = 0;
-	std::vector<int> wrote_into_groups;
-	for (auto it = swr.begin(); it != swr.end(); ++it) {
-		auto pl = server()->parse_lookup(*it, ns);
-		if (pl.status() == 0)
-			written += 1;
-		oss << "<complete addr=\"";
-
-		if (pl.status() == 0) {
-			oss << pl.addr();
-		}
-
-		oss << "\" path=\"";
-	
-		if (pl.status() == 0) {
-			oss << pl.full_path();
-		}
-
-		oss << "\" group=\"";
-		
-		if (pl.status() == 0) {
-			oss << pl.group();
-			wrote_into_groups.push_back(pl.group());
-		} else {
-			m_bad_groups.push_back(pl.group());
-		}
-
-		oss << "\" status=\"" << pl.status() << "\"/>\n";
-	}
-
-	oss
-		<< "<written>" << written << "</written>\n"
-		<< "</post>";
-
-	auto res_str = oss.str();
-
-	ioremap::thevoid::http_response reply;
-	ioremap::swarm::http_headers headers;
-
-	reply.set_code(200);
-	headers.set_content_length(res_str.size());
-	headers.set_content_type("text/plain");
-	reply.set_headers(headers);
-
-	send_reply(std::move(reply), std::move(res_str));
-
-	auto end_time = std::chrono::system_clock::now();
-
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
 	{
 		std::ostringstream oss;
 		oss
-			<< "Upload " << m_key.remote() << " " << m_key.to_string()
-			<< ": done; status code: 200; spent time: "
-			<< std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count()
-			<< "; wrote into groups: [";
-		for (auto itb = wrote_into_groups.begin(), it = itb; it != wrote_into_groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << "] failed to write into groups: [";
-		for (auto bit = m_bad_groups.begin(), it = bit, end = m_bad_groups.end(); it != end; ++it) {
-			if (it != bit) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
-		MDS_LOG_INFO("%s", oss.str().c_str());
+			<< "upload of chunk is finished:"
+			<< " key=" << key.remote()
+			<< " good-groups=" << good_groups
+			<< " bad-groups=" << bad_groups;
+
+		auto msg = oss.str();
+
+		MDS_LOG_INFO("%s", msg.c_str());
 	}
 }
 
-ioremap::elliptics::async_write_result proxy::req_upload::write(unsigned int flags) {
-	m_session->set_timeout(server()->timeout.write);
-	if (flags == single_chunk) {
-		return m_session->write_data(m_key, m_content, m_offset);
+void
+upload_helper_t::set_upload_result(const ioremap::elliptics::sync_write_result &entries) {
+	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
+		lookup_result pl(*it, "");
+		if (pl.status() != 0) {
+			continue;
+		}
+
+		entry_info_t entry_info;
+
+		entry_info.address = pl.addr();
+		entry_info.path = pl.full_path();
+		entry_info.group = pl.group();
+
+		entries_info.emplace_back(std::move(entry_info));
 	}
-	if (flags & first_chunk) {
-		return m_session->write_prepare(m_key, m_content, m_offset, m_size);
+}
+
+bool
+upload_helper_t::upload_is_good(const ioremap::elliptics::error_info &error_info) {
+	return !error_info && session.get_groups().size() >= success_copies_num;
+}
+
+void
+upload_helper_t::on_data_wrote(const ioremap::elliptics::sync_write_result &entries
+		, const ioremap::elliptics::error_info &error_info
+		, callback_t on_wrote, callback_t on_error) {
+	update_groups(entries);
+
+#define LOG_RESULT(VERBOSITY, STATUS) \
+	do { \
+		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>( \
+				std::chrono::system_clock::now() - start_time).count(); \
+		 \
+		std::ostringstream oss; \
+		oss \
+			<< "upload is finished:" \
+			<< " key=" << key.remote() \
+			<< " spent-time=" << spent_time << "ms" \
+			<< " status=" << STATUS \
+			<< " wrote into groups " << session.get_groups() \
+			<< " failed to write into groups " << bad_groups; \
+		 \
+		auto msg = oss.str(); \
+		MDS_LOG_##VERBOSITY("%s", msg.c_str()); \
+	} while (0)
+
+
+	if (upload_is_good(error_info)) {
+		if (written_size >= total_size) {
+			LOG_RESULT(INFO, "ok");
+			set_upload_result(entries);
+		}
+
+		on_wrote();
+		return;
 	}
-	if (flags & last_chunk) {
-		m_session->set_timeout(server()->timeout.write * server()->timeout_coef.for_commit);
-		return m_session->write_commit(m_key, m_content, m_offset, m_size);
+
+	LOG_RESULT(ERROR, "bad");
+
+	on_error();
+#undef LOG_RESULT
+}
+
+upload_buffer_t::upload_buffer_t(ioremap::swarm::logger bh_logger_, std::string key_
+		, size_t chunk_size_)
+	: bh_logger(std::move(bh_logger_))
+	, key(std::move(key_))
+	, chunk_size(chunk_size_)
+	, total_size(0)
+	, is_stopped(false)
+{
+}
+
+bool
+upload_buffer_t::append(const char *data, size_t size) {
+	total_size += size;
+
+	{
+		size_t buffers_size = 0;
+
+		if (!buffers.empty()) {
+			buffers_size += (buffers.size() - 1) * chunk_size;
+			buffers_size += buffers.back().size();
+		}
+		MDS_LOG_INFO("buffer append: key=%s append-size=%llu buffer-size=%llu total-size=%llu"
+				, key.c_str(), size, buffers_size, total_size);
 	}
-	return m_session->write_plain(m_key, m_content, m_offset);
+
+	while (size != 0) {
+		if (buffers.back().size() >= chunk_size) {
+			buffer_t buffer;
+			buffer.reserve(chunk_size);
+
+			buffers.emplace_back(std::move(buffer));
+		}
+
+		auto &buffer = buffers.back();
+		auto buffer_size = buffer.size();
+
+		auto part_size = std::min(size, chunk_size - buffer_size);
+		buffer.insert(buffer.end(), data, data + part_size);
+
+		data += part_size;
+		size -= part_size;
+	}
+
+	return true;
+}
+
+void
+upload_buffer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
+		, size_t success_copies_num
+		, on_wrote_callback_t on_wrote_callback, on_error_callback_t on_error_callback) {
+	upload_helper = std::make_shared<upload_helper_t>(
+			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+			, session, key, total_size, 0, commit_coef
+			, success_copies_num
+			);
+
+	write_impl(std::move(on_wrote_callback), std::move(on_error_callback));
+}
+
+void
+upload_buffer_t::stop() {
+	is_stopped = true;
+}
+
+const std::string &
+upload_buffer_t::get_key() const {
+	return key;
+}
+
+ioremap::swarm::logger &
+upload_buffer_t::logger() {
+	return bh_logger;
+}
+
+void
+upload_buffer_t::write_impl(on_wrote_callback_t on_wrote_callback_
+		, const on_error_callback_t &on_error_callback) {
+	if (is_stopped) {
+		buffers.clear();
+		on_wrote_callback_(upload_helper);
+		return;
+	}
+
+	upload_helper_t::callback_t on_wrote_callback;
+
+	if (buffers.size() == 1) {
+		on_wrote_callback = std::bind(on_wrote_callback_, upload_helper);
+	} else {
+		on_wrote_callback = std::bind(&upload_buffer_t::write_impl, shared_from_this()
+				, std::move(on_wrote_callback_), on_error_callback);
+	}
+
+	{
+		const auto &buffer = buffers.front();
+		upload_helper->write(buffer.data(), buffer.size(), std::move(on_wrote_callback)
+				, on_error_callback);
+		buffers.pop_back();
+	}
 }
 
 } // elliptics
+

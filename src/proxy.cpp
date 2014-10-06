@@ -21,6 +21,8 @@
 #include "lookup_result.hpp"
 #include "data_container.hpp"
 
+#include "upload.hpp"
+
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
 
@@ -99,10 +101,13 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 
 		if (scn == "all") {
 			item.result_checker = ioremap::elliptics::checkers::all;
+			item.success_copies_num = item.groups_count;
 		} else if (scn == "quorum") {
 			item.result_checker = ioremap::elliptics::checkers::quorum;
+			item.success_copies_num = item.groups_count / 2 + 1;
 		} else if (scn == "any"){
 			item.result_checker = ioremap::elliptics::checkers::at_least_one;
+			item.success_copies_num = 1;
 		} else {
 			std::ostringstream oss;
 			oss << "Unknown type of success-copies-num \'" << scn << "\' in \'" << item.name << "\' namespace. Allowed types: any, quorum, all.";
@@ -291,6 +296,26 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
+	
+		elliptics_read_session.reset(m_elliptics_session->clone());
+		elliptics_read_session->set_timeout(timeout.read);
+		elliptics_read_session->set_filter(ioremap::elliptics::filters::positive);
+
+		elliptics_write_session.reset(m_elliptics_session->clone());
+		elliptics_write_session->set_timeout(timeout.write);
+		elliptics_write_session->set_error_handler(
+				ioremap::elliptics::error_handlers::remove_on_fail(
+					elliptics_write_session->clone()));
+
+		elliptics_remove_session.reset(m_elliptics_session->clone());
+		elliptics_remove_session->set_timeout(timeout.remove);
+		elliptics_remove_session->set_checker(ioremap::elliptics::checkers::all);
+		elliptics_remove_session->set_filter(ioremap::elliptics::filters::all_with_ack);
+
+		elliptics_lookup_session.reset(m_elliptics_session->clone());
+		elliptics_lookup_session->set_timeout(timeout.lookup);
+		elliptics_lookup_session->set_filter(ioremap::elliptics::filters::positive);
+
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
@@ -366,7 +391,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	}
 	MDS_LOG_INFO("Mediastorage-proxy starts: initialize handlers");
 
-	register_handler<req_upload>("upload", false);
+	register_handler<upload_t>("upload", false);
 	register_handler<req_get>("get", false);
 	register_handler<req_delete>("delete", false);
 	register_handler<req_download_info_1>(req_download_info_1::handler_name, false);
@@ -721,6 +746,35 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 
 ioremap::elliptics::session proxy::get_session() {
 	return m_elliptics_session->clone();
+}
+
+ioremap::elliptics::session
+proxy::read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	return setup_session(elliptics_read_session->clone(), http_request, couple);
+}
+
+ioremap::elliptics::session
+proxy::write_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	return setup_session(elliptics_write_session->clone(), http_request, couple);
+}
+
+ioremap::elliptics::session
+proxy::remove_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	return setup_session(elliptics_remove_session->clone(), http_request, couple);
+}
+
+ioremap::elliptics::session
+proxy::lookup_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	return setup_session(elliptics_lookup_session->clone(), http_request, couple);
+}
+
+ioremap::elliptics::session
+proxy::setup_session(ioremap::elliptics::session session
+		, const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	session.set_trace_id(http_request.request_id());
+	session.set_trace_bit(http_request.trace_bit());
+	session.set_groups(couple);
+	return session;
 }
 
 namespace_ptr_t proxy::get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name) {
