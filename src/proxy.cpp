@@ -17,6 +17,8 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include "get.hpp"
+
 #include "proxy.hpp"
 #include "lookup_result.hpp"
 #include "data_container.hpp"

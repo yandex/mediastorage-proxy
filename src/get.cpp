@@ -17,40 +17,217 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "proxy.hpp"
+#include "get.hpp"
+
+#include "ranges.hpp"
 #include "data_container.hpp"
+#include "utils.hpp"
 
 #include <swarm/url.hpp>
 
+#include <crypto++/md5.h>
+
+#include <boost/asio/buffer.hpp>
+
 #include <functional>
+#include <chrono>
+#include <ctime>
 
 namespace elliptics {
 
-void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
-	m_beg_time = std::chrono::system_clock::now();
-	url_str = req.url().path();
-	MDS_LOG_INFO("Get: handle request: %s", url_str.c_str());
-	namespace_ptr_t ns;
-	try {
-		ns = server()->get_namespace(url_str, "/get");
-		auto &&prep_session = server()->prepare_session(url_str, ns);
-		m_session = prep_session.first;
-		m_session->set_trace_bit(req.trace_bit());
-		m_session->set_trace_id(req.request_id());
-		m_session->set_timeout(server()->timeout.read);
-		m_key = prep_session.second;
-		m_key.transform(*m_session);
-		m_key.set_id(m_key.id());
-	} catch (const std::exception &ex) {
-		MDS_LOG_INFO("Get: request = \"%s\"; err: \"%s\"", req.url().path().c_str(), ex.what());
+class get_helper_t
+	: public std::enable_shared_from_this<get_helper_t>
+{
+public:
+	enum class chunk_type_tag {
+		first, middle, last, single
+	};
+
+	typedef std::function<void (const std::shared_ptr<get_helper_t> &)> result_callback_t;
+	typedef std::function<void (void)> error_callback_t;
+
+	get_helper_t(ioremap::swarm::logger bh_logger_
+			, std::string key_, size_t offset_, size_t size_, size_t chunk_size_)
+		: bh_logger(std::move(bh_logger_))
+		, key(std::move(key_))
+		, offset(offset_)
+		, size(size_)
+		, chunk_size(chunk_size_)
+		, read_size(0)
+	{
+		std::ostringstream oss;
+		oss
+			<< "start reading:"
+			<< " key=" << key.remote()
+			<< " offset=" << offset
+			<< " size=" << size
+			<< " chunk-size=" << chunk_size;
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
+
+	void
+	read(ioremap::elliptics::session session // We need to pass session in each call
+			// to be able to change timeout and ioflags settings to avoid problems with
+			// checksum computing
+			, result_callback_t result_callback, error_callback_t error_callback) {
+		auto current_size = std::min(chunk_size, size);
+
+		{
+			std::ostringstream oss;
+			oss
+				<< "get chunk:"
+				<< " key=" << key.remote()
+				<< " groups=" << session.get_groups()
+				<< " chunk-size=" << current_size
+				<< " offset=" << offset
+				<< " data-left=" << (size - offset);
+
+			auto msg = oss.str();
+
+			MDS_LOG_INFO("%s", msg.c_str());
+		}
+
+		auto future = session.read_data(key, offset, current_size);
+		offset += current_size;
+		size -= current_size;
+
+		future.connect(std::bind(&get_helper_t::on_read_data, shared_from_this()
+					, std::placeholders::_1, std::placeholders::_2
+					, std::chrono::system_clock::now()
+					, std::move(result_callback), std::move(error_callback)));
+	}
+
+	boost::asio::const_buffer
+	const_buffer() const {
+		return boost::asio::const_buffer(data_pointer.data(), data_pointer.size());
+	}
+
+	chunk_type_tag
+	chunk() const {
+		return chunk_type;
+	}
+
+private:
+	ioremap::swarm::logger &
+	logger() {
+		return bh_logger;
+	}
+
+	void
+	on_read_data(const ioremap::elliptics::sync_read_result &result
+			, const ioremap::elliptics::error_info &error_info
+			, std::chrono::system_clock::time_point start_time_point
+			, result_callback_t result_callback, error_callback_t error_callback) {
+
+#define LOG_RESULT(VERBOSITY, STATUS) \
+		do { \
+			auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>( \
+					std::chrono::system_clock::now() - start_time_point \
+					).count(); \
+			 \
+			std::ostringstream oss; \
+			oss \
+				<< "get is finished:" \
+				<< " key=" << key.remote() \
+				<< " spent-time=" << spent_time << "us" \
+				<< " status=" << STATUS \
+				<< " chunk-type="; \
+			 \
+			switch (chunk_type) { \
+			case chunk_type_tag::first: \
+				oss << "first"; \
+				break; \
+			case chunk_type_tag::middle: \
+				oss << "middle"; \
+				break; \
+			case chunk_type_tag::last: \
+				oss << "last"; \
+				break; \
+			case chunk_type_tag::single: \
+				oss << "single"; \
+				break; \
+			} \
+			 \
+			auto msg = oss.str(); \
+			MDS_LOG_##VERBOSITY("%s", msg.c_str()); \
+		} while (false)
+
+		chunk_type = chunk_type_tag::middle;
+
+		if (read_size == 0) {
+			chunk_type = chunk_type_tag::first;
+		}
+
+		if (size == 0) {
+			if (chunk_type == chunk_type_tag::first) {
+				chunk_type = chunk_type_tag::single;
+			} else {
+				chunk_type = chunk_type_tag::last;
+			}
+		}
+
+		if (error_info) {
+			LOG_RESULT(ERROR, "bad");
+			MDS_LOG_ERROR("%s", error_info.message().c_str());
+			error_callback();
+			return;
+		}
+
+		data_pointer = result.front().file();
+
+		read_size += data_pointer.size();
+
+		LOG_RESULT(INFO, "ok");
+
+#undef LOG_RESULT
+
+		result_callback(shared_from_this());
+	}
+
+	ioremap::swarm::logger bh_logger;
+
+	ioremap::elliptics::key key;
+
+	size_t offset;
+	size_t size;
+	size_t chunk_size;
+	size_t read_size;
+
+	ioremap::elliptics::data_pointer data_pointer;
+	chunk_type_tag chunk_type;
+};
+
+void req_get::on_request(const ioremap::thevoid::http_request &http_request
+		, const boost::asio::const_buffer &buffer) {
+	MDS_LOG_INFO("Get: handle request");
+
+	if (http_request.method() != "HEAD" && http_request.method() != "GET") {
+		MDS_LOG_INFO("Unsupported http method\'s type: \"%s\"", http_request.method().c_str());
 		send_reply(400);
 		return;
 	}
 
-	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read, req.headers().get("Authorization"))) {
-		auto token = server()->get_auth_token(req.headers().get("Authorization"));
-		MDS_LOG_INFO("%s: invalid token \"%s\"", url_str.c_str()
-				, token.empty() ? "<none>" : token.c_str());
+	namespace_ptr_t ns;
+	try {
+		ns = server()->get_namespace(http_request.url().path(), "/get");
+		auto &&prep_session = server()->prepare_session(http_request.url().path(), ns);
+		m_session = prep_session.first;
+		m_session->set_trace_bit(http_request.trace_bit());
+		m_session->set_trace_id(http_request.request_id());
+		m_session->set_timeout(server()->timeout.read);
+		key = prep_session.second.remote();
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("Get: \"%s\"", ex.what());
+		send_reply(400);
+		return;
+	}
+
+	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read
+				, http_request.headers().get("Authorization"))) {
+		auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
+		MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
+
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 
@@ -59,33 +236,21 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		headers.add("Content-Length", "0");
 		reply.set_headers(headers);
 		send_reply(std::move(reply));
+
 		return;
 	}
 
 	if (m_session->get_groups().empty()) {
-		MDS_LOG_INFO("Get %s: on_request: cannot find couple of groups for the request"
-				, url_str.c_str());
+		MDS_LOG_INFO("Get: cannot find couple of groups for the request");
 		send_reply(404);
 		return;
 	}
 
-	auto query_list = req.url().query();
-	m_offset = get_arg<uint64_t>(query_list, "offset", 0);
-	m_size = get_arg<uint64_t>(query_list, "size", 0);
-	m_if_modified_since = req.headers().get("If-Modified-Since");
 	m_first_chunk = true;
-	m_chunk_size = server()->m_read_chunk_size;
 
 	{
 		std::ostringstream oss;
-		oss << "Get " << m_key.remote() << " " << m_key.to_string()
-			<< ": lookup from groups [";
-		const auto &groups = m_session->get_groups();
-		for (auto bit = groups.begin(), it = bit, end = groups.end(); it != end; ++it) {
-			if (it != bit) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
+		oss << "Get: lookup from groups " << m_session->get_groups();
 		auto msg = oss.str();
 		MDS_LOG_INFO("%s", msg.c_str());
 	}
@@ -94,167 +259,369 @@ void proxy::req_get::on_request(const ioremap::thevoid::http_request &req, const
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
 		m_session->set_filter(ioremap::elliptics::filters::positive);
-		auto alr = m_session->quorum_lookup(m_key);
-		alr.connect(wrap(std::bind(&proxy::req_get::on_lookup, shared_from_this(),
+		auto alr = m_session->quorum_lookup(key);
+		alr.connect(wrap(std::bind(&req_get::on_lookup, shared_from_this(),
 					std::placeholders::_1, std::placeholders::_2)));
 		m_session->set_ioflags(ioflags);
 	}
 }
 
-void proxy::req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
+void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 	if (error) {
 		if (error.code() == -ENOENT) {
-			MDS_LOG_INFO("Get %s %s: on_lookup: file not found"
-					, m_key.remote().c_str(), m_key.to_string().c_str());
+			MDS_LOG_INFO("Get: file not found");
 			send_reply(404);
 		} else {
-			MDS_LOG_ERROR("Get %s %s: on_lookup: %s", m_key.remote().c_str()
-					, m_key.to_string().c_str(), error.message().c_str());
+			MDS_LOG_ERROR("Get: %s", error.message().c_str());
 			send_reply(500);
 		}
 		return;
 	}
 	const auto &entry = slr.front();
-	auto total_size = entry.file_info()->size;
+	total_size = entry.file_info()->size;
 
-	if (m_offset >= total_size) {
-		MDS_LOG_INFO("Get %s %s: offset greater than total_size"
-				, m_key.remote().c_str(), m_key.to_string().c_str());
-		send_reply(400);
+	{
+		std::vector<int> groups;
+		for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
+			groups.push_back(it->command()->id.group_id);
+		}
+		m_session->set_groups(groups);
+	}
+
+	process_precondition_headers(entry.file_info()->mtime.tsec, entry.file_info()->size);
+}
+
+std::string generate_etag(uint64_t timestamp, uint64_t size) {
+	using namespace CryptoPP;
+
+	MD5 hash;
+
+	hash.Update((const byte *)&timestamp, sizeof(uint64_t));
+	hash.Update((const byte *)&size, sizeof(uint64_t));
+
+	std::vector<byte> result(hash.DigestSize());
+	hash.Final(result.data());
+
+	std::ostringstream oss;
+	oss << std::hex;
+	oss << "\"";
+	for (auto it = result.begin(), end = result.end(); it != end; ++it) {
+		oss << std::setfill('0') << std::setw(2) << static_cast<int>(*it);
+	}
+	oss << "\"";
+
+	return oss.str();
+}
+
+std::string make_content_range_header(size_t offset, size_t size) {
+	std::ostringstream oss;
+	oss << offset << '-' << size + offset - 1 << '/' << size;
+	return oss.str();
+}
+
+std::string make_boundary() {
+	char boundary_buf[17] = {0};
+	for (size_t i = 0; i < 2; ++i) {
+		uint32_t tmp = rand();
+		sprintf(boundary_buf + i * 8, "%08X", tmp);
+	}
+	return boundary_buf;
+}
+
+void req_get::process_precondition_headers(const time_t timestamp, const size_t size) {
+	const auto &headers = request().headers();
+
+	bool if_modified_since = false;
+	bool if_none_match = false;
+	bool if_range = false;
+
+	bool send_whole_file = false;
+
+	struct tm modified_time;
+	gmtime_r(&timestamp, &modified_time);
+
+	std::string etag = generate_etag(timestamp, size);
+
+	auto range_header = headers.get("Range");
+
+#define MAKE_TIME_TUPLE(T) std::make_tuple( \
+		(T).tm_year, (T).tm_mon, (T).tm_mday, \
+		(T).tm_hour, (T).tm_min, (T).tm_sec)
+
+	if (range_header) {
+		if (auto if_range_header = headers.get("If-Range")) {
+			if ((*if_range_header)[0] == '\"') {
+				if (*if_range_header == etag) {
+					if_range = true;
+				}
+			} else {
+				const auto &str = *if_range_header;
+
+				struct tm tm_condition;
+				strptime(str.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm_condition);
+
+				if (MAKE_TIME_TUPLE(modified_time) == MAKE_TIME_TUPLE(tm_condition)) {
+					if_range = true;
+				}
+			}
+		}
+	}
+
+	send_whole_file = !if_range;
+
+	if (auto if_match_header = headers.get("If-Match")) {
+		if (*if_match_header != etag) {
+			if (if_range) {
+				send_whole_file = true;
+			} else {
+				send_reply(412);
+				return;
+			}
+		}
+	}
+
+	if (auto if_none_match_header = headers.get("If-None-Match")) {
+		if (*if_none_match_header == etag) {
+			if_none_match = true;
+		}
+	}
+
+	if (auto if_unmodified_since_header = headers.get("If-Unmodified-Since")) {
+		const auto &str = *if_unmodified_since_header;
+
+		struct tm tm_condition;
+		strptime(str.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm_condition);
+
+		if (MAKE_TIME_TUPLE(modified_time) > MAKE_TIME_TUPLE(tm_condition)) {
+			if (if_range) {
+				send_whole_file = true;
+			} else {
+				send_reply(412);
+				return;
+			}
+		}
+	}
+
+	if (auto if_modified_since_header = headers.get("If-Modified-Since")) {
+		const auto &str = *if_modified_since_header;
+
+		struct tm tm_condition;
+		strptime(str.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm_condition);
+
+		if (MAKE_TIME_TUPLE(modified_time) <= MAKE_TIME_TUPLE(tm_condition)) {
+			if_modified_since = true;
+		}
+	}
+
+#undef MAKE_TIME_TUPLE
+
+	if (if_modified_since && if_none_match) {
+		send_reply(304);
 		return;
 	}
 
-	total_size -= m_offset;
+	prospect_http_response.set_code(200);
+	prospect_http_response.headers().set_last_modified(timestamp);
+	prospect_http_response.headers().set("ETag", etag);
 
-	if (m_size == 0 || m_size > total_size) {
-		m_size = total_size;
+	if (request().method() == "HEAD") {
+		send_reply(std::move(prospect_http_response));
+		return;
 	}
 
-	std::vector<int> groups;
-	for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
-		groups.push_back(it->command()->id.group_id);
-	}
-	m_session->set_groups(groups);
+	if (send_whole_file || !range_header) {
+		prospect_http_response.headers().set_content_length(size);
 
-	read_chunk();
-}
+		auto get_helper = make_get_helper(0, size);
 
-void proxy::req_get::read_chunk() {
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
-	{
-		std::ostringstream oss;
-		oss
-			<< "Get " << m_key.remote() << " " << m_key.to_string()
-			<< ": read_chunk: chunk_size=" << m_chunk_size
-			<< " file_size=" << m_size << " offset=" << m_offset
-			<< " data_left=" << (m_size - m_offset)
-			<< " groups: [";
-		auto groups = m_session->get_groups();
-		for (auto itb = groups.begin(), it = itb; it != groups.end(); ++it) {
-			if (it != itb) oss << ", ";
-			oss << *it;
-		}
-		oss << ']';
+		callback_t tmp = std::bind(&req_get::on_read_is_done, shared_from_this());
+		get_helper->read(get_session(), std::bind(&req_get::on_simple_read, shared_from_this()
+					, std::placeholders::_1, std::move(tmp))
+				, std::bind(&req_get::on_error, shared_from_this()));
+	} else if (auto ranges = parse_range_header(*range_header, size)) {
+		prospect_http_response.set_code(206);
+		prospect_http_response.headers().set("Accept-Ranges", "bytes");
 
-		MDS_LOG_INFO("%s", oss.str().c_str());
-	}
+		if (ranges->size() == 1) {
+			const auto &range = ranges->front();
 
-	m_session->set_timeout(server()->timeout.read);
-	if (m_first_chunk) {
-		if (server()->timeout_coef.data_flow_rate) {
-			m_session->set_timeout(
-					m_session->get_timeout() + m_size / server()->timeout_coef.data_flow_rate);
+			prospect_http_response.headers().set_content_type("application/octet-stream");
+			prospect_http_response.headers().set_content_length(range.size);
+			prospect_http_response.headers().set("Content-Range"
+					, make_content_range_header(range.offset, range.size));
+
+			send_headers(std::move(prospect_http_response)
+					, std::function<void (const boost::system::error_code &)>());
+
+			auto get_helper = make_get_helper(range.offset, range.size);
+
+			callback_t tmp = std::bind(&req_get::on_read_is_done, shared_from_this());
+			get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
+						, std::placeholders::_1, std::move(tmp))
+					, std::bind(&req_get::on_error, shared_from_this()));
+		} else {
+			auto boundary = make_boundary();
+
+			prospect_http_response.headers().set_content_type(
+					"multipart/byteranges; boundary=" + boundary);
+
+			size_t content_length = 0;
+			std::list<std::string> ranges_headers;
+
+			{
+				for (auto begin_it = ranges->begin(), it = begin_it, end_it = ranges->end();
+						it != end_it; ++it) {
+					std::ostringstream oss;
+
+					if (it != begin_it) {
+						oss << "\r\n";
+					}
+
+					oss
+						<< "--" << boundary << "\r\n"
+						<< "Content-Type: application/octet-stream\r\n"
+						<< "Content-Range: bytes "
+						<< make_content_range_header(it->offset, it->size)
+						<< "\r\n\r\n";
+
+					auto headers = oss.str();
+
+					content_length += headers.size();
+					content_length += it->size;
+					ranges_headers.emplace_back(std::move(headers));
+				}
+				{
+					std::ostringstream oss;
+					oss << "\r\n--" << boundary << "--\r\n";
+					auto last_boundary = oss.str();
+					content_length += last_boundary.size();
+					ranges_headers.emplace_back(std::move(last_boundary));
+				}
+			}
+
+			prospect_http_response.headers().set_content_length(content_length);
+
+			send_headers(std::move(prospect_http_response)
+					, std::function<void (const boost::system::error_code &)>());
+
+			read_range(std::move(*ranges), std::move(ranges_headers));
 		}
 	} else {
-		m_session->set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
-	}
-	auto arr = m_session->read_data(m_key, m_offset, m_chunk_size);
-	arr.connect(wrap(std::bind(&proxy::req_get::on_read_chunk, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
-}
-
-void proxy::req_get::on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error) {
-	if (error) {
-		MDS_LOG_ERROR("Get %s %s: on_read_chunk: %s", m_key.remote().c_str()
-				, m_key.to_string().c_str(), error.message().c_str());
-		send_reply(500);
+		send_reply(406);
 		return;
 	}
+}
 
-	MDS_LOG_INFO("Get %s %s: on_read_chunk: chunk was read"
-			, m_key.remote().c_str(), m_key.to_string().c_str());
+std::shared_ptr<get_helper_t> req_get::make_get_helper(size_t offset, size_t size) {
+	return std::make_shared<get_helper_t>(
+				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+				, key, offset, size
+				, server()->m_read_chunk_size);
+}
 
-	const auto &rr = srr.front();
-	auto file = rr.file();
+void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
+		, callback_t read_is_done) {
+	auto chunk_type = get_helper->chunk();
 
-	std::string data = file.to_string();
-
-	if (m_first_chunk) {
-		m_first_chunk = false;
-
-		ioremap::thevoid::http_response reply;
-		reply.set_code(200);
-		reply.headers().set_content_length(m_size);
-
+	if (chunk_type == get_helper_t::chunk_type_tag::first ||
+			chunk_type == get_helper_t::chunk_type_tag::single) {
 		if (NULL == server()->m_magic.get()) {
 			server()->m_magic.reset(new magic_provider());
 		}
 
-		reply.headers().set_content_type(server()->m_magic->type(data));
+		const auto &buffer = get_helper->const_buffer();
+		prospect_http_response.headers().set_content_type(server()->m_magic->type(
+					boost::asio::buffer_cast<const char *>(buffer)
+					, boost::asio::buffer_size(buffer)));
 
-		{
-			time_t timestamp = (time_t)(rr.io_attribute()->timestamp.tsec);
-
-			char ts_str[128] = {0};
-			struct tm tmp;
-			strftime(ts_str, sizeof (ts_str), "%a, %d %b %Y %T %Z", gmtime_r(&timestamp, &tmp));
-			
-			if (m_if_modified_since) {
-				if (*m_if_modified_since == ts_str) {
-					send_reply(304);
-					return;
-				}
-			}
-
-			reply.headers().set_last_modified(ts_str);
-		}
-
-		send_headers(std::move(reply), std::function<void (const boost::system::error_code &)>());
+		send_headers(std::move(prospect_http_response)
+				, std::function<void (const boost::system::error_code &)>());
 	}
 
-	send_data(std::move(data), std::bind(&proxy::req_get::on_sent_chunk, shared_from_this(), std::placeholders::_1));
-	m_offset += file.size();
+	on_simple_range_read(get_helper, std::move(read_is_done));
 }
 
-void proxy::req_get::on_sent_chunk(const boost::system::error_code &error) {
-	if (error) {
-		MDS_LOG_ERROR("Get %s %s: on_sent_chunk: %s", m_key.remote().c_str()
-				, m_key.to_string().c_str(), error.message().c_str());
-		reply()->close(error);
+void req_get::on_simple_range_read(const std::shared_ptr<get_helper_t> &get_helper
+		, callback_t read_is_done) {
+	send_data(get_helper->const_buffer(), std::bind(&req_get::on_simple_data_sent
+				, shared_from_this(), std::placeholders::_1, get_helper, std::move(read_is_done)));
+}
+
+void req_get::on_simple_data_sent(const boost::system::error_code &error_code
+		, const std::shared_ptr<get_helper_t> &get_helper
+		, callback_t read_is_done) {
+	auto chunk_type = get_helper->chunk();
+
+	if (error_code) {
+		MDS_LOG_ERROR("Get: error during chunk sending: %s", error_code.message().c_str());
+		if (chunk_type == get_helper_t::chunk_type_tag::first ||
+				chunk_type == get_helper_t::chunk_type_tag::single) {
+			send_reply(500);
+		}
 		return;
 	}
 
-	MDS_LOG_INFO("Get %s %s: chunk was sent", m_key.remote().c_str() , m_key.to_string().c_str());
+	MDS_LOG_INFO("Get: chunk was sent");
 
-	if (m_offset < m_size) {
-		read_chunk();
+	if (chunk_type == get_helper_t::chunk_type_tag::last ||
+			chunk_type == get_helper_t::chunk_type_tag::single) {
+		read_is_done();
 		return;
 	}
 
-	// if (server()->logger().level() >= ioremap::swarm::SWARM_LOG_INFO)
-	{
-		auto end_time = std::chrono::system_clock::now();
-		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - m_beg_time).count();
+	get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
+				, std::placeholders::_1, std::move(read_is_done))
+			, std::bind(&req_get::on_error, shared_from_this()));
+}
 
-		std::ostringstream oss;
-		oss
-			<< "Get " << m_key.remote() << " " << m_key.to_string()
-			<< ": on_finished: request=" << request().url().path() << " spent_time=" << spent_time
-			<< " file_size=" << m_size;
+void req_get::read_range(ranges_t ranges, std::list<std::string> ranges_headers) {
+	if (ranges.empty()) {
+		send_data(std::move(ranges_headers.front())
+				, std::bind(&req_get::on_read_is_done, shared_from_this()));
+	} else {
+		send_data(std::move(ranges_headers.front())
+				, std::function<void (const boost::system::error_code &)>());
+		ranges_headers.pop_front();
 
-		MDS_LOG_INFO("%s", oss.str().c_str());
+		auto range = ranges.front();
+		ranges.pop_front();
+
+		auto get_helper = make_get_helper(range.offset, range.size);
+
+		callback_t tmp = std::bind(&req_get::read_range, shared_from_this()
+				, std::move(ranges), std::move(ranges_headers));
+		get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
+					, std::placeholders::_1, tmp)
+				, std::bind(&req_get::on_error, shared_from_this()));
+	}
+}
+
+void req_get::on_error() {
+	send_reply(500);
+}
+
+void req_get::on_read_is_done() {
+	reply()->close(boost::system::error_code());
+}
+
+ioremap::elliptics::session req_get::get_session() {
+	auto session = m_session->clone();
+
+	session.set_timeout(server()->timeout.read);
+
+	if (m_first_chunk) {
+		m_first_chunk = false;
+
+		if (server()->timeout_coef.data_flow_rate) {
+			session.set_timeout(
+					m_session->get_timeout() + total_size / server()->timeout_coef.data_flow_rate);
+		}
+
+	} else {
+		session.set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	}
 
-	reply()->close(error);
+	return session;
 }
 
 }

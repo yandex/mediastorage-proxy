@@ -113,31 +113,6 @@ public:
 		namespace_ptr_t ns;
 	};
 
-	struct req_get
-		: public ioremap::thevoid::simple_request_stream<proxy>
-		, public std::enable_shared_from_this<req_get>
-	{
-		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
-		void read_chunk();
-		void on_read_chunk(const ioremap::elliptics::sync_read_result &srr, const ioremap::elliptics::error_info &error);
-		void on_sent_chunk(const boost::system::error_code &error);
-	private:
-		boost::optional<ioremap::elliptics::session> m_session;
-		ioremap::elliptics::key m_key;
-
-		size_t m_offset;
-		size_t m_size;
-		size_t m_chunk_size;
-		bool m_embed;
-
-		boost::optional<std::string> m_if_modified_since;
-		bool m_first_chunk;
-
-		std::chrono::system_clock::time_point m_beg_time;
-		std::string url_str;
-	};
-
 	struct req_delete
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_delete>
@@ -206,6 +181,7 @@ public:
 	};
 
 protected:
+public:
 	template <typename T>
 	void register_handler(const std::string &name, bool exact_match);
 
@@ -230,6 +206,7 @@ protected:
 	void cache_update_callback(bool cache_is_expired_);
 
 private:
+public:
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
 	int m_die_limit;

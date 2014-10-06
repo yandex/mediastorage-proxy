@@ -17,47 +17,25 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef MAGIC_PROVIDER_HPP
-#define MAGIC_PROVIDER_HPP
+#ifndef SRC__RANGES_HPP
+#define SRC__RANGES_HPP
 
-#include <boost/noncopyable.hpp>
+#include <boost/optional.hpp>
 
-#include <magic.h>
+#include <string>
+#include <list>
 
 namespace elliptics {
 
-class magic_provider : private boost::noncopyable {
-
-public:
-	magic_provider () {
-		magic_ = magic_open(MAGIC_MIME_TYPE);
-		magic_load(magic_, 0);
-	}
-
-	~magic_provider() {
-		magic_close(magic_);
-	}
-
-public:
-	std::string type(const char *data, const size_t size) {
-		const char *result(magic_buffer(magic_, data, size));
-
-		if (result) {
-			return result;
-		}
-
-		return "application/octet-stream";
-	}
-
-	std::string type(const std::string &content) {
-		return type(content.data(), content.size());
-	}
-
-private:
-	magic_t magic_;
-
+struct range_t {
+	size_t offset;
+	size_t size;
 };
+
+typedef std::list<range_t> ranges_t;
+
+boost::optional<ranges_t> parse_range_header(const std::string &header, size_t total_size);
 
 } // namespace elliptics
 
-#endif /* MAGIC_PROVIDER_HPP */
+#endif /* SRC__RANGES_HPP */
