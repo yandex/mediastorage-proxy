@@ -331,8 +331,8 @@ std::string make_boundary() {
 void req_get::process_precondition_headers(const time_t timestamp, const size_t size) {
 	const auto &headers = request().headers();
 
-	bool if_modified_since = false;
-	bool if_none_match = false;
+	bool if_prospect_304 = true;
+	bool has_304_headers = false;
 	bool if_range = false;
 
 	bool send_whole_file = false;
@@ -353,6 +353,8 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 			if ((*if_range_header)[0] == '\"') {
 				if (*if_range_header == etag) {
 					if_range = true;
+				} else {
+					send_whole_file = true;
 				}
 			} else {
 				const auto &str = *if_range_header;
@@ -362,12 +364,12 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 
 				if (MAKE_TIME_TUPLE(modified_time) == MAKE_TIME_TUPLE(tm_condition)) {
 					if_range = true;
+				} else {
+					send_whole_file = true;
 				}
 			}
 		}
 	}
-
-	send_whole_file = !if_range;
 
 	if (auto if_match_header = headers.get("If-Match")) {
 		if (*if_match_header != etag) {
@@ -381,8 +383,9 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 	}
 
 	if (auto if_none_match_header = headers.get("If-None-Match")) {
-		if (*if_none_match_header == etag) {
-			if_none_match = true;
+		has_304_headers = true;
+		if (*if_none_match_header != etag) {
+			if_prospect_304 = false;
 		}
 	}
 
@@ -403,19 +406,20 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 	}
 
 	if (auto if_modified_since_header = headers.get("If-Modified-Since")) {
+		has_304_headers = true;
 		const auto &str = *if_modified_since_header;
 
 		struct tm tm_condition;
 		strptime(str.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm_condition);
 
-		if (MAKE_TIME_TUPLE(modified_time) <= MAKE_TIME_TUPLE(tm_condition)) {
-			if_modified_since = true;
+		if (MAKE_TIME_TUPLE(modified_time) > MAKE_TIME_TUPLE(tm_condition)) {
+			if_prospect_304 = false;
 		}
 	}
 
 #undef MAKE_TIME_TUPLE
 
-	if (if_modified_since && if_none_match) {
+	if (has_304_headers && if_prospect_304) {
 		send_reply(304);
 		return;
 	}
