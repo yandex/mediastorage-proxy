@@ -511,7 +511,7 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 			read_range(std::move(*ranges), std::move(ranges_headers));
 		}
 	} else {
-		send_reply(406);
+		send_reply(416);
 		return;
 	}
 }
