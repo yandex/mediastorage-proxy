@@ -313,9 +313,9 @@ std::string generate_etag(uint64_t timestamp, uint64_t size) {
 	return oss.str();
 }
 
-std::string make_content_range_header(size_t offset, size_t size) {
+std::string make_content_range_header(size_t offset, size_t size, size_t total_size) {
 	std::ostringstream oss;
-	oss << offset << '-' << size + offset - 1 << '/' << size;
+	oss << "bytes " << offset << '-' << size + offset - 1 << '/' << total_size;
 	return oss.str();
 }
 
@@ -452,7 +452,7 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 			prospect_http_response.headers().set_content_type("application/octet-stream");
 			prospect_http_response.headers().set_content_length(range.size);
 			prospect_http_response.headers().set("Content-Range"
-					, make_content_range_header(range.offset, range.size));
+					, make_content_range_header(range.offset, range.size, size));
 
 			send_headers(std::move(prospect_http_response)
 					, std::function<void (const boost::system::error_code &)>());
@@ -484,8 +484,8 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 					oss
 						<< "--" << boundary << "\r\n"
 						<< "Content-Type: application/octet-stream\r\n"
-						<< "Content-Range: bytes "
-						<< make_content_range_header(it->offset, it->size)
+						<< "Content-Range: "
+						<< make_content_range_header(it->offset, it->size, size)
 						<< "\r\n\r\n";
 
 					auto headers = oss.str();
@@ -511,7 +511,13 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 			read_range(std::move(*ranges), std::move(ranges_headers));
 		}
 	} else {
-		send_reply(416);
+		prospect_http_response.set_code(416);
+		prospect_http_response.headers().set_content_length(0);
+		prospect_http_response.headers().set("Content-Range"
+				, "bytes */" + boost::lexical_cast<std::string>(size));
+
+		send_headers(std::move(prospect_http_response)
+				, std::function<void (const boost::system::error_code &)>());
 		return;
 	}
 }
