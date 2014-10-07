@@ -24,6 +24,7 @@
 #include <cctype>
 #include <cstring>
 #include <stdexcept>
+#include <cstdlib>
 
 namespace elliptics {
 
@@ -47,8 +48,12 @@ struct range_impl_t {
 };
 
 size_t parse_pos(const char *&s) {
-	size_t res = 0;
-	while (isdigit(*s)) res = res * 10 + *s++ - '0';
+	char *end = 0;
+	size_t res = strtoul(s, &end, 10);
+	if (end == s) {
+		throw std::runtime_error("Header is malformed");
+	}
+	s = end;
 	return res;
 }
 
