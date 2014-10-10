@@ -1,3 +1,9 @@
+mediastorage-proxy (0.65) lucid; urgency=low
+
+  * MDS-241: Statistics handler responds 404 for unknwon namespace
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 10 Oct 2014 19:48:58 +0400
+
 mediastorage-proxy (0.64) lucid; urgency=low
 
   * MDS-55: Implementation of multipart
