@@ -427,7 +427,7 @@ upload_buffer_t::append(const char *data, size_t size) {
 	}
 
 	while (size != 0) {
-		if (buffers.back().size() >= chunk_size) {
+		if (buffers.empty() || buffers.back().size() >= chunk_size) {
 			buffer_t buffer;
 			buffer.reserve(chunk_size);
 
@@ -497,7 +497,7 @@ upload_buffer_t::write_impl(on_wrote_callback_t on_wrote_callback_
 		const auto &buffer = buffers.front();
 		upload_helper->write(buffer.data(), buffer.size(), std::move(on_wrote_callback)
 				, on_error_callback);
-		buffers.pop_back();
+		buffers.pop_front();
 	}
 }
 
