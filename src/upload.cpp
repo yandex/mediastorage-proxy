@@ -38,6 +38,7 @@
 #include <fstream>
 #include <algorithm>
 #include <limits>
+#include <string>
 
 namespace elliptics {
 
@@ -101,18 +102,60 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	couple_t couple;
 
-	try {
-		couple = server()->groups_for_upload(ns, total_size);
-	} catch (const mastermind::not_enough_memory_error &e) {
-		MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-			, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
-		send_reply(507);
-		return;
-	} catch (const std::system_error &e) {
-		MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-			, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
-		send_reply(500);
-		return;
+	if (auto arg = http_request.url().query().item_value("couple_id")) {
+		int couple_id = 0;
+
+		try {
+			couple_id = boost::lexical_cast<int>(*arg);
+		} catch (...) {
+			MDS_LOG_INFO("couple_id is malformed: \"%s\"", arg->c_str());
+			send_reply(400);
+			return;
+		}
+
+		couple = server()->mastermind()->get_couple_by_group(couple_id);
+
+		if (couple.empty()) {
+			MDS_LOG_INFO("client passed unknown couple_id: %d", couple_id);
+			send_reply(400);
+			return;
+		}
+
+		if (couple_id != *std::min_element(couple.begin(), couple.end())) {
+			MDS_LOG_INFO("client tried to use no minimum group as couple_id: %d", couple_id);
+			send_reply(400);
+			return;
+		}
+
+		auto space = server()->mastermind()->free_effective_space_in_couple_by_group(couple_id);
+
+		if (space < total_size) {
+			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
+			send_reply(507);
+			return;
+		}
+
+		{
+			std::ostringstream oss;
+			oss << couple;
+			auto couple_str = oss.str();
+			MDS_LOG_INFO("use couple chosen by client: %s", couple_str.c_str());
+		}
+
+	} else {
+		try {
+			couple = server()->groups_for_upload(ns, total_size);
+		} catch (const mastermind::not_enough_memory_error &e) {
+			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+				, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
+			send_reply(507);
+			return;
+		} catch (const std::system_error &e) {
+			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+				, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
+			send_reply(500);
+			return;
+		}
 	}
 
 	if (auto content_type_opt = http_request.headers().content_type()) {
