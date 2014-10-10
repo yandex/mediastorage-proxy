@@ -1,3 +1,17 @@
+mediastorage-proxy (0.64) lucid; urgency=low
+
+  * MDS-55: Implementation of multipart
+  * MDS-55: client can choose couple by couple_id arg
+    couple_id is a query_list argument means a minimum group from couple's
+    groups. Proxy will use couple given from mastermind by couple_id
+    instead of weigthed couple if couple_id is passed.
+    If the couple_id isn't a minimum group from couple, response will be 400
+    Bad Request.
+    If there are no enough space in couple given by couple_id, response will
+    be 507 Insufficient Storage.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 10 Oct 2014 17:38:13 +0400
+
 mediastorage-proxy (0.63) lucid; urgency=low
 
   * Using 416 HTTP code for invalid Range header
