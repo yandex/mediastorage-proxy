@@ -20,10 +20,9 @@
 #ifndef MDS_PROXY__SRC__UTILS__HPP
 #define MDS_PROXY__SRC__UTILS__HPP
 
-#include <thevoid/stream.hpp>
-
 #include <swarm/logger.hpp>
 
+#include <thevoid/stream.hpp>
 #include <elliptics/session.hpp>
 
 #include <list>
@@ -38,6 +37,8 @@
 #include <iostream>
 
 namespace elliptics {
+
+typedef std::vector<int> couple_t;
 
 template <typename T>
 std::ostream &
@@ -62,6 +63,17 @@ operator << (std::ostream &stream, const std::vector<T> &vector) {
 	stream << ']';
 
 	return stream;
+}
+
+template <typename T, typename Server, typename... Args>
+std::shared_ptr<ioremap::thevoid::base_request_stream>
+make_request_stream(Server *server
+		, const std::shared_ptr<ioremap::thevoid::reply_stream> &reply
+		, Args &&...args) {
+	auto request_stream = std::make_shared<T>(std::forward<Args>(args)...);
+	request_stream->set_server(server);
+	request_stream->initialize(reply);
+	return request_stream;
 }
 
 } // namespace elliptics
