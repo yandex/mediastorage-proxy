@@ -725,7 +725,15 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 
 void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		auto ns = server()->get_namespace(req, "/statistics");
+		namespace_ptr_t ns;
+		try {
+			ns = server()->get_namespace(req, "/statistics");
+		} catch (const std::exception &ex) {
+			MDS_LOG_INFO("Statistics: Cannot find namespace: %s", ex.what());
+			send_reply(404);
+			return;
+		}
+
 		auto json = server()->mastermind()->json_namespace_statistics(ns->name);
 
 		ioremap::thevoid::http_response reply;
