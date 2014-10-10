@@ -27,10 +27,6 @@ When you specify the namespace will be issued Authorization header, which should
 
 The proxy has no restrictions on the size of upload files (it uploads by pieces, as they come to the socket).
 
-Parameters of request:
-* `offset` - an offset with which data should be written, you can use to overwrite the piece of file;
-* `embed` or `embed_timestamp` and `timestamp` - the `embed` flag is used to store meta-information together with a data; from meta-information supported now only `timestamp`.
-
 А data should be transmitted as the request body and options should be set as query list arguments.
 ###HTTP response codes
 Handle responses with 200, 400, 401, 507 and 5xx error codes. Detailed description you can find in ["HTTP status code"](#http-status-codes) topic. 
