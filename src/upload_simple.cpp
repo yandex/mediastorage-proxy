@@ -25,15 +25,16 @@ upload_simple_t::upload_simple_t(namespace_ptr_t ns_, couple_t couple_, std::str
 	: ns(std::move(ns_))
 	, couple(std::move(couple_))
 	, filename(std::move(filename_))
+	, key(ns->name + '.' + filename)
 	, m_single_chunk(false)
+	, request_is_failed(false)
+	, call_remove_if_failed(2)
 {
 }
 
 void
 upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) {
 	set_chunk_size(server()->m_write_chunk_size);
-
-	auto key = ns->name + '.' + filename;
 
 	auto query_list = http_request.url().query();
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
@@ -77,9 +78,27 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 
 void
 upload_simple_t::on_finished() {
+	bool request_is_failed_ = false;
+
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		(void) lock;
+
+		request_is_failed_ = request_is_failed;
+	}
+
 	if (!upload_helper->is_finished()) {
+		if (request_is_failed_) {
+			send_reply(500);
+			return;
+		}
+
 		try_next_chunk();
 		return;
+	}
+
+	if (request_is_failed_) {
+		remove_if_failed();
 	}
 
 	std::ostringstream oss;
@@ -124,12 +143,46 @@ upload_simple_t::on_finished() {
 	headers.set_content_type("text/xml");
 	reply.set_headers(headers);
 
-	send_reply(std::move(reply), std::move(res_str));
+	std::lock_guard<std::mutex> lock(mutex);
+	(void) lock;
+
+	if (!request_is_failed) {
+		send_reply(std::move(reply), std::move(res_str));
+		call_remove_if_failed -= 1;
+	}
 }
 
 void
 upload_simple_t::on_error(const boost::system::error_code &error_code) {
-	MDS_LOG_ERROR("%s", error_code.message().c_str());
+	std::lock_guard<std::mutex> lock(mutex);
+	(void) lock;
+
+	request_is_failed = true;
+	remove_if_failed();
+
+	MDS_LOG_ERROR("request is failed: %s", error_code.message().c_str());
+}
+
+void
+upload_simple_t::remove_if_failed() {
+	if (--call_remove_if_failed > 0) {
+		return;
+	}
+
+	auto session = server()->remove_session(request(), couple);
+
+	auto future = session.remove(key);
+	future.connect(std::bind(&upload_simple_t::on_removed, shared_from_this()
+				, std::placeholders::_1, std::placeholders::_2));
+}
+
+void
+upload_simple_t::on_removed(const ioremap::elliptics::sync_remove_result &result
+		, const ioremap::elliptics::error_info &error_info) {
+	if (error_info) {
+		MDS_LOG_ERROR("cannot remove key: %s", error_info.message().c_str());
+	}
+
 	send_reply(500);
 }
 

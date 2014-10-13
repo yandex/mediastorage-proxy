@@ -168,14 +168,26 @@ struct upload_simple_t
 	void
 	on_error(const boost::system::error_code &error_code);
 
+	void
+	remove_if_failed();
+
+	void
+	on_removed(const ioremap::elliptics::sync_remove_result &result
+			, const ioremap::elliptics::error_info &error_info);
+
 private:
 	namespace_ptr_t ns;
 	couple_t couple;
 	std::string filename;
+	std::string key;
 
 	bool m_single_chunk;
 
 	std::shared_ptr<upload_helper_t> upload_helper;
+
+	bool request_is_failed;
+	std::mutex mutex;
+	std::atomic<int> call_remove_if_failed;
 };
 
 struct upload_multipart_t

@@ -401,6 +401,9 @@ upload_multipart_t::start_writing() {
 
 void
 upload_multipart_t::on_close(const boost::system::error_code &error) {
+	if (error) {
+		on_error();
+	}
 }
 
 void
