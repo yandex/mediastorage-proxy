@@ -1,3 +1,12 @@
+mediastorage-proxy (0.66) lucid; urgency=low
+
+  * MDS-248: remove well uploaded file in case of 499
+    499 means client has gone, so he has noway to know couple_id which was
+    used to upload, therefore he cannot get the file, hence it spends disk
+    space for nothing. To keep storage space proxy removes such files.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 13 Oct 2014 13:16:08 +0400
+
 mediastorage-proxy (0.65) lucid; urgency=low
 
   * MDS-241: Statistics handler responds 404 for unknwon namespace
