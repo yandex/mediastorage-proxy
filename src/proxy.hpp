@@ -75,6 +75,9 @@ struct namespace_t {
 	std::string sign_path_prefix;
 	std::string sign_port;
 
+	bool can_choose_couple_to_upload;
+	int64_t multipart_content_length_threshold;
+
 	int success_copies_num;
 };
 

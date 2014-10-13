@@ -99,6 +99,9 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 		item.sign_path_prefix = it->sign_path_prefix();
 		item.sign_port = it->sign_port();
 
+		item.can_choose_couple_to_upload = it->can_choose_couple_to_upload();
+		item.multipart_content_length_threshold = it->multipart_content_length_threshold();
+
 		const std::string &scn = it->success_copies_num();
 
 		if (scn == "all") {

@@ -103,6 +103,12 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 	couple_t couple;
 
 	if (auto arg = http_request.url().query().item_value("couple_id")) {
+		if (!ns->can_choose_couple_to_upload) {
+			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
+			send_reply(403);
+			return;
+		}
+
 		int couple_id = 0;
 
 		try {
@@ -163,6 +169,17 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 				, "multipart/form-data;");
 
 		if (!res) {
+			auto size = ns->multipart_content_length_threshold;
+
+			if (size == -1 || size != 0 && size < total_size) {
+				MDS_LOG_INFO(
+						"client tries to upload multipart with total_size=%d"
+						", but multipart_content_length_threshold=%d"
+						, static_cast<int>(total_size), static_cast<int>(size));
+				send_reply(403);
+				return;
+			}
+
 			request_stream = make_request_stream<upload_multipart_t>(server(), reply()
 					, std::move(ns), std::move(couple));
 		}
