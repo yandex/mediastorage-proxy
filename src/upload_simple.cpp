@@ -148,8 +148,9 @@ upload_simple_t::on_finished() {
 
 	if (!request_is_failed) {
 		send_reply(std::move(reply), std::move(res_str));
-		call_remove_if_failed -= 1;
 	}
+
+	remove_if_failed();
 }
 
 void
