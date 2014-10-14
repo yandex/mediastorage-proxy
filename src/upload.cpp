@@ -119,10 +119,10 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			return;
 		}
 
-		couple = server()->mastermind()->get_couple_by_group(couple_id);
+		couple = server()->mastermind()->get_couple(couple_id, ns->name);
 
 		if (couple.empty()) {
-			MDS_LOG_INFO("client passed unknown couple_id: %d", couple_id);
+			MDS_LOG_INFO("cannot obtain couple by couple_id: %d", couple_id);
 			send_reply(400);
 			return;
 		}
