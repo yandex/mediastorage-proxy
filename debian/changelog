@@ -1,3 +1,10 @@
+mediastorage-proxy (0.68) lucid; urgency=low
+
+  * The file will be removed if upload response is failed
+  * Client can choose a couple to upload only among couples from his namespace
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 14 Oct 2014 12:40:20 +0400
+
 mediastorage-proxy (0.67) lucid; urgency=low
 
   * MDS-280: added restrictions for multipart and couple_id
