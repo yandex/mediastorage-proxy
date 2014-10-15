@@ -426,7 +426,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	register_handler<req_ping>("ping", true);
 	register_handler<req_ping>("stat", true);
 	register_handler<req_cache>("cache", true);
-	register_handler<req_cache_update>("cache-update", true);
+	register_handler<req_cache_update>("cache-update", false);
 	register_handler<req_statistics>("statistics", false);
 
 	MDS_LOG_INFO("Mediastorage-proxy starts: done");
@@ -738,9 +738,23 @@ void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, con
 void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		auto query_list = req.url().query();
+		auto cache = req.url().path().substr(sizeof("/cache-update") - 1);
 
-		server()->mastermind()->cache_force_update();
-		server()->cdn_cache->cache_force_update();
+		if (cache == "/mastermind") {
+			MDS_INFO_CACHE("update mastermind cache");
+			server()->mastermind()->cache_force_update();
+		} else if (cache == "/conductor") {
+			MDS_INFO_CACHE("update conductor cache");
+			server()->cdn_cache->cache_force_update();
+		} else if (cache.empty()) {
+			MDS_INFO_CACHE("update mastermind cache");
+			server()->mastermind()->cache_force_update();
+			MDS_INFO_CACHE("update conductor cache");
+			server()->cdn_cache->cache_force_update();
+		} else {
+			send_reply(404);
+			return;
+		}
 		send_reply(200);
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Cache request error: %s", ex.what());
