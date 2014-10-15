@@ -1,3 +1,14 @@
+mediastorage-proxy (0.69) lucid; urgency=low
+
+  * Added cache for cdn
+  * MDS-271: using new algorithm for download-info
+  * Each cache can be updated independently
+    Use /cache-update to update all caches
+    Use /cache-update/mastermind to update libmastermind cache
+    Use /cache-update/conductor to update conductor cache
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 15 Oct 2014 16:06:16 +0400
+
 mediastorage-proxy (0.68) lucid; urgency=low
 
   * The file will be removed if upload response is failed
