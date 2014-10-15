@@ -502,6 +502,9 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
+		bool use_regional_host = !x_regional_host.empty()
+			&& server()->cdn_cache->check_host(x_regional_host);
+
 		for (auto it = slr.begin(); it != slr.end(); ++it) {
 			if (!it->error()) {
 				std::stringstream oss;
@@ -513,20 +516,29 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				std::string sign;
 				long time;
 				bool use_sign = !ns->sign_token.empty();
-				std::string entry_path = entry.path();
+				std::string path = entry.path();
+				std::string host;
 
 				if (use_sign) {
 					{
 						const auto &path_prefix = ns->sign_path_prefix;
-						if (strncmp(entry_path.c_str(), path_prefix.c_str(), path_prefix.size())) {
+						if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
 							MDS_LOG_INFO(
 									"Download-info: path_prefix does not match: prefix=%s path=%s"
-									, path_prefix.c_str(), entry_path.c_str());
+									, path_prefix.c_str(), path.c_str());
+							continue;
+						}
+
+						path = '/' + path.substr(path_prefix.size());
+
+						if (use_regional_host) {
+							host = x_regional_host;
+							path = '/' + entry.host() + path;
 						} else {
-							entry_path.substr(path_prefix.size()).swap(entry_path);
-							entry_path = '/' + entry_path;
+							host = entry.host();
 						}
 					}
+
 					{
 						using namespace std::chrono;
 						time = duration_cast<seconds>(
@@ -534,25 +546,15 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 					}
 
 					{
-						using namespace std::chrono;
 						std::ostringstream oss;
-						oss << "scheme://";
-						if (!x_regional_host.empty()) {
-							oss << x_regional_host;
-						} else {
-							oss << entry.host();
-						}
-						oss << entry_path << "?time=" << time;
-						server()->hmac(oss.str(), ns).swap(sign);
+						oss << host << path << '/' << time;
+						sign = server()->hmac(oss.str(), ns);
 					}
 				}
 
 				oss << "<download-info>";
-				if (!x_regional_host.empty()) {
-					oss << "<regional-host>" << x_regional_host << "</regional-host>";
-				}
-				oss << "<host>" << entry.host() << "</host>";
-				oss << "<path>" << entry_path << "</path>";
+				oss << "<host>" << host << "</host>";
+				oss << "<path>" << path << "</path>";
 				if (use_sign) {
 					oss << "<ts>" << time << "</ts>";
 				}
@@ -986,7 +988,7 @@ bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key,
 std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	using namespace CryptoPP;
 
-	HMAC<SHA512> hmac((const byte *)ns->sign_token.data(), ns->sign_token.size());
+	HMAC<SHA256> hmac((const byte *)ns->sign_token.data(), ns->sign_token.size());
 	hmac.Update((const byte *)data.data(), data.size());
 	std::vector<byte> res(hmac.DigestSize());
 	hmac.Final(res.data());
