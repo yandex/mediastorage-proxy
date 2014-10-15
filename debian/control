@@ -21,7 +21,9 @@ Build-Depends: debhelper (>=5),
  libglib2.0-0,
  libglib2.0-dev,
  libmagic-dev,
- libcrypto++-dev
+ libcrypto++-dev,
+ libyandex-utils-http,
+ libcurl4-openssl-dev
 Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
