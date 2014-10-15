@@ -1,3 +1,9 @@
+mediastorage-proxy (0.70) lucid; urgency=low
+
+  * MDS-248: Improved error handling for simple upload
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 15 Oct 2014 17:44:55 +0400
+
 mediastorage-proxy (0.69) lucid; urgency=low
 
   * Added cache for cdn
