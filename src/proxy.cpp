@@ -741,15 +741,15 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 		auto cache = req.url().path().substr(sizeof("/cache-update") - 1);
 
 		if (cache == "/mastermind") {
-			MDS_INFO_CACHE("update mastermind cache");
+			MDS_LOG_INFO("update mastermind cache");
 			server()->mastermind()->cache_force_update();
 		} else if (cache == "/conductor") {
-			MDS_INFO_CACHE("update conductor cache");
+			MDS_LOG_INFO("update conductor cache");
 			server()->cdn_cache->cache_force_update();
 		} else if (cache.empty()) {
-			MDS_INFO_CACHE("update mastermind cache");
+			MDS_LOG_INFO("update mastermind cache");
 			server()->mastermind()->cache_force_update();
-			MDS_INFO_CACHE("update conductor cache");
+			MDS_LOG_INFO("update conductor cache");
 			server()->cdn_cache->cache_force_update();
 		} else {
 			send_reply(404);
