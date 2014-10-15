@@ -28,7 +28,7 @@ upload_simple_t::upload_simple_t(namespace_ptr_t ns_, couple_t couple_, std::str
 	, key(ns->name + '.' + filename)
 	, m_single_chunk(false)
 	, request_is_failed(false)
-	, call_remove_if_failed(2)
+	, reply_was_sent(false)
 {
 }
 
@@ -78,27 +78,16 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 
 void
 upload_simple_t::on_finished() {
-	bool request_is_failed_ = false;
-
-	{
+	if (!upload_helper->is_finished()) {
 		std::lock_guard<std::mutex> lock(mutex);
 		(void) lock;
 
-		request_is_failed_ = request_is_failed;
-	}
-
-	if (!upload_helper->is_finished()) {
-		if (request_is_failed_) {
-			send_reply(500);
+		if (request_is_failed) {
 			return;
 		}
 
 		try_next_chunk();
 		return;
-	}
-
-	if (request_is_failed_) {
-		remove_if_failed();
 	}
 
 	std::ostringstream oss;
@@ -147,10 +136,11 @@ upload_simple_t::on_finished() {
 	(void) lock;
 
 	if (!request_is_failed) {
+		reply_was_sent = true;
 		send_reply(std::move(reply), std::move(res_str));
+	} else {
+		remove_if_failed();
 	}
-
-	remove_if_failed();
 }
 
 void
@@ -158,18 +148,23 @@ upload_simple_t::on_error(const boost::system::error_code &error_code) {
 	std::lock_guard<std::mutex> lock(mutex);
 	(void) lock;
 
+	if (reply_was_sent) {
+		remove_if_failed();
+		return;
+	}
+
+	if (request_is_failed) {
+		return;
+	}
+
 	request_is_failed = true;
-	remove_if_failed();
 
 	MDS_LOG_ERROR("request is failed: %s", error_code.message().c_str());
 }
 
 void
 upload_simple_t::remove_if_failed() {
-	if (--call_remove_if_failed > 0) {
-		return;
-	}
-
+	MDS_LOG_INFO("removing key %s", key.c_str());
 	auto session = server()->remove_session(request(), couple);
 
 	auto future = session.remove(key);
@@ -181,10 +176,10 @@ void
 upload_simple_t::on_removed(const ioremap::elliptics::sync_remove_result &result
 		, const ioremap::elliptics::error_info &error_info) {
 	if (error_info) {
-		MDS_LOG_ERROR("cannot remove key: %s", error_info.message().c_str());
+		MDS_LOG_ERROR("cannot remove key %s: %s", key.c_str(), error_info.message().c_str());
+	} else {
+		MDS_LOG_INFO("key %s was removed", key.c_str());
 	}
-
-	send_reply(500);
 }
 
 } // namespace elliptics

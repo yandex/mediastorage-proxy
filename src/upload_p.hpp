@@ -186,8 +186,8 @@ private:
 	std::shared_ptr<upload_helper_t> upload_helper;
 
 	bool request_is_failed;
+	bool reply_was_sent;
 	std::mutex mutex;
-	std::atomic<int> call_remove_if_failed;
 };
 
 struct upload_multipart_t
