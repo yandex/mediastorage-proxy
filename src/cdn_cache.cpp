@@ -56,6 +56,14 @@ cdn_cache_t::check_host(const std::string &host) {
 	return host_was_found;
 }
 
+void
+cdn_cache_t::cache_force_update() {
+	std::lock_guard<std::mutex> lock(background_updater_mutex);
+	(void) lock;
+
+	update_cache();
+}
+
 ioremap::swarm::logger &
 cdn_cache_t::logger() {
 	return bh_logger;

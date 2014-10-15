@@ -23,7 +23,11 @@ public:
 	cdn_cache_t(ioremap::swarm::logger bh_logger_, config_t config_);
 	~cdn_cache_t();
 
-	bool check_host(const std::string &host);
+	bool
+	check_host(const std::string &host);
+
+	void
+	cache_force_update();
 
 private:
 	typedef std::shared_ptr<std::unordered_set<std::string>> cache_ptr_t;

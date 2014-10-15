@@ -740,6 +740,7 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 		auto query_list = req.url().query();
 
 		server()->mastermind()->cache_force_update();
+		server()->cdn_cache->cache_force_update();
 		send_reply(200);
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Cache request error: %s", ex.what());
