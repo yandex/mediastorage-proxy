@@ -28,6 +28,13 @@
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
 
+#include <handystats/core.hpp>
+#include <handystats/json_dump.hpp>
+
+#include <thevoid/rapidjson/document.h>
+#include <thevoid/rapidjson/stringbuffer.h>
+#include <thevoid/rapidjson/writer.h>
+
 #include <glib.h>
 
 #include <stdexcept>
@@ -45,6 +52,20 @@
 #include <boost/lexical_cast.hpp>
 
 #include <iostream>
+
+namespace {
+
+inline
+std::string rapidjson_to_string(const rapidjson::Value& json_value) {
+	rapidjson::StringBuffer buffer;
+	rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+	json_value.Accept(writer);
+
+	return std::string(buffer.GetString(), buffer.Size());
+}
+
+}
 
 namespace elliptics {
 
@@ -238,7 +259,7 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	if (config.HasMember("mastermind") == false) {
 		throw std::runtime_error("You should set settings for mastermind");
 	}
-	
+
 	const auto &mastermind = config["mastermind"];
 
 	if (mastermind.HasMember("nodes") == false) {
@@ -322,7 +343,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
-	
+
 		elliptics_read_session.reset(m_elliptics_session->clone());
 		elliptics_read_session->set_timeout(timeout.read);
 		elliptics_read_session->set_filter(ioremap::elliptics::filters::positive);
@@ -415,10 +436,50 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			m_read_chunk_size = chunk_size["read"].GetInt() * MB;
 		}
 
+		if (config.HasMember("handystats")) {
+			const auto& handystats_config = rapidjson_to_string(config["handystats"]);
+			HANDY_CONFIG_JSON(handystats_config.c_str());
+		}
+		else {
+			HANDY_CONFIG_JSON("{\
+					\"dump-interval\": 500,\
+					\"defaults\": {\
+						\"histogram-bins\": 30,\
+						\"moving-interval\": 60000,\
+						\"stats\": []\
+					},\
+					\"metrics\": {\
+						\"gauge\": {\
+						},\
+						\"counter\": {\
+							\"stats\": [\"rate\"],\
+							\"rate-unit\": \"s\"\
+						},\
+						\"timer\": {\
+							\"idle-timeout\": 30000,\
+							\"stats\": [\"moving-avg\", \"quantile\"]\
+						}\
+					}\
+				}");
+		}
+
 	} catch(const std::exception &ex) {
 		MDS_LOG_ERROR("%s", ex.what());
 		return false;
 	}
+
+	m_file_logger =
+		std::make_shared<handystats::backends::file_logger>(
+			"/var/log/mds-metrics.log",
+			handystats::chrono::duration(1, handystats::chrono::time_unit::SEC)
+		);
+	if (!m_file_logger->run()) {
+		MDS_LOG_ERROR("handystats: unable to start file_logger");
+		return false;
+	}
+
+	HANDY_INIT();
+
 	MDS_LOG_INFO("Mediastorage-proxy starts: initialize handlers");
 
 	register_handler<upload_t>("upload", false);
@@ -431,6 +492,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	register_handler<req_cache>("cache", true);
 	register_handler<req_cache_update>("cache-update", false);
 	register_handler<req_statistics>("statistics", false);
+	register_handler<req_stats>("stats", false);
 
 	MDS_LOG_INFO("Mediastorage-proxy starts: done");
 	MDS_LOG_INFO("Mediastorage-proxy starts: initialization is done");
@@ -747,6 +809,20 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 		MDS_LOG_ERROR("Statistics request error: unknown");
 		send_reply(500);
 	}
+}
+
+void proxy::req_stats::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	std::string json = HANDY_JSON_DUMP();
+
+	ioremap::thevoid::http_response reply;
+	ioremap::swarm::http_headers headers;
+
+	reply.set_code(200);
+	headers.set_content_length(json.size());
+	headers.set_content_type("application/json");
+	reply.set_headers(headers);
+
+	send_reply(std::move(reply), std::move(json));
 }
 
 ioremap::elliptics::session proxy::get_session() {

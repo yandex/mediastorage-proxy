@@ -26,6 +26,8 @@
 #include "utils.hpp"
 #include "cdn_cache.hpp"
 
+#include <handystats/experimental/backends/file_logger.hpp>
+
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
@@ -162,6 +164,13 @@ public:
 		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
+	struct req_stats
+		: public ioremap::thevoid::simple_request_stream<proxy>
+		, public std::enable_shared_from_this<req_stats>
+	{
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
+	};
+
 protected:
 public:
 	template <typename T>
@@ -172,7 +181,7 @@ public:
 	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
 	ioremap::elliptics::session get_session();
-	
+
 	ioremap::elliptics::session
 	read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
@@ -230,6 +239,7 @@ public:
 	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 	std::atomic<bool> cache_is_expired;
+	std::shared_ptr<handystats::backends::file_logger> m_file_logger;
 
 	struct {
 		int def;
