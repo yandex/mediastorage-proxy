@@ -24,6 +24,7 @@
 #include "loggers.hpp"
 #include "magic_provider.hpp"
 #include "utils.hpp"
+#include "cdn_cache.hpp"
 
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
@@ -164,6 +165,7 @@ public:
 
 	ioremap::elliptics::node generate_node(const rapidjson::Value &config, int &timeout_def);
 	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
+	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
 	ioremap::elliptics::session get_session();
 	
@@ -214,6 +216,7 @@ public:
 	int m_write_chunk_size;
 	int m_read_chunk_size;
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
+	std::shared_ptr<cdn_cache_t> cdn_cache;
 	std::map<std::string, namespace_ptr_t> m_namespaces;
 	bool m_namespaces_auto_update;
 	std::mutex m_namespaces_mutex;

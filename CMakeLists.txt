@@ -20,6 +20,7 @@ set(REQUIRED_LIBRARIES
 	magic
 	${GLIB_LIBRARY}
 	crypto++
+	curl
 	)
 
 set(SOURCE
@@ -32,6 +33,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/lookup_result.cpp
 	${PROJECT_SOURCE_DIR}/src/data_container.cpp
 	${PROJECT_SOURCE_DIR}/src/ranges.cpp
+	${PROJECT_SOURCE_DIR}/src/cdn_cache.cpp
 	)
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)

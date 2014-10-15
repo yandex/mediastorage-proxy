@@ -277,6 +277,24 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 			enqueue_timeout, reconnect_timeout);
 }
 
+std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
+	cdn_cache_t::config_t cdn_config;
+
+	if (config.HasMember("cdn-cache")) {
+		const auto &cdn_hosts = config["cdn-cache"];
+
+		cdn_config.url = get_string(cdn_hosts, "url", "");
+		cdn_config.timeout = get_int(cdn_hosts, "timeout", 10);
+		cdn_config.update_period = get_int(cdn_hosts, "update-period", 60);
+		cdn_config.cache_path = get_string(cdn_hosts, "cache-path", "");
+	}
+
+	auto logger_ = ioremap::swarm::logger(logger(), blackhole::log::attributes_t({
+				blackhole::attribute::make("component", "cdn-cache")}));
+
+	return std::make_shared<cdn_cache_t>(std::move(logger_), std::move(cdn_config));
+}
+
 proxy::~proxy() {
 	m_mastermind.reset();
 }
@@ -321,6 +339,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		elliptics_lookup_session->set_timeout(timeout.lookup);
 		elliptics_lookup_session->set_filter(ioremap::elliptics::filters::positive);
 
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
+
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cdn cache");
+		cdn_cache = generate_cdn_cache(config);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
