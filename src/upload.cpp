@@ -171,7 +171,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		if (!res) {
 			auto size = ns->multipart_content_length_threshold;
 
-			if (size == -1 || size != 0 && size < total_size) {
+			if (size != -1 && size < total_size) {
 				MDS_LOG_INFO(
 						"client tries to upload multipart with total_size=%d"
 						", but multipart_content_length_threshold=%d"
