@@ -99,6 +99,9 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 		item.sign_path_prefix = it->sign_path_prefix();
 		item.sign_port = it->sign_port();
 
+		item.redirect_expire_time = std::chrono::seconds(it->redirect_expire_time());
+		item.redirect_content_length_threshold = it->redirect_content_length_threshold();
+
 		item.can_choose_couple_to_upload = it->can_choose_couple_to_upload();
 		item.multipart_content_length_threshold = it->multipart_content_length_threshold();
 
@@ -502,82 +505,32 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
-		bool use_regional_host = !x_regional_host.empty()
-			&& server()->cdn_cache->check_host(x_regional_host);
+		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns);
 
-		for (auto it = slr.begin(); it != slr.end(); ++it) {
-			if (!it->error()) {
-				std::stringstream oss;
-				oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
-				std::string region = "-1";
-				
-				auto entry = server()->parse_lookup(*it, ns);
-				
-				std::string sign;
-				long time;
-				bool use_sign = !ns->sign_token.empty();
-				std::string path = entry.path();
-				std::string host;
-
-				if (use_sign) {
-					{
-						const auto &path_prefix = ns->sign_path_prefix;
-						if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
-							MDS_LOG_INFO(
-									"Download-info: path_prefix does not match: prefix=%s path=%s"
-									, path_prefix.c_str(), path.c_str());
-							continue;
-						}
-
-						path = '/' + path.substr(path_prefix.size());
-
-						if (use_regional_host) {
-							host = x_regional_host;
-							path = '/' + entry.host() + path;
-						} else {
-							host = entry.host();
-						}
-					}
-
-					{
-						using namespace std::chrono;
-						time = duration_cast<seconds>(
-									system_clock::now().time_since_epoch()).count();
-					}
-
-					{
-						std::ostringstream oss;
-						oss << host << path << '/' << time;
-						sign = server()->hmac(oss.str(), ns);
-					}
-				}
-
-				oss << "<download-info>";
-				oss << "<host>" << host << "</host>";
-				oss << "<path>" << path << "</path>";
-				if (use_sign) {
-					oss << "<ts>" << time << "</ts>";
-				}
-				oss << "<region>" << region << "</region>";
-				if (use_sign) {
-					oss << "<s>" << sign << "</s>";
-				}
-				oss << "</download-info>";
-
-				const std::string &str = oss.str();
-
-				ioremap::thevoid::http_response reply;
-				ioremap::swarm::http_headers headers;
-				reply.set_code(200);
-				headers.set_content_length(str.size());
-				headers.set_content_type("text/xml");
-				reply.set_headers(headers);
-				send_reply(std::move(reply), std::move(str));
-				return;
-			}
+		std::stringstream oss;
+		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+		oss << "<download-info>";
+		oss << "<host>" << std::get<0>(res) << "</host>";
+		oss << "<path>" << std::get<1>(res) << "</path>";
+		if (std::get<2>(res)) {
+			oss << "<ts>" << std::get<3>(res) << "</ts>";
 		}
-		MDS_LOG_DEBUG("Download info: sending response");
-		send_reply(503);  
+		oss << "<region>-1</region>";
+		if (std::get<2>(res)) {
+			oss << "<s>" << std::get<4>(res) << "</s>";
+		}
+		oss << "</download-info>";
+
+		const std::string &str = oss.str();
+
+		ioremap::thevoid::http_response reply;
+		ioremap::swarm::http_headers headers;
+		reply.set_code(200);
+		headers.set_content_length(str.size());
+		headers.set_content_type("text/xml");
+		reply.set_headers(headers);
+		send_reply(std::move(reply), std::move(str));
+
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Download info finish error: %s", ex.what());
 		send_reply(500);
@@ -1014,6 +967,68 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 		oss << std::setfill('0') << std::setw(2) << static_cast<int>(*it);
 	}
 	return oss.str();
+}
+
+std::tuple<std::string, std::string, bool, size_t, std::string>
+proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const namespace_ptr_t &ns) {
+
+	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+
+	std::string error_message;
+
+	for (auto it = slr.begin(); it != slr.end(); ++it) {
+		if (it->error()) {
+			error_message = it->error().message();
+			continue;
+		}
+
+		auto entry = parse_lookup(*it, ns);
+
+		std::string host;
+		std::string path = entry.path();
+		bool use_sign = !ns->sign_token.empty();
+		size_t ts = 0;
+		std::string sign;
+
+		if (use_sign) {
+			{
+				const auto &path_prefix = ns->sign_path_prefix;
+				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
+					std::ostringstream oss;
+					oss
+						<< "path_prefix does not match: prefix=" << path_prefix << "path=" << path;
+					throw std::runtime_error(oss.str());
+				}
+
+				path = '/' + path.substr(path_prefix.size());
+
+				if (use_regional_host) {
+					host = x_regional_host;
+					path = '/' + entry.host() + path;
+				} else {
+					host = entry.host();
+				}
+			}
+
+			{
+				using namespace std::chrono;
+				ts = (duration_cast<seconds>(system_clock::now().time_since_epoch())
+						+ ns->redirect_expire_time).count();
+			}
+
+			{
+				std::ostringstream oss;
+				oss << host << path << '/' << ts;
+				sign = hmac(oss.str(), ns);
+			}
+		}
+
+		return std::make_tuple(host, path, use_sign, ts, sign);
+	}
+
+	throw std::runtime_error("cannot make signature, there are no goot lookup result entry: "
+			+ error_message);
 }
 
 void proxy::cache_update_callback(bool cache_is_expired_) {

@@ -44,7 +44,10 @@ struct req_get
 private:
 	typedef std::function<void (void)> callback_t;
 
-	void process_precondition_headers(const time_t timestamp, const size_t size);
+	std::tuple<bool, bool> process_precondition_headers(const time_t timestamp, const size_t size);
+	bool try_to_redirect_request(const ioremap::elliptics::sync_lookup_result &slr
+			, const size_t size, bool send_whole_file);
+	void start_reading(const size_t size, bool send_whole_file);
 
 	std::shared_ptr<get_helper_t> make_get_helper(size_t offset, size_t size);
 
@@ -67,6 +70,7 @@ private:
 	ioremap::thevoid::http_response prospect_http_response;
 
 	boost::optional<ioremap::elliptics::session> m_session;
+	namespace_ptr_t ns;
 	std::string key;
 
 	size_t total_size;

@@ -208,7 +208,6 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
-	namespace_ptr_t ns;
 	try {
 		ns = server()->get_namespace(http_request.url().path(), "/get");
 		auto &&prep_session = server()->prepare_session(http_request.url().path(), ns);
@@ -288,7 +287,17 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 		m_session->set_groups(groups);
 	}
 
-	process_precondition_headers(entry.file_info()->mtime.tsec, entry.file_info()->size);
+	auto res = process_precondition_headers(entry.file_info()->mtime.tsec, entry.file_info()->size);
+
+	if (std::get<0>(res)) {
+		return;
+	}
+
+	if (try_to_redirect_request(slr, entry.file_info()->size, std::get<1>(res))) {
+		return;
+	}
+
+	start_reading(entry.file_info()->size, std::get<1>(res));
 }
 
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
@@ -328,7 +337,7 @@ std::string make_boundary() {
 	return boundary_buf;
 }
 
-void req_get::process_precondition_headers(const time_t timestamp, const size_t size) {
+std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timestamp, const size_t size) {
 	const auto &headers = request().headers();
 
 	bool if_prospect_304 = true;
@@ -377,7 +386,7 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 				send_whole_file = true;
 			} else {
 				send_reply(412);
-				return;
+				return std::make_tuple(true, false);
 			}
 		}
 	}
@@ -400,7 +409,7 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 				send_whole_file = true;
 			} else {
 				send_reply(412);
-				return;
+				return std::make_tuple(true, false);
 			}
 		}
 	}
@@ -421,7 +430,7 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 
 	if (has_304_headers && if_prospect_304) {
 		send_reply(304);
-		return;
+		return std::make_tuple(true, false);
 	}
 
 	prospect_http_response.set_code(200);
@@ -430,8 +439,61 @@ void req_get::process_precondition_headers(const time_t timestamp, const size_t 
 
 	if (request().method() == "HEAD") {
 		send_reply(std::move(prospect_http_response));
-		return;
+		return std::make_tuple(true, false);
 	}
+
+	return std::make_tuple(false, send_whole_file);
+}
+
+bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_result &slr
+		, const size_t size, bool send_whole_file) {
+
+	{
+		const auto &headers = request().headers();
+		auto range_header = headers.get("Range");
+
+		if (!send_whole_file && range_header) {
+			return false;
+		}
+	}
+
+	if (ns->redirect_content_length_threshold > size) {
+		return false;
+	}
+
+	const auto &headers = request().headers();
+
+	try {
+		auto res = server()->generate_signature_for_elliptics_file(slr
+				, headers.get("X-Regional-Host").get_value_or(""), ns);
+
+		if (!std::get<2>(res)) {
+			MDS_LOG_ERROR("cannot redirect without signature");
+			return false;
+		}
+
+		std::stringstream oss;
+		oss
+			<< "//" << std::get<0>(res) << std::get<1>(res) << "?ts="
+			<< std::get<3>(res) << "&s=" << std::get<4>(res);
+
+		ioremap::thevoid::http_response http_response;
+		http_response.set_code(302);
+		http_response.headers().set_content_length(0);
+		http_response.headers().set("Location", oss.str());
+
+		send_reply(std::move(http_response));
+
+		return true;
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("cannot generate signature: %s", ex.what());
+		return false;
+	}
+}
+
+void req_get::start_reading(const size_t size, bool send_whole_file) {
+	const auto &headers = request().headers();
+	auto range_header = headers.get("Range");
 
 	if (send_whole_file || !range_header) {
 		prospect_http_response.headers().set_content_length(size);

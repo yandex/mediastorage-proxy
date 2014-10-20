@@ -44,6 +44,7 @@
 #include <chrono>
 #include <vector>
 #include <mutex>
+#include <tuple>
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ >= 6
 #include <atomic>
@@ -75,6 +76,9 @@ struct namespace_t {
 	std::string sign_token;
 	std::string sign_path_prefix;
 	std::string sign_port;
+
+	std::chrono::seconds redirect_expire_time;
+	int64_t redirect_content_length_threshold;
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
@@ -198,6 +202,10 @@ public:
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
+
+	std::tuple<std::string, std::string, bool, size_t, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const namespace_ptr_t &ns);
 
 	void cache_update_callback(bool cache_is_expired_);
 
