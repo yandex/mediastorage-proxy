@@ -1,3 +1,11 @@
+mediastorage-proxy (0.72+handystats~1.gbpf01bc8) lucid; urgency=low
+
+  ** SNAPSHOT build @f01bc897ce9d4b54a329fee9940fb4e22462af99 **
+
+  * handystats instrumentation added.
+
+ -- Danil Osherov <shindo@yandex-team.ru>  Mon, 27 Oct 2014 20:01:31 +0300
+
 mediastorage-proxy (0.72) lucid; urgency=low
 
   * MDS-327: Added Content-Length for HEAD response
