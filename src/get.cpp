@@ -438,6 +438,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	prospect_http_response.headers().set("ETag", etag);
 
 	if (request().method() == "HEAD") {
+		prospect_http_response.headers().set_content_length(size);
 		send_reply(std::move(prospect_http_response));
 		return std::make_tuple(true, false);
 	}
