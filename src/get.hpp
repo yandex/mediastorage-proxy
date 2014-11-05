@@ -76,6 +76,8 @@ private:
 	size_t total_size;
 
 	bool m_first_chunk;
+
+	std::vector<int> bad_groups;
 };
 
 } // namespace elliptics

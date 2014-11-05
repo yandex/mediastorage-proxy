@@ -257,7 +257,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		auto ioflags = m_session->get_ioflags();
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
-		m_session->set_filter(ioremap::elliptics::filters::positive);
+		m_session->set_filter(ioremap::elliptics::filters::all);
 		auto alr = m_session->quorum_lookup(key);
 		alr.connect(wrap(std::bind(&req_get::on_lookup, shared_from_this(),
 					std::placeholders::_1, std::placeholders::_2)));
@@ -276,28 +276,36 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 		}
 		return;
 	}
-	const auto &entry = slr.front();
-	total_size = entry.file_info()->size;
+
+	uint64_t tsec = 0;
 
 	{
 		std::vector<int> groups;
 		for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
-			groups.push_back(it->command()->id.group_id);
+			auto group_id = it->command()->id.group_id;
+
+			if (it->status() == 0) {
+				groups.push_back(group_id);
+				total_size = it->file_info()->size;
+				tsec = it->file_info()->mtime.tsec;
+			} else if (it->status() == -ENOENT) {
+				bad_groups.push_back(group_id);
+			}
 		}
 		m_session->set_groups(groups);
 	}
 
-	auto res = process_precondition_headers(entry.file_info()->mtime.tsec, entry.file_info()->size);
+	auto res = process_precondition_headers(tsec, total_size);
 
 	if (std::get<0>(res)) {
 		return;
 	}
 
-	if (try_to_redirect_request(slr, entry.file_info()->size, std::get<1>(res))) {
+	if (try_to_redirect_request(slr, total_size, std::get<1>(res))) {
 		return;
 	}
 
-	start_reading(entry.file_info()->size, std::get<1>(res));
+	start_reading(total_size, std::get<1>(res));
 }
 
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
@@ -609,6 +617,17 @@ void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
 
 		send_headers(std::move(prospect_http_response)
 				, std::function<void (const boost::system::error_code &)>());
+	}
+
+	if (chunk_type == get_helper_t::chunk_type_tag::single) {
+		if (!bad_groups.empty()) {
+			MDS_LOG_INFO("mds-proxy recovers file!");
+			const auto &const_buffer = get_helper->const_buffer();
+			server()->write_session(request(), bad_groups).write_data(key
+					, ioremap::elliptics::data_pointer::from_raw(
+						const_cast<void *>(boost::asio::buffer_cast<const void *>(const_buffer))
+						, boost::asio::buffer_size(const_buffer)), 0);
+		}
 	}
 
 	on_simple_range_read(get_helper, std::move(read_is_done));
