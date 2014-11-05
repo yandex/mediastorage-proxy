@@ -171,6 +171,7 @@ upload_multipart_t::upload_multipart_t(namespace_ptr_t ns_, couple_t couple_)
 	, couple(std::move(couple_))
 	, request_is_failed(false)
 	, upload_tasks_count(1)
+	, is_internal_error(false)
 {
 }
 
@@ -297,6 +298,22 @@ upload_multipart_t::sm_headers() {
 
 	auto name = headers.substr(name_begin, name_end - name_begin);
 
+	{
+		auto pos = name.find_first_not_of('/');
+		if (pos == std::string::npos) {
+			MDS_LOG_INFO("incorrect body: part name consists only of \'/\'");
+			multipart_context.interrupt(true);
+			return;
+		}
+
+		if (pos != 0) {
+			MDS_LOG_INFO("cut %d \'/\' from the begin of the name \'%s\'"
+					, static_cast<int>(pos), name.c_str());
+
+			name = name.substr(pos);
+		}
+	}
+
 	current_filename = name;
 	upload_buffer = std::make_shared<upload_buffer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
@@ -396,13 +413,13 @@ upload_multipart_t::start_writing() {
 			, server()->timeout_coef.for_commit, ns->success_copies_num
 			, std::bind(&upload_multipart_t::on_finished
 				, shared_from_this(), std::placeholders::_1)
-			, std::bind(&upload_multipart_t::on_error, shared_from_this()));
+			, std::bind(&upload_multipart_t::on_internal_error, shared_from_this()));
 }
 
 void
 upload_multipart_t::on_close(const boost::system::error_code &error) {
 	if (error) {
-		on_error();
+		on_internal_error();
 	}
 }
 
@@ -411,6 +428,12 @@ upload_multipart_t::on_finished(const std::shared_ptr<upload_helper_t> &upload_h
 	(void) upload_helper;
 
 	send_result();
+}
+
+void
+upload_multipart_t::on_internal_error() {
+	is_internal_error = true;
+	on_error();
 }
 
 void
@@ -550,7 +573,7 @@ upload_multipart_t::send_error() {
 	}
 
 	MDS_LOG_INFO("send error");
-	send_reply(500);
+	send_reply(is_internal_error ? 500 : 400);
 }
 
 } // namespace elliptics

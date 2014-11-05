@@ -211,6 +211,9 @@ private:
 	on_finished(const std::shared_ptr<upload_helper_t> &upload_helper);
 
 	void
+	on_internal_error();
+
+	void
 	on_error();
 
 	void
@@ -299,6 +302,7 @@ private:
 
 	std::atomic<size_t> upload_tasks_count;
 	std::atomic<size_t> remove_tasks_count;
+	std::atomic<bool> is_internal_error;
 };
 
 } // namespace elliptics
