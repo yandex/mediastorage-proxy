@@ -1,3 +1,22 @@
+mediastorage-proxy (0.74) lucid; urgency=low
+
+  * MDS-321: check, a part name doesn't start with '/'
+    If a part name starts with one or several '/' proxy will remove them,
+    e.g. '///partname123' will become 'partname123'. But if the part name
+    only consists of '/' (e.g. '///////') the result will be 400 Bad Request
+  * MDS-322: mds-proxy may recover a file
+    Mds-proxy during processing get handler may send WRITE command and
+    recover a file with following restrictions:
+    1. User's request causes a reading of whole file. (Even if request has
+    Range header proxy may read whole file, e.g. see If-Range header for
+    details.)
+    2. The size of the file less than or equal to read-chunk-size. That
+    means the file will be read by one READ command.
+    3. Quorum-lookup returns either one or more groups with statuses which
+    equal to -ENOENT. And WRITE command will be sent only in that groups.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 05 Nov 2014 22:14:00 +0400
+
 mediastorage-proxy (0.73) lucid; urgency=low
 
   * zbr@ has broken API in elliptics 2.26.3.31
