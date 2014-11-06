@@ -103,6 +103,11 @@ public:
 		return boost::asio::const_buffer(data_pointer.data(), data_pointer.size());
 	}
 
+	dnet_time
+	timestamp() const {
+		return data_timestamp;
+	}
+
 	chunk_type_tag
 	chunk() const {
 		return chunk_type;
@@ -175,6 +180,7 @@ private:
 		}
 
 		data_pointer = result.front().file();
+		data_timestamp = result.front().io_attribute()->timestamp;
 
 		read_size += data_pointer.size();
 
@@ -195,6 +201,7 @@ private:
 	size_t read_size;
 
 	ioremap::elliptics::data_pointer data_pointer;
+	dnet_time data_timestamp;
 	chunk_type_tag chunk_type;
 };
 
@@ -633,8 +640,9 @@ void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
 				MDS_LOG_INFO("%s", msg.c_str());
 			}
 			const auto &const_buffer = get_helper->const_buffer();
-			server()->write_session(request(), bad_groups).write_data(key
-					, ioremap::elliptics::data_pointer::from_raw(
+			auto write_session = server()->write_session(request(), bad_groups);
+			write_session.set_timestamp(get_helper->timestamp());
+			write_session.write_data(key, ioremap::elliptics::data_pointer::from_raw(
 						const_cast<void *>(boost::asio::buffer_cast<const void *>(const_buffer))
 						, boost::asio::buffer_size(const_buffer)), 0);
 		}
