@@ -626,7 +626,12 @@ void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
 
 	if (chunk_type == get_helper_t::chunk_type_tag::single) {
 		if (!bad_groups.empty()) {
-			MDS_LOG_INFO("mds-proxy recovers file!");
+			{
+				std::ostringstream oss;
+				oss << "mds-proxy recovers file! groups=" << bad_groups;
+				const auto &msg = oss.str();
+				MDS_LOG_INFO("%s", msg.c_str());
+			}
 			const auto &const_buffer = get_helper->const_buffer();
 			server()->write_session(request(), bad_groups).write_data(key
 					, ioremap::elliptics::data_pointer::from_raw(
