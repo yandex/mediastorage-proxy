@@ -284,11 +284,16 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 		for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
 			auto group_id = it->command()->id.group_id;
 
-			if (it->status() == 0) {
+			switch (it->status())
+			{
+			case 0:
 				groups.push_back(group_id);
 				total_size = it->file_info()->size;
 				tsec = it->file_info()->mtime.tsec;
-			} else if (it->status() == -ENOENT) {
+				break;
+			case -ENOENT:
+			case -EBADFD:
+			case -EILSEQ:
 				bad_groups.push_back(group_id);
 			}
 		}
