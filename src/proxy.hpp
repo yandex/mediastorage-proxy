@@ -162,6 +162,13 @@ public:
 		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	};
 
+	struct req_stats
+		: public ioremap::thevoid::simple_request_stream<proxy>
+		, public std::enable_shared_from_this<req_stats>
+	{
+		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
+	};
+
 protected:
 public:
 	template <typename T>
@@ -172,7 +179,7 @@ public:
 	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
 	ioremap::elliptics::session get_session();
-	
+
 	ioremap::elliptics::session
 	read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 

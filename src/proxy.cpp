@@ -17,6 +17,9 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <handystats/core.hpp>
+#include <handystats/json_dump.hpp>
+
 #include "get.hpp"
 
 #include "proxy.hpp"
@@ -238,7 +241,7 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	if (config.HasMember("mastermind") == false) {
 		throw std::runtime_error("You should set settings for mastermind");
 	}
-	
+
 	const auto &mastermind = config["mastermind"];
 
 	if (mastermind.HasMember("nodes") == false) {
@@ -322,7 +325,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
-	
+
 		elliptics_read_session.reset(m_elliptics_session->clone());
 		elliptics_read_session->set_timeout(timeout.read);
 		elliptics_read_session->set_filter(ioremap::elliptics::filters::positive);
@@ -415,10 +418,24 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			m_read_chunk_size = chunk_size["read"].GetInt() * MB;
 		}
 
+		if (config.HasMember("handystats")) {
+			HANDY_CONFIG_JSON(config["handystats"]);
+
+			if (config["handystats"].HasMember("core") &&
+					config["handystats"]["core"].HasMember("enable") &&
+					config["handystats"]["core"]["enable"].IsBool() &&
+					config["handystats"]["core"]["enable"].GetBool()
+				)
+			{
+				HANDY_INIT();
+			}
+		}
+
 	} catch(const std::exception &ex) {
 		MDS_LOG_ERROR("%s", ex.what());
 		return false;
 	}
+
 	MDS_LOG_INFO("Mediastorage-proxy starts: initialize handlers");
 
 	register_handler<upload_t>("upload", false);
@@ -431,6 +448,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	register_handler<req_cache>("cache", true);
 	register_handler<req_cache_update>("cache-update", false);
 	register_handler<req_statistics>("statistics", false);
+	register_handler<req_stats>("stats", false);
 
 	MDS_LOG_INFO("Mediastorage-proxy starts: done");
 	MDS_LOG_INFO("Mediastorage-proxy starts: initialization is done");
@@ -747,6 +765,20 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 		MDS_LOG_ERROR("Statistics request error: unknown");
 		send_reply(500);
 	}
+}
+
+void proxy::req_stats::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	std::string json = HANDY_JSON_DUMP();
+
+	ioremap::thevoid::http_response reply;
+	ioremap::swarm::http_headers headers;
+
+	reply.set_code(200);
+	headers.set_content_length(json.size());
+	headers.set_content_type("application/json");
+	reply.set_headers(headers);
+
+	send_reply(std::move(reply), std::move(json));
 }
 
 ioremap::elliptics::session proxy::get_session() {
