@@ -42,8 +42,8 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 	upload_helper = std::make_shared<upload_helper_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
 			, server()->write_session(http_request, couple), key
-			, *http_request.headers().content_length(), offset, server()->timeout_coef.for_commit
-			, ns->success_copies_num
+			, *http_request.headers().content_length(), offset
+			, server()->timeout_coef.data_flow_rate , ns->success_copies_num
 			);
 }
 

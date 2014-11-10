@@ -410,7 +410,7 @@ upload_multipart_t::start_writing() {
 
 	upload_buffers.push_back(std::make_tuple(upload_buffer, current_filename));
 	upload_buffer->write(server()->write_session(http_request, couple)
-			, server()->timeout_coef.for_commit, ns->success_copies_num
+			, server()->timeout_coef.data_flow_rate, ns->success_copies_num
 			, std::bind(&upload_multipart_t::on_finished
 				, shared_from_this(), std::placeholders::_1)
 			, std::bind(&upload_multipart_t::on_internal_error, shared_from_this()));
