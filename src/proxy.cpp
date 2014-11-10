@@ -453,6 +453,13 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 			send_reply(400);
 			return;
 		}
+
+		if (ns->sign_token.empty()) {
+			MDS_LOG_INFO("cannot generate downloadinfo xml without signature-token");
+			send_reply(403);
+			return;
+		}
+
 		boost::optional<ioremap::elliptics::session> session;
 		boost::optional<ioremap::elliptics::key> key;
 
@@ -512,13 +519,9 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 		oss << "<download-info>";
 		oss << "<host>" << std::get<0>(res) << "</host>";
 		oss << "<path>" << std::get<1>(res) << "</path>";
-		if (std::get<2>(res)) {
-			oss << "<ts>" << std::get<3>(res) << "</ts>";
-		}
+		oss << "<ts>" << std::get<2>(res) << "</ts>";
 		oss << "<region>-1</region>";
-		if (std::get<2>(res)) {
-			oss << "<s>" << std::get<4>(res) << "</s>";
-		}
+		oss << "<s>" << std::get<3>(res) << "</s>";
 		oss << "</download-info>";
 
 		const std::string &str = oss.str();
@@ -969,11 +972,15 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	return oss.str();
 }
 
-std::tuple<std::string, std::string, bool, size_t, std::string>
+std::tuple<std::string, std::string, size_t, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const namespace_ptr_t &ns) {
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+	if (ns->sign_token.empty()) {
+		throw std::runtime_error(
+				"cannot generate signature for elliptics file without signature-token");
+	}
 
 	std::string error_message;
 
@@ -987,11 +994,10 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 		std::string host;
 		std::string path = entry.path();
-		bool use_sign = !ns->sign_token.empty();
 		size_t ts = 0;
 		std::string sign;
 
-		if (use_sign) {
+		{
 			{
 				const auto &path_prefix = ns->sign_path_prefix;
 				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
@@ -1001,7 +1007,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 					throw std::runtime_error(oss.str());
 				}
 
-				path = '/' + path.substr(path_prefix.size());
+				path = '/' + ns->name + '/' + path.substr(path_prefix.size());
 
 				if (use_regional_host) {
 					host = x_regional_host;
@@ -1024,7 +1030,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 			}
 		}
 
-		return std::make_tuple(host, path, use_sign, ts, sign);
+		return std::make_tuple(host, path, ts, sign);
 	}
 
 	throw std::runtime_error("cannot make signature, there are no goot lookup result entry: "
