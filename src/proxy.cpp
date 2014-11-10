@@ -390,7 +390,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			const auto &json = config["timeout-coefs"];
 
 			timeout_coef.data_flow_rate = get_int(json, "data-flow-rate", 0);
-			timeout_coef.for_commit = get_int(json, "for-commit", 0);
 		}
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cache updater");
