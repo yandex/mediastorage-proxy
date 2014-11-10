@@ -295,7 +295,9 @@ upload_helper_t::write_impl(const ioremap::elliptics::data_pointer &data_pointer
 	} else {
 		size_t future_size = written_size + data_pointer.size();
 		if (future_size >= total_size) {
-			session.set_timeout(session.get_timeout() * commit_coef);
+			if (commit_coef) {
+				session.set_timeout(session.get_timeout() + total_size / commit_coef);
+			}
 			log_chunk_upload("commit", data_pointer.size());
 			return session.write_commit(key, data_pointer, offset, future_size);
 		} else {

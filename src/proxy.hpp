@@ -241,7 +241,6 @@ public:
 
 	struct {
 		int data_flow_rate;
-		int for_commit;
 	} timeout_coef;
 
 	typedef CryptoPP::HMAC<CryptoPP::SHA512> hmac_type;
