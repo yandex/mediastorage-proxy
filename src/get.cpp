@@ -135,7 +135,7 @@ private:
 			oss \
 				<< "get is finished:" \
 				<< " key=" << key.remote() \
-				<< " spent-time=" << spent_time << "us" \
+				<< " spent-time=" << spent_time << "ms" \
 				<< " status=" << STATUS \
 				<< " chunk-type="; \
 			 \
