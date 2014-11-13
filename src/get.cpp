@@ -315,6 +315,7 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 			}
 		}
 		m_session->set_groups(groups);
+		m_session->set_filter(ioremap::elliptics::filters::positive);
 	}
 
 	auto res = process_precondition_headers(tsec, total_size);
