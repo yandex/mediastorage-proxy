@@ -13,6 +13,12 @@ mediastorage-proxy (0.76.1) lucid; urgency=low
 
  -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 10 Nov 2014 16:24:36 +0400
 
+mediastorage-proxy (0.75.1) lucid; urgency=low
+
+  * MDS-375: read only positive elliptics responses
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 13 Nov 2014 13:19:19 +0400
+
 mediastorage-proxy (0.75) lucid; urgency=low
 
   * MDS-322: read recovery work with several errors

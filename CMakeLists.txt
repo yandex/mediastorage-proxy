@@ -21,6 +21,7 @@ set(REQUIRED_LIBRARIES
 	${GLIB_LIBRARY}
 	crypto++
 	curl
+	handystats
 	)
 
 set(SOURCE
