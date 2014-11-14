@@ -17,6 +17,8 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include "handystats.hpp"
+
 #include "get.hpp"
 
 #include "ranges.hpp"
@@ -207,11 +209,14 @@ private:
 
 void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		, const boost::asio::const_buffer &buffer) {
+	MDS_REQUEST_START("get", reinterpret_cast<uint64_t>(this->reply().get()));
+
 	MDS_LOG_INFO("Get: handle request");
 
 	if (http_request.method() != "HEAD" && http_request.method() != "GET") {
 		MDS_LOG_INFO("Unsupported http method\'s type: \"%s\"", http_request.method().c_str());
 		send_reply(400);
+		MDS_REQUEST_REPLY("get", 400, reinterpret_cast<uint64_t>(this->reply().get()));
 		return;
 	}
 
@@ -226,6 +231,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Get: \"%s\"", ex.what());
 		send_reply(400);
+		MDS_REQUEST_REPLY("get", 400, reinterpret_cast<uint64_t>(this->reply().get()));
 		return;
 	}
 
@@ -242,6 +248,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		headers.add("Content-Length", "0");
 		reply.set_headers(headers);
 		send_reply(std::move(reply));
+		MDS_REQUEST_REPLY("get", 401, reinterpret_cast<uint64_t>(this->reply().get()));
 
 		return;
 	}
@@ -249,6 +256,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 	if (m_session->get_groups().empty()) {
 		MDS_LOG_INFO("Get: cannot find couple of groups for the request");
 		send_reply(404);
+		MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
 		return;
 	}
 
@@ -277,9 +285,11 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 		if (error.code() == -ENOENT) {
 			MDS_LOG_INFO("Get: file not found");
 			send_reply(404);
+			MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
 		} else {
 			MDS_LOG_ERROR("Get: %s", error.message().c_str());
 			send_reply(500);
+			MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
 		}
 		return;
 	}
@@ -305,6 +315,7 @@ void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const
 			}
 		}
 		m_session->set_groups(groups);
+		m_session->set_filter(ioremap::elliptics::filters::positive);
 	}
 
 	auto res = process_precondition_headers(tsec, total_size);
@@ -406,6 +417,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 				send_whole_file = true;
 			} else {
 				send_reply(412);
+				MDS_REQUEST_REPLY("get", 412, reinterpret_cast<uint64_t>(this->reply().get()));
 				return std::make_tuple(true, false);
 			}
 		}
@@ -429,6 +441,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 				send_whole_file = true;
 			} else {
 				send_reply(412);
+				MDS_REQUEST_REPLY("get", 412, reinterpret_cast<uint64_t>(this->reply().get()));
 				return std::make_tuple(true, false);
 			}
 		}
@@ -450,6 +463,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 
 	if (has_304_headers && if_prospect_304) {
 		send_reply(304);
+		MDS_REQUEST_REPLY("get", 304, reinterpret_cast<uint64_t>(this->reply().get()));
 		return std::make_tuple(true, false);
 	}
 
@@ -460,6 +474,8 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	if (request().method() == "HEAD") {
 		prospect_http_response.headers().set_content_length(size);
 		send_reply(std::move(prospect_http_response));
+		MDS_REQUEST_REPLY("get", 200, reinterpret_cast<uint64_t>(this->reply().get()));
+		MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
 		return std::make_tuple(true, false);
 	}
 
@@ -537,6 +553,7 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 			prospect_http_response.headers().set("Content-Range"
 					, make_content_range_header(range.offset, range.size, size));
 
+			MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 			send_headers(std::move(prospect_http_response)
 					, std::function<void (const boost::system::error_code &)>());
 
@@ -588,6 +605,7 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 
 			prospect_http_response.headers().set_content_length(content_length);
 
+			MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 			send_headers(std::move(prospect_http_response)
 					, std::function<void (const boost::system::error_code &)>());
 
@@ -599,6 +617,7 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 		prospect_http_response.headers().set("Content-Range"
 				, "bytes */" + boost::lexical_cast<std::string>(size));
 
+		MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 		send_headers(std::move(prospect_http_response)
 				, std::function<void (const boost::system::error_code &)>());
 		return;
@@ -627,6 +646,7 @@ void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
 					boost::asio::buffer_cast<const char *>(buffer)
 					, boost::asio::buffer_size(buffer)));
 
+		MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 		send_headers(std::move(prospect_http_response)
 				, std::function<void (const boost::system::error_code &)>());
 	}
@@ -667,6 +687,7 @@ void req_get::on_simple_data_sent(const boost::system::error_code &error_code
 		if (chunk_type == get_helper_t::chunk_type_tag::first ||
 				chunk_type == get_helper_t::chunk_type_tag::single) {
 			send_reply(500);
+			MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
 		}
 		return;
 	}
@@ -708,10 +729,12 @@ void req_get::read_range(ranges_t ranges, std::list<std::string> ranges_headers)
 
 void req_get::on_error() {
 	send_reply(500);
+	MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
 }
 
 void req_get::on_read_is_done() {
 	reply()->close(boost::system::error_code());
+	MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
 }
 
 ioremap::elliptics::session req_get::get_session() {
