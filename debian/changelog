@@ -1,3 +1,18 @@
+mediastorage-proxy (0.76.2) lucid; urgency=low
+
+  * MDS-365: Use data-flow-rate for upload timeouts
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 10 Nov 2014 18:57:12 +0400
+
+mediastorage-proxy (0.76.1) lucid; urgency=low
+
+  * MDS-205: Added '/$namespace' into path
+    Downloadinfo path and get-redirect path have '/$namespace' as a prefix
+    (which follows after $original-host if $regional-host is used)
+    Downloadinfo responses 403 Forbidden if /signature/token is not set.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 10 Nov 2014 16:24:36 +0400
+
 mediastorage-proxy (0.75.1) lucid; urgency=low
 
   * MDS-375: read only positive elliptics responses
