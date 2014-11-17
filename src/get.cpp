@@ -501,18 +501,18 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 	const auto &headers = request().headers();
 
 	try {
-		auto res = server()->generate_signature_for_elliptics_file(slr
-				, headers.get("X-Regional-Host").get_value_or(""), ns);
-
-		if (!std::get<2>(res)) {
-			MDS_LOG_ERROR("cannot redirect without signature");
+		if (ns->sign_token.empty()) {
+			MDS_LOG_INFO("cannot redirect without signature-token");
 			return false;
 		}
+
+		auto res = server()->generate_signature_for_elliptics_file(slr
+				, headers.get("X-Regional-Host").get_value_or(""), ns);
 
 		std::stringstream oss;
 		oss
 			<< "//" << std::get<0>(res) << std::get<1>(res) << "?ts="
-			<< std::get<3>(res) << "&s=" << std::get<4>(res);
+			<< std::get<2>(res) << "&s=" << std::get<3>(res);
 
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
