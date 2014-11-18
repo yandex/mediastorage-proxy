@@ -61,7 +61,7 @@ struct request_wrapper
 {
 	template <typename... Args>
 	request_wrapper(Args&& ...args)
-		: RequestStream(args...)
+		: RequestStream(std::forward<Args>(args)...)
 	{
 	}
 
