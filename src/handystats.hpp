@@ -43,6 +43,11 @@ struct base_request_wrapper
 		m_received_bytes = 0;
 	}
 
+	virtual
+	~base_request_wrapper()
+	{
+	}
+
 	handystats::chrono::time_point m_start_timestamp;
 
 	size_t m_sent_bytes;
