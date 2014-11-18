@@ -151,7 +151,7 @@ public:
 };
 
 struct upload_simple_t
-	: public ioremap::thevoid::buffered_request_stream<proxy>
+	: public request_wrapper<ioremap::thevoid::buffered_request_stream<proxy>>
 	, public std::enable_shared_from_this<upload_simple_t>
 {
 	upload_simple_t(namespace_ptr_t ns_, couple_t couple_, std::string filename_);
@@ -191,7 +191,7 @@ private:
 };
 
 struct upload_multipart_t
-	: public ioremap::thevoid::request_stream<proxy>
+	: public request_wrapper<ioremap::thevoid::request_stream<proxy>>
 	, public std::enable_shared_from_this<upload_multipart_t>
 {
 	upload_multipart_t(namespace_ptr_t ns_, couple_t couple_);

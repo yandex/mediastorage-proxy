@@ -17,9 +17,6 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <handystats/core.hpp>
-#include <handystats/json_dump.hpp>
-
 #include "get.hpp"
 
 #include "proxy.hpp"
@@ -28,8 +25,15 @@
 
 #include "upload.hpp"
 
+#include <handystats/core.hpp>
+#include <handystats/json_dump.hpp>
+
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
+
+#include <thevoid/rapidjson/document.h>
+#include <thevoid/rapidjson/writer.h>
+#include <thevoid/rapidjson/stringbuffer.h>
 
 #include <glib.h>
 
@@ -322,6 +326,13 @@ proxy::~proxy() {
 	MDS_LOG_INFO("Mediastorage-proxy stops: mastermind");
 	m_mastermind.reset();
 	MDS_LOG_INFO("Mediastorage-proxy stops: done");
+
+	MDS_LOG_INFO("Mediastorage-proxy stops: handystats");
+	if (m_stats_logger) {
+		m_stats_logger.reset();
+	}
+	HANDY_FINALIZE();
+	MDS_LOG_INFO("Mediastorage-proxy stops: done");
 }
 
 bool proxy::initialize(const rapidjson::Value &config) {
@@ -437,15 +448,60 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 		if (config.HasMember("handystats")) {
-			HANDY_CONFIG_JSON(config["handystats"]);
+			rapidjson::StringBuffer buffer;
+			rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+			config["handystats"].Accept(writer);
 
-			if (config["handystats"].HasMember("core") &&
-					config["handystats"]["core"].HasMember("enable") &&
-					config["handystats"]["core"]["enable"].IsBool() &&
-					config["handystats"]["core"]["enable"].GetBool()
-				)
-			{
-				HANDY_INIT();
+			if (!HANDY_CONFIG_JSON(buffer.GetString())) {
+				MDS_LOG_ERROR("handystats configuration error: " + std::string(HANDY_CONFIG_ERROR()));
+			}
+			else {
+				if (config["handystats"].HasMember("enable") &&
+						config["handystats"]["enable"].IsBool() &&
+						config["handystats"]["enable"].GetBool()
+				   )
+				{
+					HANDY_INIT();
+				}
+			}
+		}
+
+		if (config.HasMember("stats-log")) {
+			const rapidjson::Value& stats_log = config["stats-log"];
+
+			std::string stats_log_path;
+			uint64_t stats_log_period_ms = 1000;
+
+			if (stats_log.HasMember("path")) {
+				if (stats_log["path"].IsString()) {
+					stats_log_path = stats_log["path"].GetString();
+				}
+				else {
+					MDS_LOG_ERROR("handystats file_logger is not started due to invalid config: 'path' is not string");
+				}
+			}
+
+			if (stats_log.HasMember("period")) {
+				if (stats_log["period"].IsUint64()) {
+					stats_log_period_ms = stats_log["period"].GetUint64();
+				}
+				else {
+					MDS_LOG_ERROR("handystats file_logger is not started due to invalid config: 'period' is not unsigned integer");
+					stats_log_period_ms = 0;
+				}
+			}
+
+			if (!stats_log_path.empty() && stats_log_period_ms > 0) {
+				m_stats_logger.reset(
+						new handystats::backends::file_logger(
+								stats_log_path,
+								handystats::chrono::milliseconds(stats_log_period_ms)
+							)
+					);
+
+				if (!m_stats_logger->run()) {
+					MDS_LOG_ERROR("handystats file_logger is not started: %s", m_stats_logger->m_error);
+				}
 			}
 		}
 

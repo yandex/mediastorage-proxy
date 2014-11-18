@@ -26,6 +26,8 @@
 #include "utils.hpp"
 #include "cdn_cache.hpp"
 
+#include <handystats/experimental/backends/file_logger.hpp>
+
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
@@ -265,6 +267,8 @@ public:
 
 		std::set<std::string> handlers;
 	} header_protector;
+
+	std::unique_ptr<handystats::backends::file_logger> m_stats_logger;
 };
 
 template <typename T>

@@ -23,85 +23,89 @@
 #include <cstdio>
 #include <string>
 
-#include <handystats/measuring_points.hpp>
-#include <handystats/module.h>
+#include <thevoid/stream.hpp>
 
-#ifndef _HAVE_HANDY_MODULE_MDS
-	#define _HAVE_HANDY_MODULE_MDS 1
-#endif
+#include <handystats/chrono.hpp>
 
-HANDY_MODULE(MDS)
-
-
-// mds.REQUEST (counter)
-//    - total number of requests
-//    - request rate
-// mds.REQUEST.time (timer)
-//    - total time spent on processing of successful (2xx) request
-//    - quantiles (25%, 50%, 75%, 90%, 95%)
-// mds.REQUEST.reply.CODE (counter)
-//    - total number of response codes (e.g., 404) and groups (e.g., 2xx) for request
-//    - response code rate for request
-// mds.REQUEST.reply.time (timer)
-//    - time spent between request and successful (2xx) response code reply
-//    - quantiles (25%, 50%, 75%, 90%, 95%)
-
+#define __HANDY_NAME_USE BOOST_PP_CAT(__C_HANDY_NAME_BUF_, __LINE__)
+#define __HANDY_NAME_SET(...) char __HANDY_NAME_USE[255]; snprintf(__HANDY_NAME_USE, (sizeof(__HANDY_NAME_USE) - 1), __VA_ARGS__)
+#define FORMATTED(MACRO, NAME_ARGS, ...) __HANDY_NAME_SET NAME_ARGS; MACRO(__HANDY_NAME_USE, ##__VA_ARGS__)
 
 namespace elliptics {
 
-// REQUEST
+struct base_request_wrapper
+{
+	base_request_wrapper()
+	{
+		m_start_timestamp = handystats::chrono::internal_clock::now();
 
-inline void MDS_REQUEST_START(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s", method.c_str());
-	MDS_COUNTER_INCREMENT(metric_name);
-
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_START(metric_name, instance_id);
-
-	sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-	MDS_TIMER_START(metric_name, instance_id);
-}
-
-inline void MDS_REQUEST_STOP(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_STOP(metric_name, instance_id);
-}
-
-inline void MDS_REQUEST_DISCARD(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_DISCARD(metric_name, instance_id);
-}
-
-
-// REPLY
-
-inline void MDS_REQUEST_REPLY(const std::string& method, const int& code, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s.reply.%d", method.c_str(), code);
-	MDS_COUNTER_INCREMENT(metric_name);
-
-	sprintf(metric_name, "mds.%s.reply.%dxx", method.c_str(), code / 100);
-	MDS_COUNTER_INCREMENT(metric_name);
-
-	if (code / 100 != 2) {
-		sprintf(metric_name, "mds.%s.time", method.c_str());
-		MDS_TIMER_DISCARD(metric_name, instance_id);
-
-		sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-		MDS_TIMER_DISCARD(metric_name, instance_id);
+		m_sent_bytes = 0;
+		m_received_bytes = 0;
 	}
-	else {
-		sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-		MDS_TIMER_STOP(metric_name, instance_id);
+
+	handystats::chrono::time_point m_start_timestamp;
+
+	size_t m_sent_bytes;
+	size_t m_received_bytes;
+
+	ioremap::thevoid::http_response m_response;
+};
+
+template <typename RequestStream>
+struct request_wrapper
+	: base_request_wrapper
+	, std::enable_if <
+		std::is_base_of<ioremap::thevoid::base_request_stream, RequestStream>::value,
+		RequestStream
+	>::type
+{
+	template <typename... Args>
+	request_wrapper(Args&& ...args)
+		: RequestStream(args...)
+	{
 	}
-}
+
+	void send_reply(ioremap::thevoid::http_response &&rep) {
+		m_response = rep;
+		RequestStream::send_reply(std::move(rep));
+	}
+
+	template <typename T>
+	void send_reply(ioremap::thevoid::http_response &&rep, T &&data) {
+		m_sent_bytes += data.size();
+		m_response = rep;
+		RequestStream::send_reply(std::move(rep), std::move(data));
+	}
+
+	void send_reply(int code) {
+		m_response.set_code(code);
+		RequestStream::send_reply(code);
+	}
+
+	void send_headers(ioremap::thevoid::http_response &&rep, typename RequestStream::result_function &&handler) {
+		m_response = rep;
+		RequestStream::send_headers(std::move(rep), std::move(handler));
+	}
+
+	template <typename T>
+	void send_headers(ioremap::thevoid::http_response &&rep, T &&data, typename RequestStream::result_function &&handler) {
+		m_sent_bytes += data.size();
+		m_response = rep;
+		RequestStream::send_headers(std::move(rep), std::move(data), std::move(handler));
+	}
+
+	void send_data(const boost::asio::const_buffer &data, typename RequestStream::result_function &&handler) {
+		m_sent_bytes += boost::asio::buffer_size(data);
+		RequestStream::send_data(data, std::move(handler));
+	}
+
+	template <typename T>
+	typename std::enable_if<!std::is_same<T, boost::asio::const_buffer>::value, void>::type
+	send_data(T &&data, typename RequestStream::result_function &&handler) {
+		m_sent_bytes += data.size();
+		RequestStream::send_data(std::move(data), std::move(handler));
+	}
+};
 
 } // namespace elliptics
 

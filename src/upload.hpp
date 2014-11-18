@@ -20,6 +20,8 @@
 #ifndef MDS_PROXY__SRC__UPLOAD__HPP
 #define MDS_PROXY__SRC__UPLOAD__HPP
 
+#include "handystats.hpp"
+
 #include "utils.hpp"
 #include "proxy.hpp"
 #include "loggers.hpp"
@@ -33,10 +35,12 @@
 namespace elliptics {
 
 class upload_t
-	: public ioremap::thevoid::request_stream<proxy>
+	: public request_wrapper<ioremap::thevoid::request_stream<proxy>>
 	, public std::enable_shared_from_this<upload_t>
 {
 public:
+	~upload_t();
+
 	void
 	on_headers(ioremap::thevoid::http_request &&http_request);
 
