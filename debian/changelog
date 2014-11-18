@@ -1,3 +1,9 @@
+mediastorage-proxy (0.76.3) lucid; urgency=low
+
+  * MDS-413: bump version for apply hotfix from MDS-375
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 18 Nov 2014 15:27:06 +0400
+
 mediastorage-proxy (0.76.2) lucid; urgency=low
 
   * MDS-365: Use data-flow-rate for upload timeouts
