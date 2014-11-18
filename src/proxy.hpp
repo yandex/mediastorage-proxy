@@ -224,6 +224,9 @@ public:
 
 	void cache_update_callback(bool cache_is_expired_);
 
+	void initialize_handystats(const rapidjson::Value &config);
+	void initialize_stats_log(const rapidjson::Value &config);
+
 private:
 public:
 	std::mutex elliptics_mutex;
