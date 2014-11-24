@@ -323,6 +323,15 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			timeout.def = 10;
 		}
 
+		if (config.HasMember("timeouts")) {
+			const auto &json_timeout = config["timeouts"];
+
+			timeout.read = get_int(json_timeout, "read", timeout.def);
+			timeout.write = get_int(json_timeout, "write", timeout.def);
+			timeout.lookup = get_int(json_timeout, "lookup", timeout.def);
+			timeout.remove = get_int(json_timeout, "remove", timeout.def);
+		}
+
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics session");
 		m_elliptics_session.reset(generate_session(*m_elliptics_node));
 
@@ -352,15 +361,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		m_die_limit = get_int(config, "die-limit", 1);
-
-		if (config.HasMember("timeouts")) {
-			const auto &json_timeout = config["timeouts"];
-
-			timeout.read = get_int(json_timeout, "read", timeout.def);
-			timeout.write = get_int(json_timeout, "write", timeout.def);
-			timeout.lookup = get_int(json_timeout, "lookup", timeout.def);
-			timeout.remove = get_int(json_timeout, "remove", timeout.def);
-		}
 
 		if (config.HasMember("header-protector")) {
 			const auto &json_hp = config["header-protector"];
