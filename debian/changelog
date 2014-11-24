@@ -1,3 +1,9 @@
+mediastorage-proxy (0.76.4) lucid; urgency=low
+
+  * Read timeouts from config before creation elliptics session
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 24 Nov 2014 19:59:31 +0400
+
 mediastorage-proxy (0.76.3) lucid; urgency=low
 
   * MDS-413: bump version for apply hotfix from MDS-375
