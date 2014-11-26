@@ -1,3 +1,11 @@
+mediastorage-proxy (0.77.1) lucid; urgency=low
+
+  * MDS-432: app's io-loops are stopped in app d-tor
+    Proxy destroys elliptics io-loop to stop handlers processing before
+    being destroyed itself
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 26 Nov 2014 14:41:02 +0400
+
 mediastorage-proxy (0.76.4) lucid; urgency=low
 
   * Read timeouts from config before creation elliptics session
