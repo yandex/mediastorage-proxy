@@ -302,6 +302,7 @@ std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &c
 }
 
 proxy::~proxy() {
+	m_elliptics_node.reset();
 	m_mastermind.reset();
 }
 
@@ -1092,7 +1093,9 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 				addresses.emplace_back(*it);
 			}
 
-			m_elliptics_node->add_remote(addresses);
+			if (m_elliptics_node) {
+				m_elliptics_node->add_remote(addresses);
+			}
 		} catch (const std::exception &ex) {
 			std::ostringstream oss;
 			oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
