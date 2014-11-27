@@ -221,7 +221,10 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	try {
+
 		ns = server()->get_namespace(http_request.url().path(), "/get");
+		// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+		// Hence session can be safely used without any check
 		auto &&prep_session = server()->prepare_session(http_request.url().path(), ns);
 		m_session = prep_session.first;
 		m_session->set_trace_bit(http_request.trace_bit());
@@ -653,18 +656,23 @@ void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
 
 	if (chunk_type == get_helper_t::chunk_type_tag::single) {
 		if (!bad_groups.empty()) {
-			{
-				std::ostringstream oss;
-				oss << "mds-proxy recovers file! groups=" << bad_groups;
-				const auto &msg = oss.str();
-				MDS_LOG_INFO("%s", msg.c_str());
+			if (auto write_session = server()->write_session(request(), bad_groups)) {
+				{
+					std::ostringstream oss;
+					oss << "mds-proxy recovers file! groups=" << bad_groups;
+					const auto &msg = oss.str();
+					MDS_LOG_INFO("%s", msg.c_str());
+				}
+
+				const auto &const_buffer = get_helper->const_buffer();
+				write_session->set_timestamp(get_helper->timestamp());
+				write_session->write_data(key, ioremap::elliptics::data_pointer::from_raw(
+							const_cast<void *>(boost::asio::buffer_cast<const void *>(const_buffer))
+							, boost::asio::buffer_size(const_buffer)), 0);
+			} else {
+				MDS_LOG_ERROR("oops, file cannot be recovered: write-session is uninitialized");
+				return;
 			}
-			const auto &const_buffer = get_helper->const_buffer();
-			auto write_session = server()->write_session(request(), bad_groups);
-			write_session.set_timestamp(get_helper->timestamp());
-			write_session.write_data(key, ioremap::elliptics::data_pointer::from_raw(
-						const_cast<void *>(boost::asio::buffer_cast<const void *>(const_buffer))
-						, boost::asio::buffer_size(const_buffer)), 0);
 		}
 	}
 
