@@ -39,9 +39,11 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 	auto query_list = http_request.url().query();
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
 
+	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+	// Hence write_session can be safely used without any check
 	upload_helper = std::make_shared<upload_helper_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, server()->write_session(http_request, couple), key
+			, *server()->write_session(http_request, couple), key
 			, *http_request.headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , ns->success_copies_num
 			);
@@ -165,11 +167,13 @@ upload_simple_t::on_error(const boost::system::error_code &error_code) {
 void
 upload_simple_t::remove_if_failed() {
 	MDS_LOG_INFO("removing key %s", key.c_str());
-	auto session = server()->remove_session(request(), couple);
-
-	auto future = session.remove(key);
-	future.connect(std::bind(&upload_simple_t::on_removed, shared_from_this()
-				, std::placeholders::_1, std::placeholders::_2));
+	if (auto session = server()->remove_session(request(), couple)) {
+		auto future = session->remove(key);
+		future.connect(std::bind(&upload_simple_t::on_removed, shared_from_this()
+					, std::placeholders::_1, std::placeholders::_2));
+	} else {
+		MDS_LOG_ERROR("cannot remove files of failed request: remove-session is uninitialized");
+	}
 }
 
 void

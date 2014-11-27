@@ -302,8 +302,26 @@ std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &c
 }
 
 proxy::~proxy() {
-	m_elliptics_node.reset();
+	MDS_LOG_INFO("Mediastorage-proxy stops");
+
+	MDS_LOG_INFO("Mediastorage-proxy stops: elliptics node");
+	{
+		std::lock_guard<std::mutex> lock(elliptics_mutex);
+		(void) lock;
+
+		m_elliptics_session.reset();
+		elliptics_read_session.reset();
+		elliptics_write_session.reset();
+		elliptics_remove_session.reset();
+		elliptics_lookup_session.reset();
+
+		m_elliptics_node.reset();
+	}
+	MDS_LOG_INFO("Mediastorage-proxy stops: done");
+
+	MDS_LOG_INFO("Mediastorage-proxy stops: mastermind");
 	m_mastermind.reset();
+	MDS_LOG_INFO("Mediastorage-proxy stops: done");
 }
 
 bool proxy::initialize(const rapidjson::Value &config) {
@@ -482,8 +500,10 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		boost::optional<ioremap::elliptics::key> key;
 
 		try {
+			// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+			// Hence session can be safely used without any check
 			auto &&prep_session = server()->prepare_session(url, ns);
-			session.reset(prep_session.first);
+			session = prep_session.first;
 			session->set_trace_bit(req.trace_bit());
 			session->set_trace_id(req.request_id());
 			key.reset(prep_session.second);
@@ -594,13 +614,19 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
 		auto session = server()->get_session();
-		session.set_trace_bit(req.trace_bit());
-		session.set_trace_id(req.request_id());
+
+		if (!session) {
+			MDS_LOG_ERROR("cannot process ping request: session is uninitialized");
+			return;
+		}
+
+		session->set_trace_bit(req.trace_bit());
+		session->set_trace_id(req.request_id());
 
 		ts_oss << "session is copied: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
 
-		auto state_num = session.state_num();
+		auto state_num = session->state_num();
 
 		ts_oss << "state_num was computed: " << std::chrono::duration_cast<std::chrono::microseconds>(
 				std::chrono::system_clock::now() - begin_request).count() << "us; ";
@@ -784,27 +810,63 @@ void proxy::req_stats::on_request(const ioremap::thevoid::http_request &req, con
 	send_reply(std::move(reply), std::move(json));
 }
 
-ioremap::elliptics::session proxy::get_session() {
+boost::optional<ioremap::elliptics::session>
+proxy::get_session() {
+	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	(void) lock;
+
+	if (!m_elliptics_session) {
+		return boost::none;
+	}
+
 	return m_elliptics_session->clone();
 }
 
-ioremap::elliptics::session
+boost::optional<ioremap::elliptics::session>
 proxy::read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	(void) lock;
+
+	if (!elliptics_read_session) {
+		return boost::none;
+	}
+
 	return setup_session(elliptics_read_session->clone(), http_request, couple);
 }
 
-ioremap::elliptics::session
+boost::optional<ioremap::elliptics::session>
 proxy::write_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	(void) lock;
+
+	if (!elliptics_write_session) {
+		return boost::none;
+	}
+
 	return setup_session(elliptics_write_session->clone(), http_request, couple);
 }
 
-ioremap::elliptics::session
+boost::optional<ioremap::elliptics::session>
 proxy::remove_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	(void) lock;
+
+	if (!elliptics_remove_session) {
+		return boost::none;
+	}
+
 	return setup_session(elliptics_remove_session->clone(), http_request, couple);
 }
 
-ioremap::elliptics::session
+boost::optional<ioremap::elliptics::session>
 proxy::lookup_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
+	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	(void) lock;
+
+	if (!elliptics_lookup_session) {
+		return boost::none;
+	}
+
 	return setup_session(elliptics_lookup_session->clone(), http_request, couple);
 }
 
@@ -906,7 +968,8 @@ std::vector<int> proxy::get_groups(int group, const std::string &filename) {
 	return res;
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(
+std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+proxy::prepare_session(
 		const ioremap::thevoid::http_request &req,
 		const std::string &handler_name) {
 	const auto &url = req.url();
@@ -915,34 +978,38 @@ std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_s
 	return prepare_session(str_url, ns);
 }
 
-std::pair<ioremap::elliptics::session, ioremap::elliptics::key> proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
+std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
 	auto session = get_session();
 
 	std::vector<int> groups;
 	std::string filename;
 
-	if (ns->static_couple.empty()) {
-		auto bg = url.find('/', 1) + 1;
-		auto eg = url.find('/', bg);
-		auto bf = eg + 1;
-		auto ef = url.find('?', bf);
-		auto g = url.substr(bg, eg - bg);
-		url.substr(bf, ef - bf).swap(filename);
+	if (session) {
+		if (ns->static_couple.empty()) {
+			auto bg = url.find('/', 1) + 1;
+			auto eg = url.find('/', bg);
+			auto bf = eg + 1;
+			auto ef = url.find('?', bf);
+			auto g = url.substr(bg, eg - bg);
+			url.substr(bf, ef - bf).swap(filename);
 
-		try {
-			auto group = boost::lexical_cast<int>(g);
-			get_groups(group, filename).swap(groups);
-		} catch (...) {
-			throw std::runtime_error("Cannot to determine groups");
+			try {
+				auto group = boost::lexical_cast<int>(g);
+				get_groups(group, filename).swap(groups);
+			} catch (...) {
+				throw std::runtime_error("Cannot to determine groups");
+			}
+		} else {
+			auto bf = url.find('/', 1) + 1;
+			auto ef = url.find('?', bf);
+			url.substr(bf, ef - bf).swap(filename);
+			groups = ns->static_couple;
 		}
-	} else {
-		auto bf = url.find('/', 1) + 1;
-		auto ef = url.find('?', bf);
-		url.substr(bf, ef - bf).swap(filename);
-		groups = ns->static_couple;
+
+		session->set_groups(groups);
 	}
 
-	session.set_groups(groups);
 	return std::make_pair(session, ioremap::elliptics::key(ns->name + '.' + filename));;
 }
 
@@ -1093,8 +1160,13 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 				addresses.emplace_back(*it);
 			}
 
-			if (m_elliptics_node) {
-				m_elliptics_node->add_remote(addresses);
+			{
+				std::lock_guard<std::mutex> lock(elliptics_mutex);
+				(void) lock;
+
+				if (m_elliptics_node) {
+					m_elliptics_node->add_remote(addresses);
+				}
 			}
 		} catch (const std::exception &ex) {
 			std::ostringstream oss;

@@ -28,8 +28,10 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 		try {
 			ns = server()->get_namespace(url_str, "/delete");
 
+			// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+			// Hence session can be safely used without any check
 			auto &&prep_session = server()->prepare_session(url_str, ns);
-			session.reset(prep_session.first);
+			session = prep_session.first;
 			session->set_trace_bit(req.trace_bit());
 			session->set_trace_id(req.request_id());
 			key = prep_session.second;

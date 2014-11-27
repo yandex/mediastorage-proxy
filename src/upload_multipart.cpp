@@ -409,7 +409,9 @@ upload_multipart_t::start_writing() {
 	}
 
 	upload_buffers.push_back(std::make_tuple(upload_buffer, current_filename));
-	upload_buffer->write(server()->write_session(http_request, couple)
+	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+	// Hence write_session can be safely used without any check
+	upload_buffer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate, ns->success_copies_num
 			, std::bind(&upload_multipart_t::on_finished
 				, shared_from_this(), std::placeholders::_1)
@@ -476,20 +478,22 @@ upload_multipart_t::send_result() {
 	if (request_is_failed_) {
 		remove_tasks_count = upload_buffers.size() + 1;
 
-		auto session = server()->remove_session(http_request, couple);
+		if (auto session = server()->remove_session(http_request, couple)) {
+			MDS_LOG_INFO("removing uploaded files");
+			for (auto it = upload_buffers.begin(), end = upload_buffers.end(); it != end; ++it) {
+				auto key = std::get<0>(*it)->upload_helper->key;
 
-		MDS_LOG_INFO("removing uploaded files");
-		for (auto it = upload_buffers.begin(), end = upload_buffers.end(); it != end; ++it) {
-			auto key = std::get<0>(*it)->upload_helper->key;
+				MDS_LOG_INFO("remove %s", key.remote().c_str());
+				auto future = session->clone().remove(key);
 
-			MDS_LOG_INFO("remove %s", key.remote().c_str());
-			auto future = session.clone().remove(key);
+				future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
+							, key.remote(), std::placeholders::_1, std::placeholders::_2));
+			}
 
-			future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
-						, key.remote(), std::placeholders::_1, std::placeholders::_2));
+			send_error();
+		} else {
+			MDS_LOG_ERROR("cannot remove files of failed request: remove-session is uninitialized");
 		}
-
-		send_error();
 
 		return;
 	}

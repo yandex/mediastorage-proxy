@@ -178,18 +178,19 @@ public:
 	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
 	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
-	ioremap::elliptics::session get_session();
+	boost::optional<ioremap::elliptics::session>
+	get_session();
 
-	ioremap::elliptics::session
+	boost::optional<ioremap::elliptics::session>
 	read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
-	ioremap::elliptics::session
+	boost::optional<ioremap::elliptics::session>
 	write_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
-	ioremap::elliptics::session
+	boost::optional<ioremap::elliptics::session>
 	remove_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
-	ioremap::elliptics::session
+	boost::optional<ioremap::elliptics::session>
 	lookup_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
 	ioremap::elliptics::session
@@ -202,8 +203,13 @@ public:
 	int die_limit() const;
 	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::thevoid::http_request &req);
 	std::vector<int> get_groups(int group, const std::string &filename);
-	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const ioremap::thevoid::http_request &req, const std::string &handler_name);
-	std::pair<ioremap::elliptics::session, ioremap::elliptics::key> prepare_session(const std::string &url, const namespace_ptr_t &ns);
+
+	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+	prepare_session(const ioremap::thevoid::http_request &req, const std::string &handler_name);
+
+	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+	prepare_session(const std::string &url, const namespace_ptr_t &ns);
+
 	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
@@ -218,6 +224,7 @@ public:
 
 private:
 public:
+	std::mutex elliptics_mutex;
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
 
