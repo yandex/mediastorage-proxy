@@ -1,3 +1,9 @@
+mediastorage-proxy (0.77.2) lucid; urgency=low
+
+  * Elliptics sessions are destroyed before node
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 27 Nov 2014 16:20:44 +0400
+
 mediastorage-proxy (0.77.1) lucid; urgency=low
 
   * MDS-432: app's io-loops are stopped in app d-tor
