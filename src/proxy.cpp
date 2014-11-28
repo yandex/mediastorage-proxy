@@ -1071,7 +1071,7 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	return oss.str();
 }
 
-std::tuple<std::string, std::string, size_t, std::string>
+std::tuple<std::string, std::string, std::chrono::microseconds::rep, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const namespace_ptr_t &ns) {
 
@@ -1118,7 +1118,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 			{
 				using namespace std::chrono;
-				ts = (duration_cast<seconds>(system_clock::now().time_since_epoch())
+				ts = (duration_cast<microseconds>(system_clock::now().time_since_epoch())
 						+ ns->redirect_expire_time).count();
 			}
 
