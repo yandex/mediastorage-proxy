@@ -135,8 +135,7 @@ std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::share
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_request &req) {
 	auto scriptname = req.url().path();
 	auto begin = scriptname.find('/', 1) + 1;
-	auto end = scriptname.find('?', begin);
-	auto filename = scriptname.substr(begin, end - begin);
+	auto filename = scriptname.substr(begin);
 
 	auto namespace_end = begin - 1;
 	auto namespace_beg = scriptname.find('-');
