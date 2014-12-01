@@ -512,7 +512,7 @@ upload_multipart_t::send_result() {
 
 		const auto &upload_helper = std::get<0>(*it)->upload_helper;
 		oss
-			<< " <post obj=\"" << upload_helper->key.remote()
+			<< " <post obj=\"" << encode_for_xml(upload_helper->key.remote())
 			<< "\" id=\"" << upload_helper->key.to_string()
 			<< "\" groups=\"" << ns->groups_count
 			<< "\" size=\"" << upload_helper->total_size
@@ -524,7 +524,7 @@ upload_multipart_t::send_result() {
 			oss << *git << '/';
 		}
 
-		oss << std::get<1>(*it) << "\">\n";
+		oss << encode_for_xml(std::get<1>(*it)) << "\">\n";
 
 		const auto &upload_result = upload_helper->upload_result();
 

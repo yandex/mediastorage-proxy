@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
+#include <string>
 
 namespace elliptics {
 
@@ -75,6 +76,9 @@ make_request_stream(Server *server
 	request_stream->initialize(reply);
 	return request_stream;
 }
+
+std::string
+encode_for_xml(const std::string &string);
 
 } // namespace elliptics
 
