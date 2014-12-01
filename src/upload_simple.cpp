@@ -95,7 +95,7 @@ upload_simple_t::on_finished() {
 	std::ostringstream oss;
 	oss 
 		<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-		<< "<post obj=\"" << upload_helper->key.remote()
+		<< "<post obj=\"" << encode_for_xml(upload_helper->key.remote())
 		<< "\" id=\"" << upload_helper->key.to_string()
 		<< "\" groups=\"" << ns->groups_count
 		<< "\" size=\"" << upload_helper->total_size
@@ -107,7 +107,7 @@ upload_simple_t::on_finished() {
 		oss << *git << '/';
 	}
 
-	oss << filename << "\">\n";
+	oss << encode_for_xml(filename) << "\">\n";
 
 	const auto &upload_result = upload_helper->upload_result();
 
