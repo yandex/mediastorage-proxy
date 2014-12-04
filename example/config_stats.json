@@ -46,31 +46,31 @@
 			],
 			"group-info-update-period" : 10
 		},
+		"stats-log": {
+			"path": "/tmp/log/mediastorage/stats.log",
+			"period": 1000
+		},
 		"handystats": {
-			"core": {
-				"enable": true
-			},
-			"metrics-dump": {
-				"interval": 500
-			},
-			"statistics": {
+			"enable": true,
+			"dump-interval": 750,
+			"defaults": {
 				"histogram-bins": 30,
 				"moving-interval": 60000,
-				"tags": []
+				"stats": []
 			},
-			"metrics": {
-				"gauge": {
-				},
-				"counter": {
-					"tags": ["rate"],
-					"rate-unit": "s"
-				},
-				"timer": {
-					"idle-timeout": 30000,
-					"tags": ["moving-avg", "quantile"]
-				}
+			"mds.{get,upload}": {
+				"moving-interval": 5000,
+				"stats": ["throughput"]
+			},
+			"mds.{get,upload}.[23]xx.time": {
+				"moving-interval": 5000,
+				"stats": ["moving-avg", "quantile"]
+			},
+			"mds.{get,upload}.[0-9]{xx,[0-9][0-9]}": {
+				"moving-interval": 5000,
+				"stats": ["throughput"]
 			}
-		}
+		},
 		"die-limit" : 1,
 		"eblob-style-path" : true,
 		"direction-bit-num" : 16,

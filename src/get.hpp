@@ -20,6 +20,8 @@
 #ifndef SRC__GET__HPP
 #define SRC__GET__HPP
 
+#include "handystats.hpp"
+
 #include "proxy.hpp"
 
 #include "ranges.hpp"
@@ -36,11 +38,14 @@ namespace elliptics {
 class get_helper_t;
 
 struct req_get
-	: public ioremap::thevoid::simple_request_stream<proxy>
+	: public request_wrapper<ioremap::thevoid::simple_request_stream<proxy>>
 	, public std::enable_shared_from_this<req_get>
 {
 	void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
+
+	~req_get();
+
 private:
 	typedef std::function<void (void)> callback_t;
 

@@ -26,6 +26,8 @@
 
 #include <swarm/url.hpp>
 
+#include <handystats/measuring_points.hpp>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -41,6 +43,34 @@
 #include <string>
 
 namespace elliptics {
+
+upload_t::~upload_t() {
+	int resp_code = m_response.code();
+	if (request_stream) {
+		resp_code =
+			static_cast<request_wrapper<base_request_stream>*>(request_stream.get())
+			->m_response
+			.code();
+	}
+
+	auto stop_timestamp = handystats::chrono::internal_clock::now();
+	auto req_duration = stop_timestamp - m_start_timestamp;
+
+	// request counters
+	FORMATTED(HANDY_GAUGE_SET, ("mds.upload"), 1);
+	FORMATTED(HANDY_GAUGE_SET, ("mds.upload.%d", resp_code), 1);
+	if (resp_code >= 100 && resp_code <= 599) {
+		FORMATTED(HANDY_GAUGE_SET, ("mds.upload.%dxx", resp_code / 100), 1);
+	}
+
+	if (resp_code >= 200 && resp_code <= 399) {
+		FORMATTED(
+				HANDY_TIMER_SET,
+				("mds.upload.%dxx.time", resp_code / 100),
+				handystats::chrono::duration::convert_to(handystats::metrics::timer::value_unit, req_duration)
+			);
+	}
+}
 
 void
 upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {

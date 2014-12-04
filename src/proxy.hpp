@@ -26,6 +26,8 @@
 #include "utils.hpp"
 #include "cdn_cache.hpp"
 
+#include <handystats/experimental/backends/file_logger.hpp>
+
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
@@ -222,6 +224,9 @@ public:
 
 	void cache_update_callback(bool cache_is_expired_);
 
+	void initialize_handystats(const rapidjson::Value &config);
+	void initialize_stats_log(const rapidjson::Value &config);
+
 private:
 public:
 	std::mutex elliptics_mutex;
@@ -265,6 +270,8 @@ public:
 
 		std::set<std::string> handlers;
 	} header_protector;
+
+	std::unique_ptr<handystats::backends::file_logger> m_stats_logger;
 };
 
 template <typename T>
