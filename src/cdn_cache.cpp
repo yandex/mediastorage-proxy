@@ -42,6 +42,10 @@ bool
 cdn_cache_t::check_host(const std::string &host) {
 	auto local_cache = copy_cache();
 
+	if (!local_cache) {
+		return false;
+	}
+
 	auto it = local_cache->find(host);
 
 	bool host_was_found = true;
