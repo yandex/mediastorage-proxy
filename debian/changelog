@@ -1,3 +1,9 @@
+mediastorage-proxy (0.78.2) lucid; urgency=low
+
+  * Cdn-cache is not used w/o initialization
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 04 Dec 2014 19:40:31 +0400
+
 mediastorage-proxy (0.78.1) lucid; urgency=low
 
   * Filenames are encoded in upload-output-xml
