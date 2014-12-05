@@ -1,3 +1,11 @@
+mediastorage-proxy (0.78.3) lucid; urgency=low
+
+  * Signature generator uses timestamp in microseconds instead of
+    seconds
+  * Pass timestamp for signature in hex
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 05 Dec 2014 19:29:00 +0400
+
 mediastorage-proxy (0.78.2) lucid; urgency=low
 
   * Cdn-cache is not used w/o initialization
