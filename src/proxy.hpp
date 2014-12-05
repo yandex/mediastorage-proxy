@@ -216,7 +216,7 @@ public:
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 
-	std::tuple<std::string, std::string, size_t, std::string>
+	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const namespace_ptr_t &ns);
 
