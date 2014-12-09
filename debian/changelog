@@ -1,3 +1,9 @@
+mediastorage-proxy (0.78.4) lucid; urgency=low
+
+  * MDS-494: hotfix computing of first-chunk-timeout
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 09 Dec 2014 18:44:50 +0400
+
 mediastorage-proxy (0.78.3) lucid; urgency=low
 
   * Signature generator uses timestamp in microseconds instead of
