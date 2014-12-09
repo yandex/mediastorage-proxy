@@ -755,7 +755,7 @@ ioremap::elliptics::session req_get::get_session() {
 
 		if (server()->timeout_coef.data_flow_rate) {
 			session.set_timeout(
-					m_session->get_timeout() + total_size / server()->timeout_coef.data_flow_rate);
+					session.get_timeout() + total_size / server()->timeout_coef.data_flow_rate);
 		}
 
 	} else {
