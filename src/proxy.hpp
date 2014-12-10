@@ -86,6 +86,29 @@ struct namespace_t {
 	int success_copies_num;
 };
 
+struct settings_t
+	: public mastermind::namespace_state_t::user_settings_t {
+	std::string name;
+	ioremap::elliptics::result_checker result_checker;
+
+	std::string auth_key_for_write;
+	std::string auth_key_for_read;
+
+	std::vector<int> static_couple;
+
+	std::string sign_token;
+	std::string sign_path_prefix;
+	std::string sign_port;
+
+	std::chrono::seconds redirect_expire_time;
+	int64_t redirect_content_length_threshold;
+
+	bool can_choose_couple_to_upload;
+	int64_t multipart_content_length_threshold;
+
+	int success_copies_num;
+};
+
 typedef std::shared_ptr<namespace_t> namespace_ptr_t;
 
 class proxy : public ioremap::thevoid::server<proxy>
@@ -221,6 +244,9 @@ public:
 		, std::string x_regional_host, const namespace_ptr_t &ns);
 
 	void cache_update_callback(bool cache_is_expired_);
+
+	mastermind::namespace_state_t::user_settings_ptr_t
+	settings_factory(const std::string &name, const kora::config_t &config);
 
 private:
 public:

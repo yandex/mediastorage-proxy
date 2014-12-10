@@ -277,9 +277,12 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	auto enqueue_timeout = get_int(mastermind, "enqueue-timeout", 4000);
 	auto reconnect_timeout = get_int(mastermind, "reconnect-timeout", 4000);
 
+	auto factory = std::bind(&proxy::settings_factory, this
+			, std::placeholders::_1, std::placeholders::_2);
+
 	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
 			group_info_update_period, cache_path, warning_time, expire_time, worker_name,
-			enqueue_timeout, reconnect_timeout);
+			enqueue_timeout, reconnect_timeout, factory);
 }
 
 std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
@@ -1179,6 +1182,81 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 		MDS_LOG_INFO("cache updater: update elliptics remotes is done");
 		MDS_LOG_INFO("cache updater is done");
 	}
+}
+
+mastermind::namespace_state_t::user_settings_ptr_t
+proxy::settings_factory(const std::string &name, const kora::config_t &config) {
+	std::unique_ptr<settings_t> settings(new settings_t);
+
+	settings->name = name;
+
+	{
+		auto scn = config.at<std::string>("success-copies-num");
+
+		if (scn == "all") {
+			settings->result_checker = ioremap::elliptics::checkers::all;
+			settings->success_copies_num = config.at<int>("groups-count");
+		} else if (scn == "quorum") {
+			settings->result_checker = ioremap::elliptics::checkers::quorum;
+			settings->success_copies_num = config.at<int>("groups-count") / 2 + 1;
+		} else if (scn == "any"){
+			settings->result_checker = ioremap::elliptics::checkers::at_least_one;
+			settings->success_copies_num = 1;
+		} else {
+			std::ostringstream oss;
+			oss
+				<< "Unknown type of success-copies-num \'" << scn << "\' in \'"
+				<< name << "\' namespace. Allowed types: any, quorum, all.";
+			throw std::runtime_error(oss.str());
+		}
+	}
+
+	settings->auth_key_for_write = config.at<std::string>("auth-key", "");
+
+	if (config.has("auth-keys")) {
+		const auto &auth_keys_config = config.at("auth-keys");
+		settings->auth_key_for_write = auth_keys_config.at<std::string>("write", "");
+		settings->auth_key_for_read = auth_keys_config.at<std::string>("read", "");
+	}
+
+	if (config.has("static-couple")) {
+		const auto &static_couple_config = config.at("static-couple");
+
+		for (size_t index = 0, size = static_couple_config.size(); index != size; ++index) {
+			settings->static_couple.emplace_back(static_couple_config.at<int>(index));
+		}
+	}
+
+	if (config.has("signature")) {
+		const auto &signature_config = config.at("signature");
+		settings->sign_token = signature_config.at<std::string>("token", "");
+		settings->sign_path_prefix = signature_config.at<std::string>("path_prefix", "");
+		settings->sign_port = signature_config.at<std::string>("port", "");
+	}
+
+	if (config.has("redirect")) {
+		const auto &redirect_config = config.at("redirect");
+		settings->redirect_expire_time = std::chrono::seconds(
+				redirect_config.at<int>("expire-time", 0));
+		settings->redirect_content_length_threshold
+			= redirect_config.at<int>("content-length-threshold", -1);
+	}
+
+	if (config.has("features")) {
+		const auto &features_config = config.at("features");
+
+		settings->can_choose_couple_to_upload
+			= features_config.at<bool>("select-couple-to-upload", false);
+
+		if (features_config.has("multipart")) {
+			const auto &multipart_features_config = features_config.at("multipart");
+
+			settings->multipart_content_length_threshold
+				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
+		}
+	}
+
+	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));
 }
 
 } // namespace elliptics
