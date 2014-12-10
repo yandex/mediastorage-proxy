@@ -305,8 +305,11 @@ proxy::~proxy() {
 
 	MDS_LOG_INFO("Mediastorage-proxy stops: elliptics node");
 	{
-		std::lock_guard<std::mutex> lock(elliptics_mutex);
-		(void) lock;
+		std::lock_guard<std::mutex> lock_node(elliptics_node_mutex);
+		(void) lock_node;
+
+		std::lock_guard<std::mutex> lock_session(elliptics_session_mutex);
+		(void) lock_session;
 
 		m_elliptics_session.reset();
 		elliptics_read_session.reset();
@@ -811,7 +814,7 @@ void proxy::req_stats::on_request(const ioremap::thevoid::http_request &req, con
 
 boost::optional<ioremap::elliptics::session>
 proxy::get_session() {
-	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	std::lock_guard<std::mutex> lock(elliptics_session_mutex);
 	(void) lock;
 
 	if (!m_elliptics_session) {
@@ -823,7 +826,7 @@ proxy::get_session() {
 
 boost::optional<ioremap::elliptics::session>
 proxy::read_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
-	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	std::lock_guard<std::mutex> lock(elliptics_session_mutex);
 	(void) lock;
 
 	if (!elliptics_read_session) {
@@ -835,7 +838,7 @@ proxy::read_session(const ioremap::thevoid::http_request &http_request, const co
 
 boost::optional<ioremap::elliptics::session>
 proxy::write_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
-	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	std::lock_guard<std::mutex> lock(elliptics_session_mutex);
 	(void) lock;
 
 	if (!elliptics_write_session) {
@@ -847,7 +850,7 @@ proxy::write_session(const ioremap::thevoid::http_request &http_request, const c
 
 boost::optional<ioremap::elliptics::session>
 proxy::remove_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
-	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	std::lock_guard<std::mutex> lock(elliptics_session_mutex);
 	(void) lock;
 
 	if (!elliptics_remove_session) {
@@ -859,7 +862,7 @@ proxy::remove_session(const ioremap::thevoid::http_request &http_request, const 
 
 boost::optional<ioremap::elliptics::session>
 proxy::lookup_session(const ioremap::thevoid::http_request &http_request, const couple_t &couple) {
-	std::lock_guard<std::mutex> lock(elliptics_mutex);
+	std::lock_guard<std::mutex> lock(elliptics_session_mutex);
 	(void) lock;
 
 	if (!elliptics_lookup_session) {
@@ -1164,7 +1167,7 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 			}
 
 			{
-				std::lock_guard<std::mutex> lock(elliptics_mutex);
+				std::lock_guard<std::mutex> lock(elliptics_node_mutex);
 				(void) lock;
 
 				if (m_elliptics_node) {

@@ -224,7 +224,8 @@ public:
 
 private:
 public:
-	std::mutex elliptics_mutex;
+	std::mutex elliptics_node_mutex;
+	std::mutex elliptics_session_mutex;
 	boost::optional<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
 
