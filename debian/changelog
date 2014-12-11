@@ -1,3 +1,10 @@
+mediastorage-proxy (0.79.1) lucid; urgency=low
+
+  * namespace_state is used instead of old libmastermind API
+  * proxy's settings are obtained via libmastermind user_settings
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 11 Dec 2014 15:08:38 +0400
+
 mediastorage-proxy (0.78.5) lucid; urgency=low
 
   * elliptics_mutex is splited to session and node mutexes
