@@ -62,17 +62,16 @@ T get_arg(const ioremap::swarm::url_query &query_list, const std::string &name, 
 
 std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess);
 
-enum tag_user_flags {
-	UF_EMBEDS = 1
-};
-
-struct namespace_t {
+struct settings_t
+	: public mastermind::namespace_state_t::user_settings_t {
 	std::string name;
-	int groups_count;
 	ioremap::elliptics::result_checker result_checker;
+
 	std::string auth_key_for_write;
 	std::string auth_key_for_read;
+
 	std::vector<int> static_couple;
+
 	std::string sign_token;
 	std::string sign_path_prefix;
 	std::string sign_port;
@@ -86,7 +85,8 @@ struct namespace_t {
 	int success_copies_num;
 };
 
-typedef std::shared_ptr<namespace_t> namespace_ptr_t;
+const settings_t &
+proxy_settings(const mastermind::namespace_state_t &ns_state);
 
 class proxy : public ioremap::thevoid::server<proxy>
 {
@@ -119,7 +119,7 @@ public:
 		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 
 	private:
-		namespace_ptr_t ns;
+		mastermind::namespace_state_t ns_state;
 		std::string x_regional_host;
 		std::string handler_name;
 	};
@@ -197,30 +197,35 @@ public:
 	setup_session(ioremap::elliptics::session session
 			, const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
-	namespace_ptr_t get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name);
-	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
-	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
+	mastermind::namespace_state_t
+	get_namespace_state(const std::string &script, const std::string &handler);
+
 	int die_limit() const;
-	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::thevoid::http_request &req);
-	std::vector<int> get_groups(int group, const std::string &filename);
 
-	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-	prepare_session(const ioremap::thevoid::http_request &req, const std::string &handler_name);
+	std::tuple<std::string, mastermind::namespace_state_t>
+	get_file_info(const ioremap::thevoid::http_request &req);
 
-	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-	prepare_session(const std::string &url, const namespace_ptr_t &ns);
+	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
 
-	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
+	std::vector<int>
+	groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size);
+
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
-	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
+
+	std::string
+	hmac(const std::string &data, const std::string &token);
 
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-		, std::string x_regional_host, const namespace_ptr_t &ns);
+		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
 
 	void cache_update_callback(bool cache_is_expired_);
+
+	mastermind::namespace_state_t::user_settings_ptr_t
+	settings_factory(const std::string &name, const kora::config_t &config);
 
 private:
 public:
@@ -235,14 +240,10 @@ public:
 	boost::optional<ioremap::elliptics::session> elliptics_lookup_session;
 
 	int m_die_limit;
-	int m_groups_count;
 	int m_write_chunk_size;
 	int m_read_chunk_size;
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::shared_ptr<cdn_cache_t> cdn_cache;
-	std::map<std::string, namespace_ptr_t> m_namespaces;
-	bool m_namespaces_auto_update;
-	std::mutex m_namespaces_mutex;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 	std::atomic<bool> cache_is_expired;
 

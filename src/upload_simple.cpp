@@ -21,11 +21,11 @@
 
 namespace elliptics {
 
-upload_simple_t::upload_simple_t(namespace_ptr_t ns_, couple_t couple_, std::string filename_)
-	: ns(std::move(ns_))
+upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_, couple_t couple_, std::string filename_)
+	: ns_state(std::move(ns_state_))
 	, couple(std::move(couple_))
 	, filename(std::move(filename_))
-	, key(ns->name + '.' + filename)
+	, key(ns_state.name() + '.' + filename)
 	, m_single_chunk(false)
 	, request_is_failed(false)
 	, reply_was_sent(false)
@@ -45,7 +45,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
 			, *server()->write_session(http_request, couple), key
 			, *http_request.headers().content_length(), offset
-			, server()->timeout_coef.data_flow_rate , ns->success_copies_num
+			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
 			);
 }
 
@@ -97,11 +97,11 @@ upload_simple_t::on_finished() {
 		<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
 		<< "<post obj=\"" << encode_for_xml(upload_helper->key.remote())
 		<< "\" id=\"" << upload_helper->key.to_string()
-		<< "\" groups=\"" << ns->groups_count
+		<< "\" groups=\"" << ns_state.settings().groups_count()
 		<< "\" size=\"" << upload_helper->total_size
 		<< "\" key=\"";
 
-	if (ns->static_couple.empty()) {
+	if (proxy_settings(ns_state).static_couple.empty()) {
 		const auto &groups = upload_helper->session.get_groups();
 		auto git = std::min_element(groups.begin(), groups.end());
 		oss << *git << '/';
