@@ -222,15 +222,15 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 
 	try {
 
-		ns = server()->get_namespace(http_request.url().path(), "/get");
+		ns_state = server()->get_namespace_state(http_request.url().path(), "/get");
 		// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 		// Hence session can be safely used without any check
-		auto &&prep_session = server()->prepare_session(http_request.url().path(), ns);
-		m_session = prep_session.first;
+		auto &&prep_session = server()->prepare_session(http_request.url().path(), ns_state);
+		m_session = std::get<0>(prep_session);
 		m_session->set_trace_bit(http_request.trace_bit());
 		m_session->set_trace_id(http_request.request_id());
 		m_session->set_timeout(server()->timeout.read);
-		key = prep_session.second.remote();
+		key = std::get<1>(prep_session).remote();
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Get: \"%s\"", ex.what());
 		send_reply(400);
@@ -238,7 +238,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
-	if (!server()->check_basic_auth(ns->name, ns->auth_key_for_read
+	if (!server()->check_basic_auth(ns_state.name(), proxy_settings(ns_state).auth_key_for_read
 				, http_request.headers().get("Authorization"))) {
 		auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
 		MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
@@ -247,7 +247,7 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		ioremap::swarm::http_headers headers;
 
 		reply.set_code(401);
-		headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+		headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns_state.name() + "\"");
 		headers.add("Content-Length", "0");
 		reply.set_headers(headers);
 		send_reply(std::move(reply));
@@ -497,20 +497,20 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 		}
 	}
 
-	if (ns->redirect_content_length_threshold > size) {
+	if (proxy_settings(ns_state).redirect_content_length_threshold > size) {
 		return false;
 	}
 
 	const auto &headers = request().headers();
 
 	try {
-		if (ns->sign_token.empty()) {
+		if (proxy_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot redirect without signature-token");
 			return false;
 		}
 
 		auto res = server()->generate_signature_for_elliptics_file(slr
-				, headers.get("X-Regional-Host").get_value_or(""), ns);
+				, headers.get("X-Regional-Host").get_value_or(""), ns_state);
 
 		std::stringstream oss;
 		oss

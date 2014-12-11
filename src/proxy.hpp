@@ -225,6 +225,10 @@ public:
 
 	namespace_ptr_t get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name);
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
+
+	mastermind::namespace_state_t
+	get_namespace_state(const std::string &script, const std::string &handler);
+
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
 	int die_limit() const;
 
@@ -239,6 +243,9 @@ public:
 	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
 	prepare_session(const std::string &url, const namespace_ptr_t &ns);
 
+	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
+
 	std::vector<int>
 	groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size);
 
@@ -247,9 +254,16 @@ public:
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 	std::string hmac(const std::string &data, const namespace_ptr_t &ns);
 
+	std::string
+	hmac(const std::string &data, const std::string &token);
+
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const namespace_ptr_t &ns);
+
+	std::tuple<std::string, std::string, std::string, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
 
 	void cache_update_callback(bool cache_is_expired_);
 

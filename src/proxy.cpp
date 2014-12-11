@@ -918,6 +918,28 @@ namespace_ptr_t proxy::get_namespace(const std::string &scriptname, const std::s
 	return it->second;
 }
 
+mastermind::namespace_state_t
+proxy::get_namespace_state(const std::string &script, const std::string &handler) {
+	if (strncmp(script.c_str(), handler.c_str(), handler.size())) {
+		throw std::runtime_error("Cannot detect namespace");
+	}
+	std::string str_namespace;
+	if (script[handler.size()] == '-') {
+		auto namespace_end = script.find('/', 1);
+		auto namespace_beg = handler.size() + 1;
+		if (namespace_beg == namespace_end) {
+			throw std::runtime_error("Cannot detect namespace");
+		}
+		script.substr(namespace_beg, namespace_end - namespace_beg).swap(str_namespace);
+	} else if (script[handler.size()] == '/'){
+		str_namespace = "default";
+	} else {
+		throw std::runtime_error("Cannot detect namespace");
+	}
+
+	return mastermind()->get_namespace_state(str_namespace);
+}
+
 elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns) {
 	return elliptics::lookup_result(entry, ns->sign_port);
 }
@@ -1018,6 +1040,43 @@ proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
 	return std::make_pair(session, ioremap::elliptics::key(ns->name + '.' + filename));;
 }
 
+std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+proxy::prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state) {
+	auto session = get_session();
+
+	std::vector<int> groups;
+	std::string filename;
+
+	if (session) {
+		if (proxy_settings(ns_state).static_couple.empty()) {
+			auto bg = url.find('/', 1) + 1;
+			auto eg = url.find('/', bg);
+			auto bf = eg + 1;
+			auto ef = url.find('?', bf);
+			auto g = url.substr(bg, eg - bg);
+			url.substr(bf, ef - bf).swap(filename);
+
+			try {
+				auto group = boost::lexical_cast<int>(g);
+				groups = ns_state.couples().get_groups(group);
+				auto cached_groups = mastermind()->get_cache_groups(filename);
+				groups.insert(groups.begin(), cached_groups.begin(), cached_groups.end());
+			} catch (...) {
+				throw std::runtime_error("Cannot to determine groups");
+			}
+		} else {
+			auto bf = url.find('/', 1) + 1;
+			auto ef = url.find('?', bf);
+			url.substr(bf, ef - bf).swap(filename);
+			groups = proxy_settings(ns_state).static_couple;
+		}
+
+		session->set_groups(groups);
+	}
+
+	return std::make_pair(session, ioremap::elliptics::key(ns_state.name() + '.' + filename));;
+}
+
 std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {
 	return m_mastermind;
 }
@@ -1064,6 +1123,23 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 	using namespace CryptoPP;
 
 	HMAC<SHA256> hmac((const byte *)ns->sign_token.data(), ns->sign_token.size());
+	hmac.Update((const byte *)data.data(), data.size());
+	std::vector<byte> res(hmac.DigestSize());
+	hmac.Final(res.data());
+
+	std::ostringstream oss;
+	oss << std::hex;
+	for (auto it = res.begin(), end = res.end(); it != end; ++it) {
+		oss << std::setfill('0') << std::setw(2) << static_cast<int>(*it);
+	}
+	return oss.str();
+}
+
+std::string
+proxy::hmac(const std::string &data, const std::string &token) {
+	using namespace CryptoPP;
+
+	HMAC<SHA256> hmac((const byte *)token.data(), token.size());
 	hmac.Update((const byte *)data.data(), data.size());
 	std::vector<byte> res(hmac.DigestSize());
 	hmac.Final(res.data());
@@ -1135,6 +1211,75 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 				std::ostringstream oss;
 				oss << host << path << '/' << ts;
 				sign = hmac(oss.str(), ns);
+			}
+		}
+
+		return std::make_tuple(host, path, ts, sign);
+	}
+
+	throw std::runtime_error("cannot make signature, there are no goot lookup result entry: "
+			+ error_message);
+}
+
+std::tuple<std::string, std::string, std::string, std::string>
+proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state) {
+
+	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+	if (proxy_settings(ns_state).sign_token.empty()) {
+		throw std::runtime_error(
+				"cannot generate signature for elliptics file without signature-token");
+	}
+
+	std::string error_message;
+
+	for (auto it = slr.begin(); it != slr.end(); ++it) {
+		if (it->error()) {
+			error_message = it->error().message();
+			continue;
+		}
+
+		lookup_result entry(*it, proxy_settings(ns_state).sign_port);
+
+		std::string host;
+		std::string path = entry.path();
+		std::string ts;
+		std::string sign;
+
+		{
+			{
+				const auto &path_prefix = proxy_settings(ns_state).sign_path_prefix;
+				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
+					std::ostringstream oss;
+					oss
+						<< "path_prefix does not match: prefix=" << path_prefix << "path=" << path;
+					throw std::runtime_error(oss.str());
+				}
+
+				path = '/' + ns_state.name() + '/' + path.substr(path_prefix.size());
+
+				if (use_regional_host) {
+					host = x_regional_host;
+					path = '/' + entry.host() + path;
+				} else {
+					host = entry.host();
+				}
+			}
+
+			{
+				using namespace std::chrono;
+				std::ostringstream ts_oss;
+				ts_oss
+					<< std::hex
+					<< (duration_cast<microseconds>(system_clock::now().time_since_epoch())
+							+ proxy_settings(ns_state).redirect_expire_time).count();
+				ts = ts_oss.str();
+			}
+
+			{
+				std::ostringstream oss;
+				oss << host << path << '/' << ts;
+				sign = hmac(oss.str(), proxy_settings(ns_state).sign_token);
 			}
 		}
 

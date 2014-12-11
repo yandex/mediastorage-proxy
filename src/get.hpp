@@ -70,7 +70,7 @@ private:
 	ioremap::thevoid::http_response prospect_http_response;
 
 	boost::optional<ioremap::elliptics::session> m_session;
-	namespace_ptr_t ns;
+	mastermind::namespace_state_t ns_state;
 	std::string key;
 
 	size_t total_size;
