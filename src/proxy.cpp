@@ -774,16 +774,16 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 
 void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		namespace_ptr_t ns;
+		mastermind::namespace_state_t ns_state;
 		try {
-			ns = server()->get_namespace(req, "/statistics");
+			ns_state = server()->get_namespace_state(req.url().path(), "/statistics");
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Statistics: Cannot find namespace: %s", ex.what());
 			send_reply(404);
 			return;
 		}
 
-		auto json = server()->mastermind()->json_namespace_statistics(ns->name);
+		auto json = server()->mastermind()->json_namespace_statistics(ns_state.name());
 
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
