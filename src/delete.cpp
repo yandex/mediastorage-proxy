@@ -23,25 +23,27 @@ namespace elliptics {
 void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		MDS_LOG_INFO("Delete: handle request: %s", req.url().path().c_str());
-		namespace_ptr_t ns;
+		mastermind::namespace_state_t ns_state;
 		url_str = req.url().path();
 		try {
-			ns = server()->get_namespace(url_str, "/delete");
+			ns_state = server()->get_namespace_state(url_str, "/delete");
 
 			// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 			// Hence session can be safely used without any check
-			auto &&prep_session = server()->prepare_session(url_str, ns);
-			session = prep_session.first;
+			auto &&prep_session = server()->prepare_session(url_str, ns_state);
+			session = std::get<0>(prep_session);
 			session->set_trace_bit(req.trace_bit());
 			session->set_trace_id(req.request_id());
-			key = prep_session.second;
+			key = std::get<1>(prep_session);
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Delete: request = \"%s\", err = \"%s\"", url_str.c_str(), ex.what());
 			send_reply(400);
 			return;
 		}
 
-		if (!server()->check_basic_auth(ns->name, ns->auth_key_for_write, req.headers().get("Authorization"))) {
+		if (!server()->check_basic_auth(ns_state.name()
+					, proxy_settings(ns_state).auth_key_for_write
+					, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
 			MDS_LOG_INFO("%s: invalid token \"%s\"", url_str.c_str()
 					, token.empty() ? "<none>" : token.c_str());
@@ -49,7 +51,7 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
-			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns_state.name() + "\"");
 			headers.add("Content-Length", "0");
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
