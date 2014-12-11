@@ -109,6 +109,9 @@ struct settings_t
 	int success_copies_num;
 };
 
+const settings_t &
+proxy_settings(const mastermind::namespace_state_t &ns_state);
+
 typedef std::shared_ptr<namespace_t> namespace_ptr_t;
 
 class proxy : public ioremap::thevoid::server<proxy>
@@ -224,7 +227,10 @@ public:
 	namespace_ptr_t get_namespace(const std::string &scriptname, const std::string &handler_name);
 	elliptics::lookup_result parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns);
 	int die_limit() const;
-	std::pair<std::string, elliptics::namespace_ptr_t> get_file_info(const ioremap::thevoid::http_request &req);
+
+	std::tuple<std::string, mastermind::namespace_state_t>
+	get_file_info(const ioremap::thevoid::http_request &req);
+
 	std::vector<int> get_groups(int group, const std::string &filename);
 
 	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
@@ -233,7 +239,9 @@ public:
 	std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
 	prepare_session(const std::string &url, const namespace_ptr_t &ns);
 
-	std::vector<int> groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size);
+	std::vector<int>
+	groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size);
+
     std::shared_ptr<mastermind::mastermind_t> &mastermind();
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);

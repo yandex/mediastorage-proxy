@@ -169,6 +169,11 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	return std::string(str);
 }
 
+const settings_t &
+proxy_settings(const mastermind::namespace_state_t &ns_state) {
+	return static_cast<const settings_t &>(ns_state.settings().user_settings());
+}
+
 ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
@@ -921,18 +926,16 @@ int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size) {
-	if (!name_space->static_couple.empty())
-		return name_space->static_couple;
-	return m_mastermind->get_metabalancer_groups(name_space->groups_count, name_space->name, size);
+std::vector<int> proxy::groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size) {
+	if (!proxy_settings(ns_state).static_couple.empty())
+		return proxy_settings(ns_state).static_couple;
+	return ns_state.weights().groups(size);
 }
 
-std::pair<std::string, namespace_ptr_t> proxy::get_file_info(const ioremap::thevoid::http_request &req) {
+std::tuple<std::string, mastermind::namespace_state_t>
+proxy::get_file_info(const ioremap::thevoid::http_request &req) {
 	auto p = get_filename(req);
-	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-	auto it = m_namespaces.find(p.second);
-	auto nm = (it != m_namespaces.end() ? it->second : std::make_shared<elliptics::namespace_t>());
-	return std::make_pair(p.first, nm);
+	return std::make_tuple(p.first, mastermind()->get_namespace_state(p.second));
 }
 
 std::vector<int> proxy::get_groups(int group, const std::string &filename) {
