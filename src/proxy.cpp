@@ -490,14 +490,14 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		MDS_LOG_INFO("Download info: handle request: %s", req.url().path().c_str());
 		const auto &url = req.url().path();
 		try {
-			ns = server()->get_namespace(url, handler_name);
+			ns_state = server()->get_namespace_state(url, handler_name);
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Download info: request = \"%s\"; err: \"%s\"", url.c_str(), ex.what());
 			send_reply(400);
 			return;
 		}
 
-		if (ns->sign_token.empty()) {
+		if (proxy_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot generate downloadinfo xml without signature-token");
 			send_reply(403);
 			return;
@@ -509,11 +509,11 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		try {
 			// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 			// Hence session can be safely used without any check
-			auto &&prep_session = server()->prepare_session(url, ns);
-			session = prep_session.first;
+			auto &&prep_session = server()->prepare_session(url, ns_state);
+			session = std::get<0>(prep_session);
 			session->set_trace_bit(req.trace_bit());
 			session->set_trace_id(req.request_id());
-			key.reset(prep_session.second);
+			key.reset(std::get<1>(prep_session));
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Download info request error: %s", ex.what());
 			send_reply(400);
@@ -557,7 +557,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns);
+		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns_state);
 
 		std::stringstream oss;
 		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";

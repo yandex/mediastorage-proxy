@@ -145,7 +145,7 @@ public:
 		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
 
 	private:
-		namespace_ptr_t ns;
+		mastermind::namespace_state_t ns_state;
 		std::string x_regional_host;
 		std::string handler_name;
 	};
