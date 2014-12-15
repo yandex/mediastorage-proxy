@@ -22,6 +22,7 @@ set(REQUIRED_LIBRARIES
 	crypto++
 	curl
 	handystats
+	kora-util
 	)
 
 set(SOURCE

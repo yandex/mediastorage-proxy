@@ -154,7 +154,8 @@ struct upload_simple_t
 	: public ioremap::thevoid::buffered_request_stream<proxy>
 	, public std::enable_shared_from_this<upload_simple_t>
 {
-	upload_simple_t(namespace_ptr_t ns_, couple_t couple_, std::string filename_);
+	upload_simple_t(mastermind::namespace_state_t ns_state_
+			, couple_t couple_, std::string filename_);
 
 	void
 	on_request(const ioremap::thevoid::http_request &http_request);
@@ -176,7 +177,7 @@ struct upload_simple_t
 			, const ioremap::elliptics::error_info &error_info);
 
 private:
-	namespace_ptr_t ns;
+	mastermind::namespace_state_t ns_state;
 	couple_t couple;
 	std::string filename;
 	std::string key;
@@ -194,7 +195,7 @@ struct upload_multipart_t
 	: public ioremap::thevoid::request_stream<proxy>
 	, public std::enable_shared_from_this<upload_multipart_t>
 {
-	upload_multipart_t(namespace_ptr_t ns_, couple_t couple_);
+	upload_multipart_t(mastermind::namespace_state_t ns_state_, couple_t couple_);
 
 	void
 	on_headers(ioremap::thevoid::http_request &&http_request_);
@@ -287,7 +288,7 @@ private:
 	void start_writing();
 
 	ioremap::thevoid::http_request http_request;
-	namespace_ptr_t ns;
+	mastermind::namespace_state_t ns_state;
 	couple_t couple;
 
 	std::string boundary;

@@ -166,8 +166,8 @@ upload_multipart_t::multipart_context_t::reset() {
 	is_interrupted = false;
 }
 
-upload_multipart_t::upload_multipart_t(namespace_ptr_t ns_, couple_t couple_)
-	: ns(std::move(ns_))
+upload_multipart_t::upload_multipart_t(mastermind::namespace_state_t ns_state_, couple_t couple_)
+	: ns_state(std::move(ns_state_))
 	, couple(std::move(couple_))
 	, request_is_failed(false)
 	, upload_tasks_count(1)
@@ -317,7 +317,7 @@ upload_multipart_t::sm_headers() {
 	current_filename = name;
 	upload_buffer = std::make_shared<upload_buffer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, ns->name + '.' + name, server()->m_write_chunk_size
+			, ns_state.name() + '.' + name, server()->m_write_chunk_size
 			);
 
 	multipart_context.state = multipart_state_tag::body;
@@ -412,7 +412,7 @@ upload_multipart_t::start_writing() {
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
 	upload_buffer->write(*server()->write_session(http_request, couple)
-			, server()->timeout_coef.data_flow_rate, ns->success_copies_num
+			, server()->timeout_coef.data_flow_rate, proxy_settings(ns_state).success_copies_num
 			, std::bind(&upload_multipart_t::on_finished
 				, shared_from_this(), std::placeholders::_1)
 			, std::bind(&upload_multipart_t::on_internal_error, shared_from_this()));
@@ -514,11 +514,11 @@ upload_multipart_t::send_result() {
 		oss
 			<< " <post obj=\"" << encode_for_xml(upload_helper->key.remote())
 			<< "\" id=\"" << upload_helper->key.to_string()
-			<< "\" groups=\"" << ns->groups_count
+			<< "\" groups=\"" << ns_state.settings().groups_count()
 			<< "\" size=\"" << upload_helper->total_size
 			<< "\" key=\"";
 
-		if (ns->static_couple.empty()) {
+		if (proxy_settings(ns_state).static_couple.empty()) {
 			const auto &groups = upload_helper->session.get_groups();
 			auto git = std::min_element(groups.begin(), groups.end());
 			oss << *git << '/';

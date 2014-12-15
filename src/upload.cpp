@@ -74,16 +74,17 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	auto file_info = server()->get_file_info(http_request);
 
-	auto ns = file_info.second;
+	auto ns_state = std::get<1>(file_info);
 
-	if (ns->name.empty()) {
+	if (!ns_state) {
 		MDS_LOG_INFO("cannot determine a namespace");
 		send_reply(400);
 		return;
 	}
 
 	{
-		if (!server()->check_basic_auth(ns->name, ns->auth_key_for_write
+		if (!server()->check_basic_auth(ns_state.name()
+					, proxy_settings(ns_state).auth_key_for_write
 					, http_request.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
 			MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
@@ -92,7 +93,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			ioremap::swarm::http_headers headers;
 
 			reply.set_code(401);
-			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns->name + "\"");
+			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns_state.name() + "\"");
 			headers.set_content_length(0);
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
@@ -103,7 +104,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 	couple_t couple;
 
 	if (auto arg = http_request.url().query().item_value("couple_id")) {
-		if (!ns->can_choose_couple_to_upload) {
+		if (!proxy_settings(ns_state).can_choose_couple_to_upload) {
 			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
 			send_reply(403);
 			return;
@@ -119,7 +120,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			return;
 		}
 
-		couple = server()->mastermind()->get_couple(couple_id, ns->name);
+		couple = ns_state.couples().get_couple_groups(couple_id);
 
 		if (couple.empty()) {
 			MDS_LOG_INFO("cannot obtain couple by couple_id: %d", couple_id);
@@ -133,7 +134,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			return;
 		}
 
-		auto space = server()->mastermind()->free_effective_space_in_couple_by_group(couple_id);
+		auto space = ns_state.couples().free_effective_space(couple_id);
 
 		if (space < total_size) {
 			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
@@ -150,15 +151,17 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	} else {
 		try {
-			couple = server()->groups_for_upload(ns, total_size);
+			couple = server()->groups_for_upload(ns_state, total_size);
 		} catch (const mastermind::not_enough_memory_error &e) {
 			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-				, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
+				, static_cast<int>(ns_state.settings().groups_count())
+				, ns_state.name().c_str(), e.code().message().c_str());
 			send_reply(507);
 			return;
 		} catch (const std::system_error &e) {
 			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-				, static_cast<int>(ns->groups_count), ns->name.c_str(), e.code().message().c_str());
+				, static_cast<int>(ns_state.settings().groups_count())
+				, ns_state.name().c_str(), e.code().message().c_str());
 			send_reply(500);
 			return;
 		}
@@ -169,7 +172,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 				, "multipart/form-data;");
 
 		if (!res) {
-			auto size = ns->multipart_content_length_threshold;
+			auto size = proxy_settings(ns_state).multipart_content_length_threshold;
 
 			if (size != -1 && size < total_size) {
 				MDS_LOG_INFO(
@@ -181,13 +184,13 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			}
 
 			request_stream = make_request_stream<upload_multipart_t>(server(), reply()
-					, std::move(ns), std::move(couple));
+					, std::move(ns_state), std::move(couple));
 		}
 	}
 
 	if (!request_stream) {
 		request_stream = make_request_stream<upload_simple_t>(server(), reply()
-				, std::move(ns), std::move(couple), std::move(file_info.first));
+				, std::move(ns_state), std::move(couple), std::move(std::get<0>(file_info)));
 	}
 
 	request_stream->on_headers(std::move(http_request));

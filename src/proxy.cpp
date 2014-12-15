@@ -86,52 +86,6 @@ ioremap::elliptics::session generate_session(const ioremap::elliptics::node &nod
 	return session;
 }
 
-std::map<std::string, elliptics::namespace_ptr_t> generate_namespaces(std::shared_ptr<mastermind::mastermind_t> &m_mastermind) {
-	std::map<std::string, elliptics::namespace_ptr_t> res;
-	auto nms = m_mastermind->get_namespaces_settings();
-
-	for (auto it = nms.begin(); it != nms.end(); ++it) {
-		elliptics::namespace_t item;
-
-		item.name = it->name();
-		item.groups_count = it->groups_count();
-		item.auth_key_for_write = it->auth_key_for_write();
-		item.auth_key_for_read = it->auth_key_for_read();
-		item.static_couple = it->static_couple();
-		item.sign_token = it->sign_token();
-		item.sign_path_prefix = it->sign_path_prefix();
-		item.sign_port = it->sign_port();
-
-		item.redirect_expire_time = std::chrono::seconds(it->redirect_expire_time());
-		item.redirect_content_length_threshold = it->redirect_content_length_threshold();
-
-		item.can_choose_couple_to_upload = it->can_choose_couple_to_upload();
-		item.multipart_content_length_threshold = it->multipart_content_length_threshold();
-
-		const std::string &scn = it->success_copies_num();
-
-		if (scn == "all") {
-			item.result_checker = ioremap::elliptics::checkers::all;
-			item.success_copies_num = item.groups_count;
-		} else if (scn == "quorum") {
-			item.result_checker = ioremap::elliptics::checkers::quorum;
-			item.success_copies_num = item.groups_count / 2 + 1;
-		} else if (scn == "any"){
-			item.result_checker = ioremap::elliptics::checkers::at_least_one;
-			item.success_copies_num = 1;
-		} else {
-			std::ostringstream oss;
-			oss << "Unknown type of success-copies-num \'" << scn << "\' in \'" << item.name << "\' namespace. Allowed types: any, quorum, all.";
-			throw std::runtime_error(oss.str());
-		}
-
-		res.insert(std::map<std::string, elliptics::namespace_ptr_t>::value_type(
-			item.name, std::make_shared<elliptics::namespace_t>(item)));
-	}
-
-	return res;
-}
-
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_request &req) {
 	auto scriptname = req.url().path();
 	auto begin = scriptname.find('/', 1) + 1;
@@ -167,6 +121,11 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	char str[2 * DNET_ID_SIZE + 1];
 	dnet_dump_id_len_raw(id.id, DNET_ID_SIZE, str);
 	return std::string(str);
+}
+
+const settings_t &
+proxy_settings(const mastermind::namespace_state_t &ns_state) {
+	return static_cast<const settings_t &>(ns_state.settings().user_settings());
 }
 
 ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
@@ -277,9 +236,12 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	auto enqueue_timeout = get_int(mastermind, "enqueue-timeout", 4000);
 	auto reconnect_timeout = get_int(mastermind, "reconnect-timeout", 4000);
 
+	auto factory = std::bind(&proxy::settings_factory, this
+			, std::placeholders::_1, std::placeholders::_2);
+
 	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
 			group_info_update_period, cache_path, warning_time, expire_time, worker_name,
-			enqueue_timeout, reconnect_timeout);
+			enqueue_timeout, reconnect_timeout, factory);
 }
 
 std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
@@ -421,10 +383,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 					std::placeholders::_1));
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
-		MDS_LOG_INFO("Mediastorage-proxy starts: initialize namespaces");
-		m_namespaces = generate_namespaces(m_mastermind);
-		MDS_LOG_INFO("Mediastorage-proxy starts: done");
-
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
 		}
@@ -485,14 +443,14 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		MDS_LOG_INFO("Download info: handle request: %s", req.url().path().c_str());
 		const auto &url = req.url().path();
 		try {
-			ns = server()->get_namespace(url, handler_name);
+			ns_state = server()->get_namespace_state(url, handler_name);
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Download info: request = \"%s\"; err: \"%s\"", url.c_str(), ex.what());
 			send_reply(400);
 			return;
 		}
 
-		if (ns->sign_token.empty()) {
+		if (proxy_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot generate downloadinfo xml without signature-token");
 			send_reply(403);
 			return;
@@ -504,11 +462,11 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		try {
 			// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 			// Hence session can be safely used without any check
-			auto &&prep_session = server()->prepare_session(url, ns);
-			session = prep_session.first;
+			auto &&prep_session = server()->prepare_session(url, ns_state);
+			session = std::get<0>(prep_session);
 			session->set_trace_bit(req.trace_bit());
 			session->set_trace_id(req.request_id());
-			key.reset(prep_session.second);
+			key.reset(std::get<1>(prep_session));
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Download info request error: %s", ex.what());
 			send_reply(400);
@@ -552,7 +510,7 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns);
+		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns_state);
 
 		std::stringstream oss;
 		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
@@ -769,16 +727,16 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 
 void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		namespace_ptr_t ns;
+		mastermind::namespace_state_t ns_state;
 		try {
-			ns = server()->get_namespace(req, "/statistics");
+			ns_state = server()->get_namespace_state(req.url().path(), "/statistics");
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("Statistics: Cannot find namespace: %s", ex.what());
 			send_reply(404);
 			return;
 		}
 
-		auto json = server()->mastermind()->json_namespace_statistics(ns->name);
+		auto json = server()->mastermind()->json_namespace_statistics(ns_state.name());
 
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
@@ -881,114 +839,53 @@ proxy::setup_session(ioremap::elliptics::session session
 	return session;
 }
 
-namespace_ptr_t proxy::get_namespace(const ioremap::thevoid::http_request &req, const std::string &handler_name) {
-	const auto &url = req.url();
-	return get_namespace(url.path(), handler_name);
-}
-
-namespace_ptr_t proxy::get_namespace(const std::string &scriptname, const std::string &handler_name) {
-	if (strncmp(scriptname.c_str(), handler_name.c_str(), handler_name.size())) {
+mastermind::namespace_state_t
+proxy::get_namespace_state(const std::string &script, const std::string &handler) {
+	if (strncmp(script.c_str(), handler.c_str(), handler.size())) {
 		throw std::runtime_error("Cannot detect namespace");
 	}
 	std::string str_namespace;
-	if (scriptname[handler_name.size()] == '-') {
-		auto namespace_end = scriptname.find('/', 1);
-		auto namespace_beg = handler_name.size() + 1;
+	if (script[handler.size()] == '-') {
+		auto namespace_end = script.find('/', 1);
+		auto namespace_beg = handler.size() + 1;
 		if (namespace_beg == namespace_end) {
 			throw std::runtime_error("Cannot detect namespace");
 		}
-		scriptname.substr(namespace_beg, namespace_end - namespace_beg).swap(str_namespace);
-	} else if (scriptname[handler_name.size()] == '/'){
+		script.substr(namespace_beg, namespace_end - namespace_beg).swap(str_namespace);
+	} else if (script[handler.size()] == '/'){
 		str_namespace = "default";
 	} else {
 		throw std::runtime_error("Cannot detect namespace");
 	}
 
-	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-	auto it = m_namespaces.find(str_namespace);
-	if (it == m_namespaces.end()) {
-		throw std::runtime_error("Cannot detect namespace");
-	}
-
-	return it->second;
-}
-
-elliptics::lookup_result proxy::parse_lookup(const ioremap::elliptics::lookup_result_entry &entry, const namespace_ptr_t &ns) {
-	return elliptics::lookup_result(entry, ns->sign_port);
+	return mastermind()->get_namespace_state(str_namespace);
 }
 
 int proxy::die_limit() const {
 	return m_die_limit;
 }
 
-std::vector<int> proxy::groups_for_upload(const elliptics::namespace_ptr_t &name_space, uint64_t size) {
-	if (!name_space->static_couple.empty())
-		return name_space->static_couple;
-	return m_mastermind->get_metabalancer_groups(name_space->groups_count, name_space->name, size);
+std::vector<int> proxy::groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size) {
+	if (!proxy_settings(ns_state).static_couple.empty())
+		return proxy_settings(ns_state).static_couple;
+	return ns_state.weights().groups(size);
 }
 
-std::pair<std::string, namespace_ptr_t> proxy::get_file_info(const ioremap::thevoid::http_request &req) {
+std::tuple<std::string, mastermind::namespace_state_t>
+proxy::get_file_info(const ioremap::thevoid::http_request &req) {
 	auto p = get_filename(req);
-	std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-	auto it = m_namespaces.find(p.second);
-	auto nm = (it != m_namespaces.end() ? it->second : std::make_shared<elliptics::namespace_t>());
-	return std::make_pair(p.first, nm);
+	return std::make_tuple(p.first, mastermind()->get_namespace_state(p.second));
 }
 
-std::vector<int> proxy::get_groups(int group, const std::string &filename) {
-	std::vector<int> res;
-
-	try {
-		std::vector<int> vec_groups1;
-		std::vector<int> vec_groups2;
-		m_mastermind->get_symmetric_groups(group).swap(vec_groups1);
-		m_mastermind->get_cache_groups(filename).swap(vec_groups2);
-		vec_groups1.reserve(vec_groups2.size());
-		vec_groups1.insert(vec_groups1.end(), vec_groups2.begin(), vec_groups2.end());
-		res.swap(vec_groups1);
-	} catch (...) {
-		MDS_LOG_ERROR("Cannot to determine groups");
-	}
-
-	// TODO: if (m_proxy_logger->level() >= ioremap::swarm::SWARM_LOG_INFO)
-	{
-		std::ostringstream oss;
-
-		auto &groups = res;
-		oss << "Fetched groups for request: [";
-		for (auto it = groups.begin(); it != groups.end(); ++it) {
-			if (it != groups.begin())
-				oss << ", ";
-			oss << *it;
-		}
-		oss << "]";
-
-		MDS_LOG_INFO("%s", oss.str().c_str());
-		MDS_LOG_INFO("filename: %s", filename.c_str());
-	}
-
-	return res;
-}
-
-std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-proxy::prepare_session(
-		const ioremap::thevoid::http_request &req,
-		const std::string &handler_name) {
-	const auto &url = req.url();
-	const auto &str_url = url.path();
-	const auto &ns = get_namespace(str_url, handler_name);
-	return prepare_session(str_url, ns);
-}
-
-std::pair<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
+std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+proxy::prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state) {
 	auto session = get_session();
 
 	std::vector<int> groups;
 	std::string filename;
 
 	if (session) {
-		if (ns->static_couple.empty()) {
+		if (proxy_settings(ns_state).static_couple.empty()) {
 			auto bg = url.find('/', 1) + 1;
 			auto eg = url.find('/', bg);
 			auto bf = eg + 1;
@@ -998,7 +895,9 @@ proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
 
 			try {
 				auto group = boost::lexical_cast<int>(g);
-				get_groups(group, filename).swap(groups);
+				groups = ns_state.couples().get_groups(group);
+				auto cached_groups = mastermind()->get_cache_groups(filename);
+				groups.insert(groups.begin(), cached_groups.begin(), cached_groups.end());
 			} catch (...) {
 				throw std::runtime_error("Cannot to determine groups");
 			}
@@ -1006,13 +905,13 @@ proxy::prepare_session(const std::string &url, const namespace_ptr_t &ns) {
 			auto bf = url.find('/', 1) + 1;
 			auto ef = url.find('?', bf);
 			url.substr(bf, ef - bf).swap(filename);
-			groups = ns->static_couple;
+			groups = proxy_settings(ns_state).static_couple;
 		}
 
 		session->set_groups(groups);
 	}
 
-	return std::make_pair(session, ioremap::elliptics::key(ns->name + '.' + filename));;
+	return std::make_pair(session, ioremap::elliptics::key(ns_state.name() + '.' + filename));;
 }
 
 std::shared_ptr<mastermind::mastermind_t> &proxy::mastermind() {
@@ -1057,10 +956,11 @@ bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key,
 	return !result;
 }
 
-std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
+std::string
+proxy::hmac(const std::string &data, const std::string &token) {
 	using namespace CryptoPP;
 
-	HMAC<SHA256> hmac((const byte *)ns->sign_token.data(), ns->sign_token.size());
+	HMAC<SHA256> hmac((const byte *)token.data(), token.size());
 	hmac.Update((const byte *)data.data(), data.size());
 	std::vector<byte> res(hmac.DigestSize());
 	hmac.Final(res.data());
@@ -1075,10 +975,10 @@ std::string proxy::hmac(const std::string &data, const namespace_ptr_t &ns) {
 
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-		, std::string x_regional_host, const namespace_ptr_t &ns) {
+	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state) {
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
-	if (ns->sign_token.empty()) {
+	if (proxy_settings(ns_state).sign_token.empty()) {
 		throw std::runtime_error(
 				"cannot generate signature for elliptics file without signature-token");
 	}
@@ -1091,7 +991,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 			continue;
 		}
 
-		auto entry = parse_lookup(*it, ns);
+		lookup_result entry(*it, proxy_settings(ns_state).sign_port);
 
 		std::string host;
 		std::string path = entry.path();
@@ -1100,7 +1000,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 		{
 			{
-				const auto &path_prefix = ns->sign_path_prefix;
+				const auto &path_prefix = proxy_settings(ns_state).sign_path_prefix;
 				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
 					std::ostringstream oss;
 					oss
@@ -1108,7 +1008,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 					throw std::runtime_error(oss.str());
 				}
 
-				path = '/' + ns->name + '/' + path.substr(path_prefix.size());
+				path = '/' + ns_state.name() + '/' + path.substr(path_prefix.size());
 
 				if (use_regional_host) {
 					host = x_regional_host;
@@ -1124,14 +1024,14 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 				ts_oss
 					<< std::hex
 					<< (duration_cast<microseconds>(system_clock::now().time_since_epoch())
-							+ ns->redirect_expire_time).count();
+							+ proxy_settings(ns_state).redirect_expire_time).count();
 				ts = ts_oss.str();
 			}
 
 			{
 				std::ostringstream oss;
 				oss << host << path << '/' << ts;
-				sign = hmac(oss.str(), ns);
+				sign = hmac(oss.str(), proxy_settings(ns_state).sign_token);
 			}
 		}
 
@@ -1149,13 +1049,6 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 
 	if (m) {
 		MDS_LOG_INFO("cache updater: starts");
-		{
-			MDS_LOG_INFO("cache updater: update namespaces");
-			auto namespaces = generate_namespaces(m);
-			std::lock_guard<std::mutex> lock(m_namespaces_mutex);
-			m_namespaces.swap(namespaces);
-			MDS_LOG_INFO("cache updater: update namespaces is done");
-		}
 
 		MDS_LOG_INFO("cache updater: update elliptics remotes");
 		try {
@@ -1182,6 +1075,81 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 		MDS_LOG_INFO("cache updater: update elliptics remotes is done");
 		MDS_LOG_INFO("cache updater is done");
 	}
+}
+
+mastermind::namespace_state_t::user_settings_ptr_t
+proxy::settings_factory(const std::string &name, const kora::config_t &config) {
+	std::unique_ptr<settings_t> settings(new settings_t);
+
+	settings->name = name;
+
+	{
+		auto scn = config.at<std::string>("success-copies-num");
+
+		if (scn == "all") {
+			settings->result_checker = ioremap::elliptics::checkers::all;
+			settings->success_copies_num = config.at<int>("groups-count");
+		} else if (scn == "quorum") {
+			settings->result_checker = ioremap::elliptics::checkers::quorum;
+			settings->success_copies_num = config.at<int>("groups-count") / 2 + 1;
+		} else if (scn == "any"){
+			settings->result_checker = ioremap::elliptics::checkers::at_least_one;
+			settings->success_copies_num = 1;
+		} else {
+			std::ostringstream oss;
+			oss
+				<< "Unknown type of success-copies-num \'" << scn << "\' in \'"
+				<< name << "\' namespace. Allowed types: any, quorum, all.";
+			throw std::runtime_error(oss.str());
+		}
+	}
+
+	settings->auth_key_for_write = config.at<std::string>("auth-key", "");
+
+	if (config.has("auth-keys")) {
+		const auto &auth_keys_config = config.at("auth-keys");
+		settings->auth_key_for_write = auth_keys_config.at<std::string>("write", "");
+		settings->auth_key_for_read = auth_keys_config.at<std::string>("read", "");
+	}
+
+	if (config.has("static-couple")) {
+		const auto &static_couple_config = config.at("static-couple");
+
+		for (size_t index = 0, size = static_couple_config.size(); index != size; ++index) {
+			settings->static_couple.emplace_back(static_couple_config.at<int>(index));
+		}
+	}
+
+	if (config.has("signature")) {
+		const auto &signature_config = config.at("signature");
+		settings->sign_token = signature_config.at<std::string>("token", "");
+		settings->sign_path_prefix = signature_config.at<std::string>("path_prefix", "");
+		settings->sign_port = signature_config.at<std::string>("port", "");
+	}
+
+	if (config.has("redirect")) {
+		const auto &redirect_config = config.at("redirect");
+		settings->redirect_expire_time = std::chrono::seconds(
+				redirect_config.at<int>("expire-time", 0));
+		settings->redirect_content_length_threshold
+			= redirect_config.at<int>("content-length-threshold", -1);
+	}
+
+	if (config.has("features")) {
+		const auto &features_config = config.at("features");
+
+		settings->can_choose_couple_to_upload
+			= features_config.at<bool>("select-couple-to-upload", false);
+
+		if (features_config.has("multipart")) {
+			const auto &multipart_features_config = features_config.at("multipart");
+
+			settings->multipart_content_length_threshold
+				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
+		}
+	}
+
+	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));
 }
 
 } // namespace elliptics
