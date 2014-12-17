@@ -1,3 +1,9 @@
+mediastorage-proxy (0.80.1) lucid; urgency=low
+
+  * Deps: libswarm2 (>= 0.7.1.0)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 17 Dec 2014 18:10:40 +0400
+
 mediastorage-proxy (0.79.2) lucid; urgency=low
 
   * Set Accept-Ranges header for all positive response
