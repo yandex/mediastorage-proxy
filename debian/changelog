@@ -1,3 +1,9 @@
+mediastorage-proxy (0.79.2) lucid; urgency=low
+
+  * Set Accept-Ranges header for all positive response
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 16 Dec 2014 22:04:49 +0400
+
 mediastorage-proxy (0.79.1) lucid; urgency=low
 
   * namespace_state is used instead of old libmastermind API

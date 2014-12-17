@@ -473,6 +473,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	prospect_http_response.set_code(200);
 	prospect_http_response.headers().set_last_modified(timestamp);
 	prospect_http_response.headers().set("ETag", etag);
+	prospect_http_response.headers().set("Accept-Ranges", "bytes");
 
 	if (request().method() == "HEAD") {
 		prospect_http_response.headers().set_content_length(size);
@@ -546,7 +547,6 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 				, std::bind(&req_get::on_error, shared_from_this()));
 	} else if (auto ranges = parse_range_header(*range_header, size)) {
 		prospect_http_response.set_code(206);
-		prospect_http_response.headers().set("Accept-Ranges", "bytes");
 
 		if (ranges->size() == 1) {
 			const auto &range = ranges->front();
