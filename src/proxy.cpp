@@ -858,7 +858,18 @@ proxy::get_namespace_state(const std::string &script, const std::string &handler
 		throw std::runtime_error("Cannot detect namespace");
 	}
 
-	return mastermind()->get_namespace_state(str_namespace);
+	return get_namespace_state(str_namespace);
+}
+
+mastermind::namespace_state_t
+proxy::get_namespace_state(const std::string &name) {
+	auto ns_state = mastermind()->get_namespace_state(name);
+
+	if (!ns_state) {
+		throw std::runtime_error("Cannot detect namespace");
+	}
+
+	return ns_state;
 }
 
 int proxy::die_limit() const {
@@ -874,7 +885,7 @@ std::vector<int> proxy::groups_for_upload(const mastermind::namespace_state_t &n
 std::tuple<std::string, mastermind::namespace_state_t>
 proxy::get_file_info(const ioremap::thevoid::http_request &req) {
 	auto p = get_filename(req);
-	return std::make_tuple(p.first, mastermind()->get_namespace_state(p.second));
+	return std::make_tuple(p.first, get_namespace_state(p.second));
 }
 
 std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
