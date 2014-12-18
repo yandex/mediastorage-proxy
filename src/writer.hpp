@@ -102,7 +102,7 @@ public:
 	write(const ioremap::elliptics::data_pointer &data_pointer);
 
 	const entries_info_t &
-	result() const;
+	get_result() const;
 
 	bool
 	is_finished() const;
@@ -112,6 +112,15 @@ public:
 
 	bool
 	is_failed() const;
+
+	size_t
+	get_total_size() const;
+
+	const std::string &
+	get_key() const;
+
+	std::string
+	get_id() const;
 
 private:
 	enum class state_tag {

@@ -161,7 +161,7 @@ elliptics::writer::writer_t::write(const ioremap::elliptics::data_pointer &data_
 }
 
 const elliptics::writer::writer_t::entries_info_t &
-elliptics::writer::writer_t::result() const {
+elliptics::writer::writer_t::get_result() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -204,6 +204,21 @@ elliptics::writer::writer_t::is_failed() const {
 	(void) lock_guard;
 
 	return state == state_tag::failed;
+}
+
+size_t
+elliptics::writer::writer_t::get_total_size() const {
+	return total_size;
+}
+
+const std::string &
+elliptics::writer::writer_t::get_key() const {
+	return key.remote();
+}
+
+std::string
+elliptics::writer::writer_t::get_id() const {
+	return key.to_string();
 }
 
 ioremap::swarm::logger &
