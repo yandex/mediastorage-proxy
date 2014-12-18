@@ -307,6 +307,7 @@ elliptics::writer::writer_t::write_impl(
 		const ioremap::elliptics::data_pointer &data_pointer) {
 	if (written_size == 0) {
 		log_chunk("prepare", data_pointer.size());
+		state = state_tag::writing;
 		return session.write_prepare(key, data_pointer, offset, total_size);
 	} else {
 		size_t future_size = written_size + data_pointer.size();
@@ -320,9 +321,11 @@ elliptics::writer::writer_t::write_impl(
 				session.set_timeout(session.get_timeout() + total_size / commit_coef);
 			}
 			log_chunk("commit", data_pointer.size());
+			state = state_tag::committing;
 			return session.write_commit(key, data_pointer, offset, future_size);
 		} else {
 			log_chunk("plain", data_pointer.size());
+			state = state_tag::writing;
 			return session.write_plain(key, data_pointer, offset);
 		}
 	}
