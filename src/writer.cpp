@@ -376,24 +376,22 @@ elliptics::writer::writer_t::on_data_wrote(
 
 		LOG_RESULT(ERROR, "bad");
 
-		if (state == state_tag::committing) {
-			state = state_tag::removing;
-			{
-				std::ostringstream oss;
-				oss
-					<< "remove start:"
-					<< " key=" << key.remote()
-					<< " groups=" << session.get_groups()
-					;
-				auto msg = oss.str();
-				MDS_LOG_INFO("%s", msg.c_str());
-			}
-
-			// TODO: need to set remove-timeout
-			auto async_result = session.remove(key);
-			async_result.connect(std::bind(&writer_t::on_data_removed
-						, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		state = state_tag::removing;
+		{
+			std::ostringstream oss;
+			oss
+				<< "remove start:"
+				<< " key=" << key.remote()
+				<< " groups=" << session.get_groups()
+				;
+			auto msg = oss.str();
+			MDS_LOG_INFO("%s", msg.c_str());
 		}
+
+		// TODO: need to set remove-timeout
+		auto async_result = session.remove(key);
+		async_result.connect(std::bind(&writer_t::on_data_removed
+					, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 		break;
 	}
 	case state_tag::waiting:
