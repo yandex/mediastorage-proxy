@@ -377,6 +377,13 @@ elliptics::writer::writer_t::on_data_wrote(
 		LOG_RESULT(ERROR, "bad");
 
 		state = state_tag::removing;
+
+		{
+			auto groups = session.get_groups();
+			groups.insert(groups.end(), bad_groups.begin(), bad_groups.end());
+			session.set_groups(groups);
+		}
+
 		{
 			std::ostringstream oss;
 			oss
