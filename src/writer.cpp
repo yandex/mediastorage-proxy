@@ -23,47 +23,43 @@
 #include "utils.hpp"
 #include "lookup_result.hpp"
 
-const char *
-elliptics::writer::error_category_t::name() const {
-	return "writer error category";
-}
-std::string
-elliptics::writer::error_category_t::message(int ev) const {
-	switch (ev) {
-		// TODO: add descriptions for each error code
-	default:
-		return "unknown error";
+class error_category_t
+	: public std::error_category
+{
+public:
+	const char *
+	name() const {
+		return "writer error category";
 	}
-}
+
+	std::string
+	message(int ev) const {
+		switch (ev) {
+			// TODO: add descriptions for each error code
+		default:
+			return "unknown error";
+		}
+	}
+};
 
 const std::error_category &
-elliptics::writer::error_category() {
+elliptics::writer::writer_category() {
 	const static error_category_t instance;
 	return instance;
 }
 
 std::error_code
-elliptics::writer::make_error_code(error_tag e) {
-	return std::error_code(static_cast<int>(e), error_category());
+elliptics::writer::make_error_code(writer_errc e) {
+	return std::error_code(static_cast<int>(e), writer_category());
 }
 
 std::error_condition
-elliptics::writer::make_error_condition(error_tag e) {
-	return std::error_condition(static_cast<int>(e), error_category());
+elliptics::writer::make_error_condition(writer_errc e) {
+	return std::error_condition(static_cast<int>(e), writer_category());
 }
 
-elliptics::writer::unexpected_event_error::unexpected_event_error(const std::string &message)
-	: std::system_error(make_error_code(error_tag::unexpected_event), message)
-{
-}
-
-elliptics::writer::incorrect_size_error::incorrect_size_error(const std::string &message)
-	: std::system_error(make_error_code(error_tag::incorrect_size), message)
-{
-}
-
-elliptics::writer::internal_error::internal_error(const std::string &message)
-	: std::system_error(make_error_code(error_tag::internal), message)
+elliptics::writer::writer_error::writer_error(writer_errc e, const std::string &message)
+	: std::system_error(make_error_code(e), message)
 {
 }
 
@@ -125,7 +121,7 @@ elliptics::writer::writer_t::write(const ioremap::elliptics::data_pointer &data_
 		size_t future_size = data_pointer.size() + written_size;
 
 		if (future_size > total_size) {
-			throw incorrect_size_error();
+			throw writer_error(writer_errc::incorrect_size);
 		}
 
 		if (written_size == 0 && data_pointer.size() == total_size) {
@@ -156,7 +152,7 @@ elliptics::writer::writer_t::write(const ioremap::elliptics::data_pointer &data_
 	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
-		throw unexpected_event_error();
+		throw writer_error(writer_errc::unexpected_event);
 	}
 }
 
@@ -177,7 +173,7 @@ elliptics::writer::writer_t::get_result() const {
 	// Default is needed only for avoding compile warning:
 	// 'control reaches end of non-void function'
 	default:
-		throw unexpected_event_error();
+		throw writer_error(writer_errc::unexpected_event);
 	}
 }
 
@@ -313,7 +309,7 @@ elliptics::writer::writer_t::write_impl(
 		size_t future_size = written_size + data_pointer.size();
 
 		if (future_size > total_size) {
-			throw incorrect_size_error();
+			throw writer_error(writer_errc::incorrect_size);
 		}
 
 		if (future_size == total_size) {
@@ -370,7 +366,7 @@ elliptics::writer::writer_t::on_data_wrote(
 				state = state_tag::waiting;
 			}
 
-			on_complete(make_error_code(error_tag::success));
+			on_complete(make_error_code(writer_errc::success));
 			return;
 		}
 
@@ -406,7 +402,7 @@ elliptics::writer::writer_t::on_data_wrote(
 	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
-		throw unexpected_event_error();
+		throw writer_error(writer_errc::unexpected_event);
 	}
 
 #undef LOG_RESULT
@@ -423,7 +419,7 @@ elliptics::writer::writer_t::on_data_removed(
 	case state_tag::removing: {
 		MDS_LOG_INFO("remove is finished");
 		state = state_tag::failed;
-		on_complete(make_error_code(error_tag::internal));
+		on_complete(make_error_code(writer_errc::internal));
 		break;
 	}
 	case state_tag::waiting:
@@ -432,7 +428,7 @@ elliptics::writer::writer_t::on_data_removed(
 	case state_tag::need_remove:
 	case state_tag::committed:
 	case state_tag::failed:
-		throw unexpected_event_error();
+		throw writer_error(writer_errc::unexpected_event);
 	}
 }
 

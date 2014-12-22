@@ -31,49 +31,26 @@
 
 namespace elliptics { namespace writer {
 
-enum class error_tag {
+enum class writer_errc {
 	  success
 	, unexpected_event
 	, incorrect_size
 	, internal
 };
 
-class error_category_t
-	: public std::error_category
-{
-public:
-	const char *
-	name() const;
-
-	std::string
-	message(int ev) const;
-};
-
 const std::error_category &
-error_category();
+writer_category();
 
 std::error_code
-make_error_code(error_tag e);
+make_error_code(writer_errc e);
 
 std::error_condition
-make_error_condition(error_tag e);
+make_error_condition(writer_errc e);
 
-class unexpected_event_error : public std::system_error
+class writer_error : public std::system_error
 {
 public:
-	unexpected_event_error(const std::string &message = "");
-};
-
-class incorrect_size_error : public std::system_error
-{
-public:
-	incorrect_size_error(const std::string &message = "");
-};
-
-class internal_error : public std::system_error
-{
-public:
-	internal_error(const std::string &message = "");
+	writer_error(writer_errc e, const std::string &message = "");
 };
 
 class writer_t : public std::enable_shared_from_this<writer_t>
@@ -191,7 +168,7 @@ private:
 namespace std {
 
 template <>
-struct is_error_code_enum<elliptics::writer::error_tag>
+struct is_error_code_enum<elliptics::writer::writer_errc>
 	: public true_type
 {};
 
