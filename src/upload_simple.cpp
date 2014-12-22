@@ -47,7 +47,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
-	writer = std::make_shared<writer::writer_t>(
+	writer = std::make_shared<writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
 			, *server()->write_session(http_request, couple), key
 			, *http_request.headers().content_length(), offset

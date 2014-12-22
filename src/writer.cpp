@@ -43,27 +43,27 @@ public:
 };
 
 const std::error_category &
-elliptics::writer::writer_category() {
+elliptics::writer_category() {
 	const static error_category_t instance;
 	return instance;
 }
 
 std::error_code
-elliptics::writer::make_error_code(writer_errc e) {
+elliptics::make_error_code(writer_errc e) {
 	return std::error_code(static_cast<int>(e), writer_category());
 }
 
 std::error_condition
-elliptics::writer::make_error_condition(writer_errc e) {
+elliptics::make_error_condition(writer_errc e) {
 	return std::error_condition(static_cast<int>(e), writer_category());
 }
 
-elliptics::writer::writer_error::writer_error(writer_errc e, const std::string &message)
+elliptics::writer_error::writer_error(writer_errc e, const std::string &message)
 	: std::system_error(make_error_code(e), message)
 {
 }
 
-elliptics::writer::writer_t::writer_t(ioremap::swarm::logger bh_logger_
+elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, const ioremap::elliptics::session &session_, std::string key_
 		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
 		, callback_t on_complete_
@@ -106,13 +106,13 @@ elliptics::writer::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 }
 
 void
-elliptics::writer::writer_t::write(const char *data, size_t size) {
+elliptics::writer_t::write(const char *data, size_t size) {
 	write(ioremap::elliptics::data_pointer::from_raw(
 			reinterpret_cast<void *>(const_cast<char *>(data)), size));
 }
 
 void
-elliptics::writer::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer) {
+elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer) {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -156,8 +156,8 @@ elliptics::writer::writer_t::write(const ioremap::elliptics::data_pointer &data_
 	}
 }
 
-const elliptics::writer::writer_t::entries_info_t &
-elliptics::writer::writer_t::get_result() const {
+const elliptics::writer_t::entries_info_t &
+elliptics::writer_t::get_result() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -178,7 +178,7 @@ elliptics::writer::writer_t::get_result() const {
 }
 
 bool
-elliptics::writer::writer_t::is_finished() const {
+elliptics::writer_t::is_finished() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -187,7 +187,7 @@ elliptics::writer::writer_t::is_finished() const {
 }
 
 bool
-elliptics::writer::writer_t::is_committed() const {
+elliptics::writer_t::is_committed() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -195,7 +195,7 @@ elliptics::writer::writer_t::is_committed() const {
 }
 
 bool
-elliptics::writer::writer_t::is_failed() const {
+elliptics::writer_t::is_failed() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -203,27 +203,27 @@ elliptics::writer::writer_t::is_failed() const {
 }
 
 size_t
-elliptics::writer::writer_t::get_total_size() const {
+elliptics::writer_t::get_total_size() const {
 	return total_size;
 }
 
 const std::string &
-elliptics::writer::writer_t::get_key() const {
+elliptics::writer_t::get_key() const {
 	return key.remote();
 }
 
 std::string
-elliptics::writer::writer_t::get_id() const {
+elliptics::writer_t::get_id() const {
 	return key.to_string();
 }
 
 ioremap::swarm::logger &
-elliptics::writer::writer_t::logger() {
+elliptics::writer_t::logger() {
 	return bh_logger;
 }
 
 void
-elliptics::writer::writer_t::log_chunk(
+elliptics::writer_t::log_chunk(
 		const std::string &write_type, size_t chunk_size) {
 	std::ostringstream oss;
 	oss
@@ -241,7 +241,7 @@ elliptics::writer::writer_t::log_chunk(
 }
 
 void
-elliptics::writer::writer_t::update_groups(
+elliptics::writer_t::update_groups(
 		const ioremap::elliptics::sync_write_result &entries) {
 	std::vector<int> good_groups;
 
@@ -274,7 +274,7 @@ elliptics::writer::writer_t::update_groups(
 }
 
 void
-elliptics::writer::writer_t::set_result(
+elliptics::writer_t::set_result(
 		const ioremap::elliptics::sync_write_result &entries) {
 	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
 		lookup_result pl(*it, "");
@@ -293,13 +293,13 @@ elliptics::writer::writer_t::set_result(
 }
 
 bool
-elliptics::writer::writer_t::write_is_good(
+elliptics::writer_t::write_is_good(
 		const ioremap::elliptics::error_info &error_info) {
 	return !error_info && session.get_groups().size() >= success_copies_num;
 }
 
 ioremap::elliptics::async_write_result
-elliptics::writer::writer_t::write_impl(
+elliptics::writer_t::write_impl(
 		const ioremap::elliptics::data_pointer &data_pointer) {
 	if (written_size == 0) {
 		log_chunk("prepare", data_pointer.size());
@@ -328,7 +328,7 @@ elliptics::writer::writer_t::write_impl(
 }
 
 void
-elliptics::writer::writer_t::on_data_wrote(
+elliptics::writer_t::on_data_wrote(
 		const ioremap::elliptics::sync_write_result &entries
 		, const ioremap::elliptics::error_info &error_info) {
 #define LOG_RESULT(VERBOSITY, STATUS) \
@@ -409,7 +409,7 @@ elliptics::writer::writer_t::on_data_wrote(
 }
 
 void
-elliptics::writer::writer_t::on_data_removed(
+elliptics::writer_t::on_data_removed(
 		const ioremap::elliptics::sync_remove_result &entries
 		, const ioremap::elliptics::error_info &error_info) {
 	lock_guard_t lock_guard(state_mutex);

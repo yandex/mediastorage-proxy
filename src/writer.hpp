@@ -29,7 +29,7 @@
 #include <system_error>
 #include <mutex>
 
-namespace elliptics { namespace writer {
+namespace elliptics {
 
 enum class writer_errc {
 	  success
@@ -163,12 +163,12 @@ private:
 };
 
 
-}} // namespace elliptics::writer
+} // namespace elliptics
 
 namespace std {
 
 template <>
-struct is_error_code_enum<elliptics::writer::writer_errc>
+struct is_error_code_enum<elliptics::writer_errc>
 	: public true_type
 {};
 

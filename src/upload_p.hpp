@@ -199,7 +199,7 @@ private:
 
 	bool m_single_chunk;
 
-	std::shared_ptr<writer::writer_t> writer;
+	std::shared_ptr<writer_t> writer;
 
 	deferred_function_t deferred_fallback;
 };
