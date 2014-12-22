@@ -21,6 +21,8 @@
 #define MDS_PROXY__SRC__UPLOAD__P_HPP
 
 #include "upload.hpp"
+#include "writer.hpp"
+#include "deferred_function.hpp"
 
 #include <fstream>
 #include <list>
@@ -164,13 +166,25 @@ struct upload_simple_t
 	on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags);
 
 	void
-	on_finished();
-
-	void
 	on_error(const boost::system::error_code &error_code);
 
 	void
-	remove_if_failed();
+	on_write_is_done(const std::error_code &error_code);
+
+	void
+	send_result();
+
+	void
+	headers_are_sent(const std::string &res_str, const boost::system::error_code &error_code);
+
+	void
+	data_is_sent(const boost::system::error_code &error_code);
+
+	void
+	fallback();
+
+	void
+	remove();
 
 	void
 	on_removed(const ioremap::elliptics::sync_remove_result &result
@@ -179,16 +193,15 @@ struct upload_simple_t
 private:
 	mastermind::namespace_state_t ns_state;
 	couple_t couple;
+	int couple_id;
 	std::string filename;
 	std::string key;
 
 	bool m_single_chunk;
 
-	std::shared_ptr<upload_helper_t> upload_helper;
+	std::shared_ptr<writer::writer_t> writer;
 
-	bool request_is_failed;
-	bool reply_was_sent;
-	std::mutex mutex;
+	deferred_function_t deferred_fallback;
 };
 
 struct upload_multipart_t
