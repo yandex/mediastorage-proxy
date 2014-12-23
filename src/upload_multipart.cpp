@@ -230,7 +230,7 @@ upload_multipart_t::on_data(const boost::asio::const_buffer &buffer) {
 			interrupt_writers(error_type_tag::multipart);
 		}
 
-		// TODO: explain second condition
+		// If multipart_context.state is equal to end, the join was already called in this task.
 		if (is_error() && multipart_state_tag::end != multipart_context.state) {
 			join_upload_tasks();
 			return 0;
@@ -247,7 +247,8 @@ void
 upload_multipart_t::on_close(const boost::system::error_code &error) {
 	if (error) {
 		interrupt_writers(error_type_tag::client);
-		// TODO: explain this join
+		// Multipart parser is not finished if reading request error is ocurred.
+		// That means on_data will not be called anymore and we need to join parser task here.
 		join_upload_tasks();
 	}
 }
@@ -458,7 +459,10 @@ upload_multipart_t::set_error(error_type_tag e) {
 	std::lock_guard<std::mutex> lock_guard(error_type_mutex);
 	(void) lock_guard;
 
-	// TODO: explain error priorities
+	// Errors have priorities:
+	// 1. Client error means there is no reason to send response
+	// 2. Internal error means we should send 500
+	// 3. Multipart error means we should send 400
 	switch (error_type) {
 	case error_type_tag::none:
 		error_type = e;
