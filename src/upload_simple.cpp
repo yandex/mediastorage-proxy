@@ -24,28 +24,35 @@ namespace elliptics {
 upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_, couple_t couple_, std::string filename_)
 	: ns_state(std::move(ns_state_))
 	, couple(std::move(couple_))
+	, couple_id(*std::min_element(couple.begin(), couple.end()))
 	, filename(std::move(filename_))
 	, key(ns_state.name() + '.' + filename)
 	, m_single_chunk(false)
-	, request_is_failed(false)
-	, reply_was_sent(false)
+	, deferred_fallback([this] { fallback(); })
 {
 }
 
 void
 upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) {
+
 	set_chunk_size(server()->m_write_chunk_size);
 
 	auto query_list = http_request.url().query();
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
 
+	auto self = shared_from_this();
+	auto on_complete = [this, self] (const std::error_code &error_code) {
+		on_write_is_done(error_code);
+	};
+
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
-	upload_helper = std::make_shared<upload_helper_t>(
+	writer = std::make_shared<writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
 			, *server()->write_session(http_request, couple), key
 			, *http_request.headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
+			, on_complete
 			);
 }
 
@@ -60,7 +67,7 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 		return;
 	}
 
-	if ((flags == first_chunk) && (buffer_size == upload_helper->total_size)) {
+	if ((flags == first_chunk) && (buffer_size == writer->get_total_size())) {
 		MDS_LOG_INFO("on_chunk: fixing flags to single_chunk");
 		flags = single_chunk;
 	}
@@ -69,49 +76,75 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 		m_single_chunk = true;
 	}
 
-	{
-		// There should be lambda instead of typedef & bind, but gcc 4.4 doesn't support it
-		typedef void (upload_simple_t::*on_error_f)(int);
-		upload_helper->write(buffer_data, buffer_size
-				, std::bind(&upload_simple_t::on_finished, shared_from_this())
-				, std::bind((on_error_f)&upload_simple_t::send_reply, shared_from_this(), 500));
-	}
+	// There are two parallel activities:
+	// 1. Reading client request
+	// 2. Writing data into elliptics
+	// Errors which could happen in second part are handled by writer object (involving removing of
+	// needless file). But errors which could happen during reading request should be handled by
+	// this object.
+	// When such error is ocurred the on_error method will be called. But chunk writing can process
+	// in this moment, so we cannot remove file and need to wait until writing is finished.
+	// Otherwise if chunk writing does not process we have to initiate file removing in on_error
+	// method.
+	// To solve this problem deferred call of fallback method is used. The method will be executed
+	// only on second call. The method is deferred by one call before each chunk writing, is called
+	// after each chunk writing is finished and is called in on_error.
+	deferred_fallback.defer();
+	writer->write(buffer_data, buffer_size);
+}
+
+// The on_error call means an error occurred during working with socket (either read or write).
+// The close method is used as a part of send_headers callback.
+// That means on_error will not be called if socket write error occurrs.
+// Thus, only socket read error should be handled.
+void
+upload_simple_t::on_error(const boost::system::error_code &error_code) {
+	MDS_LOG_ERROR("error during reading request: %s", error_code.message().c_str());
+	deferred_fallback();
 }
 
 void
-upload_simple_t::on_finished() {
-	if (!upload_helper->is_finished()) {
-		std::lock_guard<std::mutex> lock(mutex);
-		(void) lock;
+upload_simple_t::on_write_is_done(const std::error_code &error_code) {
+	if (error_code) {
+		MDS_LOG_ERROR("could not write file into storage: %s"
+				, error_code.message().c_str());
+		send_reply(500);
+		return;
+	}
 
-		if (request_is_failed) {
-			return;
-		}
+	// Fallback will be executed if it is called twice: here and in on_error.
+	if (deferred_fallback()) {
+		return;
+	}
 
+	if (!writer->is_committed()) {
 		try_next_chunk();
 		return;
 	}
 
+	send_result();
+}
+
+void
+upload_simple_t::send_result() {
 	std::ostringstream oss;
 	oss 
 		<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-		<< "<post obj=\"" << encode_for_xml(upload_helper->key.remote())
-		<< "\" id=\"" << upload_helper->key.to_string()
+		<< "<post obj=\"" << encode_for_xml(writer->get_key())
+		<< "\" id=\"" << writer->get_id()
 		<< "\" groups=\"" << ns_state.settings().groups_count()
-		<< "\" size=\"" << upload_helper->total_size
+		<< "\" size=\"" << writer->get_total_size()
 		<< "\" key=\"";
 
 	if (proxy_settings(ns_state).static_couple.empty()) {
-		const auto &groups = upload_helper->session.get_groups();
-		auto git = std::min_element(groups.begin(), groups.end());
-		oss << *git << '/';
+		oss << couple_id << '/';
 	}
 
 	oss << encode_for_xml(filename) << "\">\n";
 
-	const auto &upload_result = upload_helper->upload_result();
+	const auto &result = writer->get_result();
 
-	for (auto it = upload_result.begin(), end = upload_result.end(); it != end; ++it) {
+	for (auto it = result.begin(), end = result.end(); it != end; ++it) {
 		oss
 			<< "<complete"
 			<< " addr=\"" << it->address << "\""
@@ -121,7 +154,7 @@ upload_simple_t::on_finished() {
 	}
 
 	oss
-		<< "<written>" << upload_result.size() << "</written>\n"
+		<< "<written>" << result.size() << "</written>\n"
 		<< "</post>";
 
 	auto res_str = oss.str();
@@ -134,38 +167,48 @@ upload_simple_t::on_finished() {
 	headers.set_content_type("text/xml");
 	reply.set_headers(headers);
 
-	std::lock_guard<std::mutex> lock(mutex);
-	(void) lock;
-
-	if (!request_is_failed) {
-		reply_was_sent = true;
-		send_reply(std::move(reply), std::move(res_str));
-	} else {
-		remove_if_failed();
-	}
+	send_headers(std::move(reply)
+			, std::bind(&upload_simple_t::headers_are_sent, shared_from_this()
+				, res_str, std::placeholders::_1));
 }
 
 void
-upload_simple_t::on_error(const boost::system::error_code &error_code) {
-	std::lock_guard<std::mutex> lock(mutex);
-	(void) lock;
-
-	if (reply_was_sent) {
-		remove_if_failed();
+upload_simple_t::headers_are_sent(const std::string &res_str
+		, const boost::system::error_code &error_code) {
+	if (error_code) {
+		MDS_LOG_ERROR("cannot send headers: %s", error_code.message().c_str());
+		fallback();
 		return;
 	}
 
-	if (request_is_failed) {
-		return;
-	}
+	MDS_LOG_INFO("headers are sent");
 
-	request_is_failed = true;
-
-	MDS_LOG_ERROR("request is failed: %s", error_code.message().c_str());
+	send_data(std::move(res_str)
+			, std::bind(&upload_simple_t::data_is_sent, shared_from_this()
+				, std::placeholders::_1));
 }
 
 void
-upload_simple_t::remove_if_failed() {
+upload_simple_t::data_is_sent(const boost::system::error_code &error_code) {
+	if (error_code) {
+		MDS_LOG_ERROR("cannot send data: %s", error_code.message().c_str());
+		fallback();
+		return;
+	}
+
+	MDS_LOG_INFO("data is sent");
+
+	close(boost::system::error_code());
+}
+
+void
+upload_simple_t::fallback() {
+	close(boost::system::error_code());
+	remove();
+}
+
+void
+upload_simple_t::remove() {
 	MDS_LOG_INFO("removing key %s", key.c_str());
 	if (auto session = server()->remove_session(request(), couple)) {
 		auto future = session->remove(key);
