@@ -27,6 +27,8 @@ set(REQUIRED_LIBRARIES
 
 set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/proxy.cpp
+	${PROJECT_SOURCE_DIR}/src/writer.cpp
+	${PROJECT_SOURCE_DIR}/src/buffered_writer.cpp
 	${PROJECT_SOURCE_DIR}/src/upload.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_simple.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_multipart.cpp
