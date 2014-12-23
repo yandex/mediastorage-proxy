@@ -31,8 +31,13 @@ public:
 
 	std::string
 	message(int ev) const {
-		switch (ev) {
-			// TODO: add descriptions for each error code
+		switch (static_cast<elliptics::buffered_writer_errc>(ev)) {
+		case elliptics::buffered_writer_errc::success:
+			return "success";
+		case elliptics::buffered_writer_errc::interrupted:
+			return "writing was interrupted";
+		case elliptics::buffered_writer_errc::unexpected_event:
+			return "unexpected event";
 		default:
 			return "unknown error";
 		}
