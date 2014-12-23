@@ -76,14 +76,26 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 		m_single_chunk = true;
 	}
 
-	// TODO: write comprehensive comment what happens here
+	// There are two parallel activities:
+	// 1. Reading client request
+	// 2. Writing data into elliptics
+	// Errors which could happen in second part are handled by writer object (involving removing of
+	// needless file). But errors which could happen during reading request should be handled by
+	// this object.
+	// When such error is ocurred the on_error method will be called. But chunk writing can process
+	// in this moment, so we cannot remove file and need to wait until writing is finished.
+	// Otherwise if chunk writing does not process we have to initiate file removing in on_error
+	// method.
+	// To solve this problem deferred call of fallback method is used. The method will be executed
+	// only on second call. The method is deferred by one call before each chunk writing, is called
+	// after each chunk writing is finished and is called in on_error.
 	deferred_fallback.defer();
 	writer->write(buffer_data, buffer_size);
 }
 
 // The on_error call means an error occurred during working with socket (either read or write).
 // The close method is used as a part of send_headers callback.
-// That means on_close will not be called if socket write error occurrs.
+// That means on_error will not be called if socket write error occurrs.
 // Thus, only socket read error should be handled.
 void
 upload_simple_t::on_error(const boost::system::error_code &error_code) {
@@ -100,7 +112,7 @@ upload_simple_t::on_write_is_done(const std::error_code &error_code) {
 		return;
 	}
 
-	// TODO: write comprehensive comment what happens here
+	// Fallback will be executed if it is called twice: here and in on_error.
 	if (deferred_fallback()) {
 		return;
 	}
@@ -155,7 +167,6 @@ upload_simple_t::send_result() {
 	headers.set_content_type("text/xml");
 	reply.set_headers(headers);
 
-	// TODO: explain error handling
 	send_headers(std::move(reply)
 			, std::bind(&upload_simple_t::headers_are_sent, shared_from_this()
 				, res_str, std::placeholders::_1));
