@@ -22,6 +22,7 @@
 
 #include "upload.hpp"
 #include "writer.hpp"
+#include "buffered_writer.hpp"
 #include "deferred_function.hpp"
 
 #include <fstream>
@@ -221,25 +222,6 @@ struct upload_multipart_t
 
 private:
 
-	void
-	on_finished(const std::shared_ptr<upload_helper_t> &upload_helper);
-
-	void
-	on_internal_error();
-
-	void
-	on_error();
-
-	void
-	send_result();
-
-	void
-	on_removed(const std::string &key, const ioremap::elliptics::sync_remove_result &result
-			, const ioremap::elliptics::error_info &error_info);
-
-	void
-	send_error();
-
 	enum class multipart_state_tag {
 		init, headers, body, after_body, end
 	};
@@ -292,6 +274,13 @@ private:
 		bool is_interrupted;
 	} multipart_context;
 
+	enum class error_type_tag {
+		  none
+		, internal
+		, multipart
+		, client
+	};
+
 	void sm_init();
 	void sm_headers();
 	void sm_body();
@@ -300,23 +289,66 @@ private:
 
 	void start_writing();
 
+	void
+	on_writer_is_finished(const std::error_code &error_code);
+
+	void
+	set_error(error_type_tag e);
+
+	bool
+	is_error();
+
+	error_type_tag
+	get_error();
+
+	void
+	interrupt_writers(error_type_tag e);
+
+	void
+	interrupt_writers();
+
+	void
+	on_writers_are_finished();
+
+	void
+	send_result();
+
+	void
+	headers_are_sent(const std::string &res_str, const boost::system::error_code &error_code);
+
+	void
+	data_is_sent(const boost::system::error_code &error_code);
+
+	void
+	remove_files();
+
+	void
+	on_removed(const std::string &key, const ioremap::elliptics::sync_remove_result &result
+			, const ioremap::elliptics::error_info &error_info);
+
+	void
+	send_error();
+
+	deferred_function_t interrupt_writers_once;
+	deferred_function_t join_upload_tasks;
+	deferred_function_t join_remove_tasks;
+
+	error_type_tag error_type;
+	std::mutex error_type_mutex;
+
 	ioremap::thevoid::http_request http_request;
 	mastermind::namespace_state_t ns_state;
 	couple_t couple;
+	int couple_id;
 
 	std::string boundary;
 
-	std::shared_ptr<upload_buffer_t> upload_buffer;
+	std::shared_ptr<buffered_writer_t> buffered_writer;
 	std::string current_filename;
 
-	std::vector<std::tuple<std::shared_ptr<upload_buffer_t>, std::string>> upload_buffers;
+	std::vector<std::tuple<std::shared_ptr<buffered_writer_t>, std::string>> buffered_writers;
+	std::mutex buffered_writers_mutex;
 
-	std::mutex mutex;
-	bool request_is_failed;
-
-	std::atomic<size_t> upload_tasks_count;
-	std::atomic<size_t> remove_tasks_count;
-	std::atomic<bool> is_internal_error;
 };
 
 } // namespace elliptics

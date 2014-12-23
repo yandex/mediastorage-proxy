@@ -167,11 +167,12 @@ upload_multipart_t::multipart_context_t::reset() {
 }
 
 upload_multipart_t::upload_multipart_t(mastermind::namespace_state_t ns_state_, couple_t couple_)
-	: ns_state(std::move(ns_state_))
+	: interrupt_writers_once([this] { interrupt_writers(); })
+	, join_upload_tasks([this] { on_writers_are_finished(); })
+	, join_remove_tasks([this] { send_error(); })
+	, ns_state(std::move(ns_state_))
 	, couple(std::move(couple_))
-	, request_is_failed(false)
-	, upload_tasks_count(1)
-	, is_internal_error(false)
+	, couple_id(*std::min_element(couple.begin(), couple.end()))
 {
 }
 
@@ -224,14 +225,31 @@ upload_multipart_t::on_data(const boost::asio::const_buffer &buffer) {
 		}
 	} while (!multipart_context.interrupted());
 
-	multipart_context.trim();
+	{
+		if (multipart_context.error()) {
+			interrupt_writers(error_type_tag::multipart);
+		}
 
-	if (multipart_context.error()) {
-		on_error();
-		return 0;
+		// TODO: explain second condition
+		if (is_error() && multipart_state_tag::end != multipart_context.state) {
+			join_upload_tasks();
+			return 0;
+		}
 	}
 
+
+	multipart_context.trim();
+
 	return buffer_size;
+}
+
+void
+upload_multipart_t::on_close(const boost::system::error_code &error) {
+	if (error) {
+		interrupt_writers(error_type_tag::client);
+		// TODO: explain this join
+		join_upload_tasks();
+	}
 }
 
 void
@@ -315,10 +333,14 @@ upload_multipart_t::sm_headers() {
 	}
 
 	current_filename = name;
-	upload_buffer = std::make_shared<upload_buffer_t>(
+	auto self = shared_from_this();
+	auto callback = [this, self] (const std::error_code &error_code) {
+		on_writer_is_finished(error_code);
+	};
+
+	buffered_writer = std::make_shared<buffered_writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, ns_state.name() + '.' + name, server()->m_write_chunk_size
-			);
+			, ns_state.name() + '.' + name, server()->m_write_chunk_size, callback);
 
 	multipart_context.state = multipart_state_tag::body;
 }
@@ -346,7 +368,7 @@ upload_multipart_t::sm_body() {
 	}
 
 	auto size = boundary_it - multipart_context.begin();
-	upload_buffer->append(&*multipart_context.begin(), size);
+	buffered_writer->append(&*multipart_context.begin(), size);
 	multipart_context.skip(size);
 
 	if (boundary_found) {
@@ -389,72 +411,107 @@ upload_multipart_t::sm_after_body() {
 	multipart_context.state = multipart_state_tag::end;
 }
 
-
 void
 upload_multipart_t::sm_end() {
 	multipart_context.interrupt(false);
-	send_result();
+	join_upload_tasks();
 }
 
 void
 upload_multipart_t::start_writing() {
-	++upload_tasks_count;
-
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::mutex> lock(buffered_writers_mutex);
 	(void) lock;
 
-	if (request_is_failed) {
-		multipart_context.interrupt(true);
+	if (is_error()) {
+		multipart_context.interrupt(false);
 		return;
 	}
 
-	upload_buffers.push_back(std::make_tuple(upload_buffer, current_filename));
+	join_upload_tasks.defer();
+
+	buffered_writers.push_back(std::make_tuple(buffered_writer, current_filename));
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
-	upload_buffer->write(*server()->write_session(http_request, couple)
-			, server()->timeout_coef.data_flow_rate, proxy_settings(ns_state).success_copies_num
-			, std::bind(&upload_multipart_t::on_finished
-				, shared_from_this(), std::placeholders::_1)
-			, std::bind(&upload_multipart_t::on_internal_error, shared_from_this()));
+	buffered_writer->write(*server()->write_session(http_request, couple)
+			, server()->timeout_coef.data_flow_rate, proxy_settings(ns_state).success_copies_num);
 }
 
 void
-upload_multipart_t::on_close(const boost::system::error_code &error) {
-	if (error) {
-		on_internal_error();
+upload_multipart_t::on_writer_is_finished(const std::error_code &error_code) {
+	if (error_code) {
+		const auto interrupted_error = make_error_code(buffered_writer_errc::interrupted);
+
+		if (error_code != interrupted_error) {
+			interrupt_writers(error_type_tag::internal);
+		}
+	}
+
+	join_upload_tasks();
+}
+
+void
+upload_multipart_t::set_error(error_type_tag e) {
+	if (error_type_tag::none == e) {
+		throw std::runtime_error("unexpected error type");
+	}
+
+	std::lock_guard<std::mutex> lock_guard(error_type_mutex);
+	(void) lock_guard;
+
+	// TODO: explain error priorities
+	switch (error_type) {
+	case error_type_tag::none:
+		error_type = e;
+		break;
+	case error_type_tag::internal:
+		if (error_type_tag::client == e) {
+			error_type = e;
+		}
+		break;
+	case error_type_tag::multipart:
+		error_type = e;
+		break;
+	case error_type_tag::client:
+		// nothing to do
+		break;
+	}
+}
+
+bool
+upload_multipart_t::is_error() {
+	return error_type_tag::none != get_error();
+}
+
+upload_multipart_t::error_type_tag
+upload_multipart_t::get_error() {
+	std::lock_guard<std::mutex> lock_guard(error_type_mutex);
+	(void) lock_guard;
+
+	return error_type;
+}
+
+void
+upload_multipart_t::interrupt_writers(error_type_tag e) {
+	set_error(e);
+	interrupt_writers_once();
+}
+
+void
+upload_multipart_t::interrupt_writers() {
+	std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
+	(void) lock_guard;
+
+	MDS_LOG_INFO("interrupt writers");
+	for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
+		std::get<0>(*it)->interrupt();
 	}
 }
 
 void
-upload_multipart_t::on_finished(const std::shared_ptr<upload_helper_t> &upload_helper) {
-	(void) upload_helper;
-
-	send_result();
-}
-
-void
-upload_multipart_t::on_internal_error() {
-	is_internal_error = true;
-	on_error();
-}
-
-void
-upload_multipart_t::on_error() {
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		(void) lock;
-
-		if (!request_is_failed) {
-			request_is_failed = true;
-
-			MDS_LOG_INFO("request is failed");
-
-			MDS_LOG_INFO("stoping uploads");
-			for (auto it = upload_buffers.begin(), end = upload_buffers.end(); it != end; ++it) {
-				std::get<0>(*it)->stop();
-			}
-		}
-
+upload_multipart_t::on_writers_are_finished() {
+	if (is_error()) {
+		remove_files();
+		return;
 	}
 
 	send_result();
@@ -462,42 +519,6 @@ upload_multipart_t::on_error() {
 
 void
 upload_multipart_t::send_result() {
-	if (--upload_tasks_count != 0) {
-		return;
-	}
-
-	bool request_is_failed_ = false;
-
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		(void) lock;
-
-		request_is_failed_ = request_is_failed;
-	}
-
-	if (request_is_failed_) {
-		remove_tasks_count = upload_buffers.size() + 1;
-
-		if (auto session = server()->remove_session(http_request, couple)) {
-			MDS_LOG_INFO("removing uploaded files");
-			for (auto it = upload_buffers.begin(), end = upload_buffers.end(); it != end; ++it) {
-				auto key = std::get<0>(*it)->upload_helper->key;
-
-				MDS_LOG_INFO("remove %s", key.remote().c_str());
-				auto future = session->clone().remove(key);
-
-				future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
-							, key.remote(), std::placeholders::_1, std::placeholders::_2));
-			}
-
-			send_error();
-		} else {
-			MDS_LOG_ERROR("cannot remove files of failed request: remove-session is uninitialized");
-		}
-
-		return;
-	}
-
 	MDS_LOG_INFO("send result");
 
 	std::ostringstream oss;
@@ -508,27 +529,25 @@ upload_multipart_t::send_result() {
 		<< "<multipart-post couple_id=\""
 		<< *std::min_element(couple.begin(), couple.end()) << "\">\n";
 
-	for (auto it = upload_buffers.begin(), end = upload_buffers.end(); it != end; ++it) {
+	for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
 
-		const auto &upload_helper = std::get<0>(*it)->upload_helper;
+		const auto &writer = std::get<0>(*it)->get_writer();
 		oss
-			<< " <post obj=\"" << encode_for_xml(upload_helper->key.remote())
-			<< "\" id=\"" << upload_helper->key.to_string()
+			<< " <post obj=\"" << encode_for_xml(writer->get_key())
+			<< "\" id=\"" << writer->get_id()
 			<< "\" groups=\"" << ns_state.settings().groups_count()
-			<< "\" size=\"" << upload_helper->total_size
+			<< "\" size=\"" << writer->get_total_size()
 			<< "\" key=\"";
 
 		if (proxy_settings(ns_state).static_couple.empty()) {
-			const auto &groups = upload_helper->session.get_groups();
-			auto git = std::min_element(groups.begin(), groups.end());
-			oss << *git << '/';
+			oss << couple_id << '/';
 		}
 
 		oss << encode_for_xml(std::get<1>(*it)) << "\">\n";
 
-		const auto &upload_result = upload_helper->upload_result();
+		const auto &result = writer->get_result();
 
-		for (auto it = upload_result.begin(), end = upload_result.end(); it != end; ++it) {
+		for (auto it = result.begin(), end = result.end(); it != end; ++it) {
 			oss
 				<< "  <complete"
 				<< " addr=\"" << it->address << "\""
@@ -538,7 +557,7 @@ upload_multipart_t::send_result() {
 		}
 
 		oss
-			<< "  <written>" << upload_result.size() << "</written>\n"
+			<< "  <written>" << result.size() << "</written>\n"
 			<< " </post>\n";
 	}
 
@@ -554,7 +573,61 @@ upload_multipart_t::send_result() {
 	headers.set_content_type("text/xml");
 	reply.set_headers(headers);
 
-	send_reply(std::move(reply), std::move(res_str));
+	send_headers(std::move(reply)
+			, std::bind(&upload_multipart_t::headers_are_sent, shared_from_this()
+				, res_str, std::placeholders::_1));
+}
+
+void
+upload_multipart_t::headers_are_sent(const std::string &res_str
+		, const boost::system::error_code &error_code) {
+	if (error_code) {
+		MDS_LOG_ERROR("cannot send headers: %s", error_code.message().c_str());
+		set_error(error_type_tag::client);
+		remove_files();
+		return;
+	}
+
+	MDS_LOG_INFO("headers are sent");
+
+	send_data(std::move(res_str)
+			, std::bind(&upload_multipart_t::data_is_sent, shared_from_this()
+				, std::placeholders::_1));
+}
+
+void
+upload_multipart_t::data_is_sent(const boost::system::error_code &error_code) {
+	if (error_code) {
+		MDS_LOG_ERROR("cannot send data: %s", error_code.message().c_str());
+		set_error(error_type_tag::client);
+		remove_files();
+		return;
+	}
+
+	MDS_LOG_INFO("data is sent");
+
+	close(boost::system::error_code());
+}
+
+void
+upload_multipart_t::remove_files() {
+	if (auto session = server()->remove_session(http_request, couple)) {
+		MDS_LOG_INFO("removing uploaded files");
+
+		for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
+			const auto &key = std::get<0>(*it)->get_key();
+			join_remove_tasks.defer();
+
+			MDS_LOG_INFO("remove %s", key.c_str());
+			auto future = session->clone().remove(key);
+			future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
+						, key, std::placeholders::_1, std::placeholders::_2));
+		}
+
+		join_remove_tasks();
+	} else {
+		MDS_LOG_ERROR("cannot remove files of failed request: remove-session is uninitialized");
+	}
 }
 
 void
@@ -567,17 +640,26 @@ upload_multipart_t::on_removed(const std::string &key
 		MDS_LOG_INFO("File \"%s\" was removed", key.c_str());
 	}
 
-	send_error();
+	join_remove_tasks();
 }
 
 void
 upload_multipart_t::send_error() {
-	if (--remove_tasks_count != 0) {
-		return;
-	}
-
 	MDS_LOG_INFO("send error");
-	send_reply(is_internal_error ? 500 : 400);
+
+	switch (get_error()) {
+	case error_type_tag::none:
+		throw std::runtime_error("unexpected error type");
+	case error_type_tag::internal:
+		send_reply(500);
+		break;
+	case error_type_tag::multipart:
+		send_reply(400);
+		break;
+	case error_type_tag::client:
+		close(boost::system::error_code());
+		break;
+	}
 }
 
 } // namespace elliptics
