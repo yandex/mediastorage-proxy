@@ -34,8 +34,15 @@ public:
 
 	std::string
 	message(int ev) const {
-		switch (ev) {
-			// TODO: add descriptions for each error code
+		switch (static_cast<elliptics::writer_errc>(ev)) {
+		case elliptics::writer_errc::success:
+			return "success";
+		case elliptics::writer_errc::unexpected_event:
+			return "unexpected event";
+		case elliptics::writer_errc::incorrect_size:
+			return "incorrect size";
+		case elliptics::writer_errc::internal:
+			return "internal error";
 		default:
 			return "unknown error";
 		}
