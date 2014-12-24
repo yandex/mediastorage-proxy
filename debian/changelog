@@ -1,3 +1,9 @@
+mediastorage-proxy (0.79.3) lucid; urgency=low
+
+  * Throw exception in case of ns_state is uninitialized
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 18 Dec 2014 16:34:59 +0400
+
 mediastorage-proxy (0.79.2) lucid; urgency=low
 
   * Set Accept-Ranges header for all positive response

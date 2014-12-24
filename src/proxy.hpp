@@ -208,6 +208,9 @@ public:
 	mastermind::namespace_state_t
 	get_namespace_state(const std::string &script, const std::string &handler);
 
+	mastermind::namespace_state_t
+	get_namespace_state(const std::string &name);
+
 	int die_limit() const;
 
 	std::tuple<std::string, mastermind::namespace_state_t>
