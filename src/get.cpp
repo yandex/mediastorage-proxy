@@ -536,8 +536,11 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
 		http_response.headers().set_content_length(0);
-		http_response.headers().set("Location", oss.str());
 
+		auto location = oss.str();
+		http_response.headers().set("Location", location);
+
+		MDS_LOG_INFO("redirect request to \"%s\"", location.c_str());
 		send_reply(std::move(http_response));
 
 		return true;
