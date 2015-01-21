@@ -40,8 +40,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 	auto query_list = http_request.url().query();
 	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
 
-	auto self = shared_from_this();
-	auto on_complete = [this, self] (const std::error_code &error_code) {
+	auto on_complete = [this] (const std::error_code &error_code) {
 		on_write_is_done(error_code);
 	};
 
