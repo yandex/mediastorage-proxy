@@ -252,8 +252,7 @@ upload_multipart_t::sm_headers() {
 	}
 
 	current_filename = name;
-	auto self = shared_from_this();
-	auto callback = [this, self] (const std::error_code &error_code) {
+	auto callback = [this] (const std::error_code &error_code) {
 		on_writer_is_finished(error_code);
 	};
 

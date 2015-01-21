@@ -494,12 +494,27 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 		auto range_header = headers.get("Range");
 
 		if (!send_whole_file && range_header) {
+			MDS_LOG_INFO("cannot redirect: ranges should be processed");
 			return false;
 		}
 	}
 
-	if (proxy_settings(ns_state).redirect_content_length_threshold > size) {
-		return false;
+	{
+		auto redirect_size = proxy_settings(ns_state).redirect_content_length_threshold;
+		if (redirect_size == -1) {
+			MDS_LOG_INFO("cannot redirect: redirect-content-length-threshold is infinity");
+			return false;
+		}
+
+		if (redirect_size > size) {
+			std::ostringstream oss;
+			oss << "cannot redirect: file is to small;"
+				<< " file-size=" << size << ";"
+				<< " redirect-content-length-threshold=" << redirect_size;
+			auto str = oss.str();
+			MDS_LOG_INFO("%s", str.c_str());
+			return false;
+		}
 	}
 
 	const auto &headers = request().headers();
@@ -521,8 +536,11 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
 		http_response.headers().set_content_length(0);
-		http_response.headers().set("Location", oss.str());
 
+		auto location = oss.str();
+		http_response.headers().set("Location", location);
+
+		MDS_LOG_INFO("redirect request to \"%s\"", location.c_str());
 		send_reply(std::move(http_response));
 
 		return true;

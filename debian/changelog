@@ -17,6 +17,20 @@ mediastorage-proxy (0.80.1) lucid; urgency=low
 
  -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 17 Dec 2014 18:10:40 +0400
 
+mediastorage-proxy (0.79.4) lucid; urgency=low
+
+  * Namespace's settings have default values
+  * MDS-564: redirect-content-length-threshold -1 means infinity
+  * Log for redirected request was added
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 24 Dec 2014 21:06:31 +0400
+
+mediastorage-proxy (0.79.3) lucid; urgency=low
+
+  * Throw exception in case of ns_state is uninitialized
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 18 Dec 2014 16:34:59 +0400
+
 mediastorage-proxy (0.79.2) lucid; urgency=low
 
   * Set Accept-Ranges header for all positive response

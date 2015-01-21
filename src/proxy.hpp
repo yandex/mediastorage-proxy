@@ -64,6 +64,14 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 
 struct settings_t
 	: public mastermind::namespace_state_t::user_settings_t {
+
+	settings_t()
+		: redirect_content_length_threshold(-1)
+		, can_choose_couple_to_upload(false)
+		, multipart_content_length_threshold(0)
+		, success_copies_num(-1)
+	{}
+
 	std::string name;
 	ioremap::elliptics::result_checker result_checker;
 
@@ -199,6 +207,9 @@ public:
 
 	mastermind::namespace_state_t
 	get_namespace_state(const std::string &script, const std::string &handler);
+
+	mastermind::namespace_state_t
+	get_namespace_state(const std::string &name);
 
 	int die_limit() const;
 
