@@ -456,6 +456,16 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 			return;
 		}
 
+		{
+			auto format = get_arg<std::string>(request().url().query(), "format", "xml");
+
+			if (format != "xml" && format != "json" && format != "jsonp") {
+				MDS_LOG_ERROR("unknown format=%s", format.c_str());
+				send_reply(400);
+				return;
+			}
+		}
+
 		boost::optional<ioremap::elliptics::session> session;
 		boost::optional<ioremap::elliptics::key> key;
 
@@ -552,7 +562,6 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 				body = oss.str();
 			}
 		}
-
 
 		headers.set_content_length(body.size());
 		reply.set_headers(headers);
