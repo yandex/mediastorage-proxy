@@ -512,25 +512,51 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 
 		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns_state);
 
-		std::stringstream oss;
-		oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
-		oss << "<download-info>";
-		oss << "<host>" << std::get<0>(res) << "</host>";
-		oss << "<path>" << std::get<1>(res) << "</path>";
-		oss << "<ts>" << std::get<2>(res) << "</ts>";
-		oss << "<region>-1</region>";
-		oss << "<s>" << std::get<3>(res) << "</s>";
-		oss << "</download-info>";
-
-		const std::string &str = oss.str();
-
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
 		reply.set_code(200);
-		headers.set_content_length(str.size());
-		headers.set_content_type("text/xml");
+		std::string body;
+
+		auto format = get_arg<std::string>(request().url().query(), "format", "xml");
+
+		if (format == "xml") {
+			headers.set_content_type("text/xml");
+
+			std::stringstream oss;
+			oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+			oss << "<download-info>";
+			oss << "<host>" << std::get<0>(res) << "</host>";
+			oss << "<path>" << std::get<1>(res) << "</path>";
+			oss << "<ts>" << std::get<2>(res) << "</ts>";
+			oss << "<region>-1</region>";
+			oss << "<s>" << std::get<3>(res) << "</s>";
+			oss << "</download-info>";
+
+			body = oss.str();
+		} else if (format == "json" || format == "jsonp") {
+			auto dynamic = kora::dynamic_t::empty_object;
+			auto &object = dynamic.as_object();
+			object["host"] = std::get<0>(res);
+			object["path"] = std::get<1>(res);
+			object["ts"] = std::get<2>(res);
+			object["s"] = std::get<3>(res);
+
+			if (format == "json") {
+				headers.set_content_type("application/json");
+				body = kora::to_pretty_json(dynamic);
+			} else {
+				headers.set_content_type("application/javascript");
+				std::ostringstream oss;
+				oss << get_arg<std::string>(request().url().query(), "callback", "");
+				oss << "(" << dynamic << ")";
+				body = oss.str();
+			}
+		}
+
+
+		headers.set_content_length(body.size());
 		reply.set_headers(headers);
-		send_reply(std::move(reply), std::move(str));
+		send_reply(std::move(reply), std::move(body));
 
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Download info finish error: %s", ex.what());
