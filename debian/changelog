@@ -1,3 +1,9 @@
+mediastorage-proxy (0.80.5) lucid; urgency=low
+
+  * MDS-524: added json and jsonp formats for downloadinfo
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 23 Jan 2015 17:39:41 +0400
+
 mediastorage-proxy (0.80.4) lucid; urgency=low
 
   * Fix memory leak in upload helper's collback
