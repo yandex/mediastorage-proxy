@@ -531,7 +531,7 @@ bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_resu
 		std::stringstream oss;
 		oss
 			<< "//" << std::get<0>(res) << std::get<1>(res) << "?ts="
-			<< std::get<2>(res) << "&s=" << std::get<3>(res);
+			<< std::get<2>(res) << "&sign=" << std::get<3>(res);
 
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
