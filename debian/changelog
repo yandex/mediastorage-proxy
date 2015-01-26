@@ -1,3 +1,9 @@
+mediastorage-proxy (0.80.8) lucid; urgency=low
+
+  * MDS-586: the 's' argument in redirect location was renamed into 'sign'
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 26 Jan 2015 17:52:21 +0400
+
 mediastorage-proxy (0.80.7) lucid; urgency=low
 
   * MDS-572: dependence on ubic was added
