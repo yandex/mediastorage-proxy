@@ -1,3 +1,9 @@
+mediastorage-proxy (0.80.7) lucid; urgency=low
+
+  * MDS-572: dependence on ubic was added
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 26 Jan 2015 16:50:53 +0400
+
 mediastorage-proxy (0.80.6) lucid; urgency=low
 
   * MDS-524: wrong format for downloadinfo causes 400 bad request
