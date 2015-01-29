@@ -1,3 +1,12 @@
+mediastorage-proxy (0.80.9) lucid; urgency=low
+
+  * MDS-552: proxy will response 507 if -ENOSPC occurs
+    If the writting is failed during processing upload handler and one of
+    elliptics returns status -ENOSPC(28) proxy will send 507 Insufficient
+    Storage instead of 500 Internal Server Error.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 30 Jan 2015 01:12:24 +0400
+
 mediastorage-proxy (0.80.8) lucid; urgency=low
 
   * MDS-586: the 's' argument in redirect location was renamed into 'sign'
