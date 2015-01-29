@@ -153,6 +153,7 @@ private:
 
 	enum class error_type_tag {
 		  none
+		, insufficient_storage
 		, internal
 		, multipart
 		, client

@@ -107,7 +107,13 @@ upload_simple_t::on_write_is_done(const std::error_code &error_code) {
 	if (error_code) {
 		MDS_LOG_ERROR("could not write file into storage: %s"
 				, error_code.message().c_str());
-		send_reply(500);
+
+		if (error_code == make_error_code(writer_errc::insufficient_storage)) {
+			send_reply(507);
+		} else {
+			send_reply(500);
+		}
+
 		return;
 	}
 
