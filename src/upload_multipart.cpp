@@ -360,7 +360,11 @@ upload_multipart_t::on_writer_is_finished(const std::error_code &error_code) {
 		const auto interrupted_error = make_error_code(buffered_writer_errc::interrupted);
 
 		if (error_code != interrupted_error) {
-			interrupt_writers(error_type_tag::internal);
+			if (error_code == make_error_code(writer_errc::insufficient_storage)) {
+				interrupt_writers(error_type_tag::insufficient_storage);
+			} else {
+				interrupt_writers(error_type_tag::internal);
+			}
 		}
 	}
 
@@ -378,14 +382,20 @@ upload_multipart_t::set_error(error_type_tag e) {
 
 	// Errors have priorities:
 	// 1. Client error means there is no reason to send response
-	// 2. Internal error means we should send 500
-	// 3. Multipart error means we should send 400
+	// 2. Insufficient Storage error means we should send 507
+	// 3. Internal error means we should send 500
+	// 4. Multipart error means we should send 400
 	switch (error_type) {
 	case error_type_tag::none:
 		error_type = e;
 		break;
-	case error_type_tag::internal:
+	case error_type_tag::insufficient_storage:
 		if (error_type_tag::client == e) {
+			error_type = e;
+		}
+		break;
+	case error_type_tag::internal:
+		if (error_type_tag::client == e || error_type_tag::insufficient_storage == e) {
 			error_type = e;
 		}
 		break;
@@ -571,6 +581,9 @@ upload_multipart_t::send_error() {
 	switch (get_error()) {
 	case error_type_tag::none:
 		throw std::runtime_error("unexpected error type");
+	case error_type_tag::insufficient_storage:
+		send_reply(507);
+		break;
 	case error_type_tag::internal:
 		send_reply(500);
 		break;

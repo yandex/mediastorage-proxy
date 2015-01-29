@@ -36,6 +36,7 @@ enum class writer_errc {
 	, unexpected_event
 	, incorrect_size
 	, internal
+	, insufficient_storage
 };
 
 const std::error_category &
@@ -131,6 +132,9 @@ private:
 	ioremap::elliptics::async_write_result
 	write_impl(const ioremap::elliptics::data_pointer &data_pointer);
 
+	elliptics::writer_errc
+	choose_errc_for_client(const ioremap::elliptics::sync_write_result &entries);
+
 	void
 	on_data_wrote(const ioremap::elliptics::sync_write_result &entries
 			, const ioremap::elliptics::error_info &error_info);
@@ -141,6 +145,7 @@ private:
 
 	state_tag state;
 	mutable mutex_t state_mutex;
+	writer_errc errc_for_client;
 
 	ioremap::swarm::logger bh_logger;
 
