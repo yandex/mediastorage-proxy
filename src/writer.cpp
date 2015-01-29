@@ -43,6 +43,8 @@ public:
 			return "incorrect size";
 		case elliptics::writer_errc::internal:
 			return "internal error";
+		case elliptics::writer_errc::insufficient_storage:
+			return "insufficient storage";
 		default:
 			return "unknown error";
 		}
@@ -76,6 +78,7 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, callback_t on_complete_
 		)
 	: state(state_tag::waiting)
+	, errc_for_client(writer_errc::success)
 	, bh_logger(std::move(bh_logger_))
 	, session(session_.clone())
 	, key(std::move(key_))
@@ -334,6 +337,28 @@ elliptics::writer_t::write_impl(
 	}
 }
 
+elliptics::writer_errc
+elliptics::writer_t::choose_errc_for_client(const ioremap::elliptics::sync_write_result &entries) {
+	bool is_insufficient_storage = false;
+
+	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
+		auto status = it->status();
+
+		switch (status) {
+		case -ENOSPC:
+			is_insufficient_storage = true;
+			break;
+		}
+
+	}
+
+	if (is_insufficient_storage) {
+		return writer_errc::insufficient_storage;
+	}
+
+	return writer_errc::internal;
+}
+
 void
 elliptics::writer_t::on_data_wrote(
 		const ioremap::elliptics::sync_write_result &entries
@@ -380,6 +405,7 @@ elliptics::writer_t::on_data_wrote(
 		LOG_RESULT(ERROR, "bad");
 
 		state = state_tag::removing;
+		errc_for_client = choose_errc_for_client(entries);
 
 		{
 			auto groups = session.get_groups();
@@ -426,7 +452,7 @@ elliptics::writer_t::on_data_removed(
 	case state_tag::removing: {
 		MDS_LOG_INFO("remove is finished");
 		state = state_tag::failed;
-		on_complete(make_error_code(writer_errc::internal));
+		on_complete(make_error_code(errc_for_client));
 		break;
 	}
 	case state_tag::waiting:
