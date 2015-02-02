@@ -1,3 +1,61 @@
+mediastorage-proxy (0.80.9) lucid; urgency=low
+
+  * MDS-552: proxy will response 507 if -ENOSPC occurs
+    If the writting is failed during processing upload handler and one of
+    elliptics returns status -ENOSPC(28) proxy will send 507 Insufficient
+    Storage instead of 500 Internal Server Error.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 30 Jan 2015 01:12:24 +0400
+
+mediastorage-proxy (0.80.8) lucid; urgency=low
+
+  * MDS-586: the 's' argument in redirect location was renamed into 'sign'
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 26 Jan 2015 17:52:21 +0400
+
+mediastorage-proxy (0.80.7) lucid; urgency=low
+
+  * MDS-572: dependence on ubic was added
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 26 Jan 2015 16:50:53 +0400
+
+mediastorage-proxy (0.80.6) lucid; urgency=low
+
+  * MDS-524: wrong format for downloadinfo causes 400 bad request
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 23 Jan 2015 18:41:16 +0400
+
+mediastorage-proxy (0.80.5) lucid; urgency=low
+
+  * MDS-524: added json and jsonp formats for downloadinfo
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 23 Jan 2015 17:39:41 +0400
+
+mediastorage-proxy (0.80.4) lucid; urgency=low
+
+  * Fix memory leak in upload helper's collback
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 21 Jan 2015 17:11:36 +0400
+
+mediastorage-proxy (0.80.3) lucid; urgency=low
+
+  * MDS-430: error handling in upload handlers (including removing of needless
+    files) was reworked
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 23 Dec 2014 20:53:43 +0400
+
+mediastorage-proxy (0.80.2) lucid; urgency=low
+
+  * Deps: libswarm2 (>= 0.7.2.0)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 23 Dec 2014 19:42:40 +0400
+
+mediastorage-proxy (0.80.1) lucid; urgency=low
+
+  * Deps: libswarm2 (>= 0.7.1.0)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 17 Dec 2014 18:10:40 +0400
+
 mediastorage-proxy (0.79.4) lucid; urgency=low
 
   * Namespace's settings have default values
