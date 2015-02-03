@@ -239,9 +239,11 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	auto factory = std::bind(&proxy::settings_factory, this
 			, std::placeholders::_1, std::placeholders::_2);
 
-	return std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
+	auto result = std::make_shared<mastermind::mastermind_t>(remotes, sp_lg,
 			group_info_update_period, cache_path, warning_time, expire_time, worker_name,
-			enqueue_timeout, reconnect_timeout, factory);
+			enqueue_timeout, reconnect_timeout, false);
+	result->set_user_settings_factory(std::move(factory));
+	return result;
 }
 
 std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
@@ -265,6 +267,10 @@ std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &c
 proxy::~proxy() {
 	MDS_LOG_INFO("Mediastorage-proxy stops");
 
+	MDS_LOG_INFO("Mediastorage-proxy stops: mastermind");
+	mastermind()->stop();
+	MDS_LOG_INFO("Mediastorage-proxy stops: done");
+
 	MDS_LOG_INFO("Mediastorage-proxy stops: elliptics node");
 	{
 		std::lock_guard<std::mutex> lock_node(elliptics_node_mutex);
@@ -281,10 +287,6 @@ proxy::~proxy() {
 
 		m_elliptics_node.reset();
 	}
-	MDS_LOG_INFO("Mediastorage-proxy stops: done");
-
-	MDS_LOG_INFO("Mediastorage-proxy stops: mastermind");
-	m_mastermind.reset();
 	MDS_LOG_INFO("Mediastorage-proxy stops: done");
 }
 
@@ -381,7 +383,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cache updater");
 		mastermind()->set_update_cache_ext1_callback(std::bind(&proxy::cache_update_callback, this,
 					std::placeholders::_1));
+		mastermind()->start();
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
+
+		update_elliptics_remotes();
 
 		if (config.HasMember("chunk-size") == false) {
 			throw std::runtime_error("You should set values for write and read chunk sizes");
@@ -1088,6 +1093,32 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 			+ error_message);
 }
 
+void
+proxy::update_elliptics_remotes() {
+	MDS_LOG_INFO("update elliptics remotes");
+
+	try {
+		auto remotes = mastermind()->get_elliptics_remotes();
+		std::vector<ioremap::elliptics::address> addresses;
+
+		for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
+			addresses.emplace_back(*it);
+		}
+
+		std::lock_guard<std::mutex> lock_guard(elliptics_node_mutex);
+
+		if (m_elliptics_node) {
+			m_elliptics_node->add_remote(addresses);
+		}
+	} catch (const std::exception &ex) {
+		std::ostringstream oss;
+		oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
+		MDS_LOG_INFO("%s", oss.str().c_str());
+	}
+
+	MDS_LOG_INFO("update elliptics remotes is done");
+}
+
 void proxy::cache_update_callback(bool cache_is_expired_) {
 	auto &&m = mastermind();
 
@@ -1096,29 +1127,8 @@ void proxy::cache_update_callback(bool cache_is_expired_) {
 	if (m) {
 		MDS_LOG_INFO("cache updater: starts");
 
-		MDS_LOG_INFO("cache updater: update elliptics remotes");
-		try {
-			auto remotes = mastermind()->get_elliptics_remotes();
-			std::vector<ioremap::elliptics::address> addresses;
+		update_elliptics_remotes();
 
-			for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
-				addresses.emplace_back(*it);
-			}
-
-			{
-				std::lock_guard<std::mutex> lock(elliptics_node_mutex);
-				(void) lock;
-
-				if (m_elliptics_node) {
-					m_elliptics_node->add_remote(addresses);
-				}
-			}
-		} catch (const std::exception &ex) {
-			std::ostringstream oss;
-			oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
-			MDS_LOG_INFO("%s", oss.str().c_str());
-		}
-		MDS_LOG_INFO("cache updater: update elliptics remotes is done");
 		MDS_LOG_INFO("cache updater is done");
 	}
 }
