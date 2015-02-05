@@ -250,12 +250,14 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 		if (error_code) {
 			state = state_tag::failed;
 			on_finished(error_code);
+			writer.reset();
 			break;
 		}
 
 		if (buffers.empty()) {
 			state = state_tag::completed;
 			on_finished(buffered_writer_errc::success);
+			writer.reset();
 			break;
 		}
 
@@ -265,6 +267,7 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 		state = state_tag::interrupted;
 		buffers.clear();
 		on_finished(buffered_writer_errc::interrupted);
+		writer.reset();
 		break;
 	case state_tag::appending:
 	case state_tag::completed:
