@@ -252,13 +252,14 @@ upload_multipart_t::sm_headers() {
 	}
 
 	current_filename = name;
-	auto callback = [this] (const std::error_code &error_code) {
-		on_writer_is_finished(error_code);
+	auto self = shared_from_this();
+	auto callback = [this, self, current_filename] (const std::error_code &error_code) {
+		on_writer_is_finished(current_filename, error_code);
 	};
 
 	buffered_writer = std::make_shared<buffered_writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, ns_state.name() + '.' + name, server()->m_write_chunk_size, callback);
+			, ns_state.name() + '.' + name, server()->m_write_chunk_size, std::move(callback));
 
 	multipart_context.state = multipart_state_tag::body;
 }
@@ -347,15 +348,39 @@ upload_multipart_t::start_writing() {
 
 	join_upload_tasks.defer();
 
-	buffered_writers.push_back(std::make_tuple(buffered_writer, current_filename));
+	buffered_writers.insert(std::make_pair(current_filename, buffered_writer));
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
-			, server()->timeout_coef.data_flow_rate, proxy_settings(ns_state).success_copies_num);
+			, server()->timeout_coef.data_flow_rate
+			, proxy_settings(ns_state).success_copies_num);
+
+	buffered_writer.reset();
 }
 
 void
-upload_multipart_t::on_writer_is_finished(const std::error_code &error_code) {
+upload_multipart_t::on_writer_is_finished(const std::string &current_filename
+		, const std::error_code &error_code) {
+	{
+		std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
+		auto it = buffered_writers.find(current_filename);
+
+		part_result_t result;
+		result.name = current_filename;
+
+		{
+			const auto &writer = it->second->get_writer();
+			result.key_id = writer->get_id();
+			result.key_remote = writer->get_key();
+			result.total_size = writer->get_total_size();
+			result.entries_info = writer->get_result();
+		}
+
+		buffered_writers.erase(it);
+
+		results.emplace_back(std::move(result));
+	}
+
 	if (error_code) {
 		const auto interrupted_error = make_error_code(buffered_writer_errc::interrupted);
 
@@ -434,7 +459,7 @@ upload_multipart_t::interrupt_writers() {
 
 	MDS_LOG_INFO("interrupt writers");
 	for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
-		std::get<0>(*it)->interrupt();
+		it->second->interrupt();
 	}
 }
 
@@ -460,23 +485,22 @@ upload_multipart_t::send_result() {
 		<< "<multipart-post couple_id=\""
 		<< *std::min_element(couple.begin(), couple.end()) << "\">\n";
 
-	for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
+	for (auto it = results.begin(), end = results.end(); it != end; ++it) {
 
-		const auto &writer = std::get<0>(*it)->get_writer();
 		oss
-			<< " <post obj=\"" << encode_for_xml(writer->get_key())
-			<< "\" id=\"" << writer->get_id()
+			<< " <post obj=\"" << encode_for_xml(it->key_remote)
+			<< "\" id=\"" << it->key_id
 			<< "\" groups=\"" << ns_state.settings().groups_count()
-			<< "\" size=\"" << writer->get_total_size()
+			<< "\" size=\"" << it->total_size
 			<< "\" key=\"";
 
 		if (proxy_settings(ns_state).static_couple.empty()) {
 			oss << couple_id << '/';
 		}
 
-		oss << encode_for_xml(std::get<1>(*it)) << "\">\n";
+		oss << encode_for_xml(it->name) << "\">\n";
 
-		const auto &result = writer->get_result();
+		const auto &result = it->entries_info;
 
 		for (auto it = result.begin(), end = result.end(); it != end; ++it) {
 			oss
@@ -545,8 +569,8 @@ upload_multipart_t::remove_files() {
 	if (auto session = server()->remove_session(http_request, couple)) {
 		MDS_LOG_INFO("removing uploaded files");
 
-		for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
-			const auto &key = std::get<0>(*it)->get_key();
+		for (auto it = results.begin(), end = results.end(); it != end; ++it) {
+			auto key = it->key_remote;
 			join_remove_tasks.defer();
 
 			MDS_LOG_INFO("remove %s", key.c_str());
