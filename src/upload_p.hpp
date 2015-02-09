@@ -159,6 +159,14 @@ private:
 		, client
 	};
 
+	struct part_result_t {
+		std::string name;
+		std::string key_id;
+		std::string key_remote;
+		size_t total_size;
+		writer_t::entries_info_t entries_info;
+	};
+
 	void sm_init();
 	void sm_headers();
 	void sm_body();
@@ -168,7 +176,8 @@ private:
 	void start_writing();
 
 	void
-	on_writer_is_finished(const std::error_code &error_code);
+	on_writer_is_finished(const std::string &current_filename
+			, const std::error_code &error_code);
 
 	void
 	set_error(error_type_tag e);
@@ -224,8 +233,9 @@ private:
 	std::shared_ptr<buffered_writer_t> buffered_writer;
 	std::string current_filename;
 
-	std::vector<std::tuple<std::shared_ptr<buffered_writer_t>, std::string>> buffered_writers;
 	std::mutex buffered_writers_mutex;
+	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
+	std::vector<part_result_t> results;
 
 };
 

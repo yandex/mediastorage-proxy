@@ -1,3 +1,15 @@
+mediastorage-proxy (0.81.2) lucid; urgency=low
+
+  * MDS-684: upload is adopted to be used with thevoid=0.7.3.0
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 05 Feb 2015 13:49:16 +0400
+
+mediastorage-proxy (0.81.1) lucid; urgency=low
+
+  * MDS-587: using control of mastermind io-loop
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 03 Feb 2015 13:50:15 +0400
+
 mediastorage-proxy (0.80.9) lucid; urgency=low
 
   * MDS-552: proxy will response 507 if -ENOSPC occurs

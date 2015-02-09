@@ -233,6 +233,9 @@ public:
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
 
+	void
+	update_elliptics_remotes();
+
 	void cache_update_callback(bool cache_is_expired_);
 
 	mastermind::namespace_state_t::user_settings_ptr_t
