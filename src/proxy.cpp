@@ -1207,6 +1207,9 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 			settings->multipart_content_length_threshold
 				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
 		}
+
+		settings->custom_expiration_time
+			= features_config.at<bool>("custom-expiration-time", false);
 	}
 
 	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));

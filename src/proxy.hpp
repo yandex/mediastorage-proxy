@@ -69,6 +69,7 @@ struct settings_t
 		: redirect_content_length_threshold(-1)
 		, can_choose_couple_to_upload(false)
 		, multipart_content_length_threshold(0)
+		, custom_expiration_time(false)
 		, success_copies_num(-1)
 	{}
 
@@ -89,6 +90,7 @@ struct settings_t
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
+	bool custom_expiration_time;
 
 	int success_copies_num;
 };
