@@ -69,6 +69,7 @@ struct settings_t
 		: redirect_content_length_threshold(-1)
 		, can_choose_couple_to_upload(false)
 		, multipart_content_length_threshold(0)
+		, custom_expiration_time(false)
 		, success_copies_num(-1)
 	{}
 
@@ -89,6 +90,7 @@ struct settings_t
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
+	bool custom_expiration_time;
 
 	int success_copies_num;
 };
@@ -130,6 +132,7 @@ public:
 		mastermind::namespace_state_t ns_state;
 		std::string x_regional_host;
 		std::string handler_name;
+		boost::optional<std::chrono::seconds> expiration_time;
 	};
 
 	struct req_download_info_1 : public req_download_info {
@@ -232,6 +235,11 @@ public:
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
+
+	std::tuple<std::string, std::string, std::string, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+		, boost::optional<std::chrono::seconds> optional_expiration_time);
 
 	void
 	update_elliptics_remotes();
