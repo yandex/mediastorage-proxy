@@ -173,13 +173,13 @@ elliptics::writer_t::get_result() const {
 
 	switch (state) {
 	case state_tag::committed:
-		return entries_info;
 	case state_tag::waiting:
+	case state_tag::failed:
+		return entries_info;
 	case state_tag::writing:
 	case state_tag::committing:
 	case state_tag::need_remove:
 	case state_tag::removing:
-	case state_tag::failed:
 	// Default is needed only for avoding compile warning:
 	// 'control reaches end of non-void function'
 	default:

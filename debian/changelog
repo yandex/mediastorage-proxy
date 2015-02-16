@@ -1,3 +1,14 @@
+mediastorage-proxy (0.82.2) lucid; urgency=low
+
+  * MDS-732: the writer state machine is changed
+    get_result returns emtpy result in following states:
+    - waiting
+    - failed
+    Both states can be during writer callback is running.
+    Therefore throwing unexpected_event error is incorrect behaviour.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 16 Feb 2015 19:20:14 +0400
+
 mediastorage-proxy (0.82.1) lucid; urgency=low
 
   * MDS-713: finalize handystats on server's destruction.
