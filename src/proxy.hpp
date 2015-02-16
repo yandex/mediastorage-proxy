@@ -132,6 +132,7 @@ public:
 		mastermind::namespace_state_t ns_state;
 		std::string x_regional_host;
 		std::string handler_name;
+		boost::optional<std::chrono::seconds> expiration_time;
 	};
 
 	struct req_download_info_1 : public req_download_info {

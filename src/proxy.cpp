@@ -466,12 +466,35 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		}
 
 		{
-			auto format = get_arg<std::string>(request().url().query(), "format", "xml");
+			const auto &query = request().url().query();
 
-			if (format != "xml" && format != "json" && format != "jsonp") {
-				MDS_LOG_ERROR("unknown format=%s", format.c_str());
-				send_reply(400);
-				return;
+			{
+				auto format = get_arg<std::string>(query, "format", "xml");
+
+				if (format != "xml" && format != "json" && format != "jsonp") {
+					MDS_LOG_ERROR("unknown format=%s", format.c_str());
+					send_reply(400);
+					return;
+				}
+			}
+
+			if (query.has_item("expiration-time")) {
+				if (!proxy_settings(ns_state).custom_expiration_time) {
+					MDS_LOG_ERROR("using of expiration-time is prohibited");
+					send_reply(403);
+					return;
+				}
+
+				auto expiration_time_str = *query.item_value("expiration-time");
+
+				try {
+					expiration_time = std::chrono::seconds(
+							boost::lexical_cast<size_t>(expiration_time_str));
+				} catch (const std::exception &ex) {
+					MDS_LOG_ERROR("cannot parse expiration-time: %s", ex.what());
+					send_reply(400);
+					return;
+				}
 			}
 		}
 
@@ -529,7 +552,8 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns_state);
+		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host
+				, ns_state, expiration_time);
 
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
