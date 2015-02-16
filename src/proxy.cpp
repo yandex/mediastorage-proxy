@@ -466,12 +466,35 @@ void proxy::req_download_info::on_request(const ioremap::thevoid::http_request &
 		}
 
 		{
-			auto format = get_arg<std::string>(request().url().query(), "format", "xml");
+			const auto &query = request().url().query();
 
-			if (format != "xml" && format != "json" && format != "jsonp") {
-				MDS_LOG_ERROR("unknown format=%s", format.c_str());
-				send_reply(400);
-				return;
+			{
+				auto format = get_arg<std::string>(query, "format", "xml");
+
+				if (format != "xml" && format != "json" && format != "jsonp") {
+					MDS_LOG_ERROR("unknown format=%s", format.c_str());
+					send_reply(400);
+					return;
+				}
+			}
+
+			if (query.has_item("expiration-time")) {
+				if (!proxy_settings(ns_state).custom_expiration_time) {
+					MDS_LOG_ERROR("using of expiration-time is prohibited");
+					send_reply(403);
+					return;
+				}
+
+				auto expiration_time_str = *query.item_value("expiration-time");
+
+				try {
+					expiration_time = std::chrono::seconds(
+							boost::lexical_cast<size_t>(expiration_time_str));
+				} catch (const std::exception &ex) {
+					MDS_LOG_ERROR("cannot parse expiration-time: %s", ex.what());
+					send_reply(400);
+					return;
+				}
 			}
 		}
 
@@ -529,7 +552,8 @@ void proxy::req_download_info::on_finished(const ioremap::elliptics::sync_lookup
 			return;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host, ns_state);
+		auto res = server()->generate_signature_for_elliptics_file(slr, x_regional_host
+				, ns_state, expiration_time);
 
 		ioremap::thevoid::http_response reply;
 		ioremap::swarm::http_headers headers;
@@ -1031,6 +1055,13 @@ proxy::hmac(const std::string &data, const std::string &token) {
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state) {
+	return generate_signature_for_elliptics_file(slr, std::move(x_regional_host), ns_state
+			, boost::none);
+}
+std::tuple<std::string, std::string, std::string, std::string>
+proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+	, boost::optional<std::chrono::seconds> optional_expiration_time) {
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
 	if (proxy_settings(ns_state).sign_token.empty()) {
@@ -1075,11 +1106,15 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 			{
 				using namespace std::chrono;
+
+				auto now = system_clock::now().time_since_epoch();
+				auto expiration_time = optional_expiration_time.get_value_or(
+						proxy_settings(ns_state).redirect_expire_time);
+
 				std::ostringstream ts_oss;
 				ts_oss
 					<< std::hex
-					<< (duration_cast<microseconds>(system_clock::now().time_since_epoch())
-							+ proxy_settings(ns_state).redirect_expire_time).count();
+					<< duration_cast<microseconds>(now + expiration_time).count();
 				ts = ts_oss.str();
 			}
 
@@ -1207,6 +1242,9 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 			settings->multipart_content_length_threshold
 				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
 		}
+
+		settings->custom_expiration_time
+			= features_config.at<bool>("custom-expiration-time", false);
 	}
 
 	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));
