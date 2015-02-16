@@ -1031,6 +1031,13 @@ proxy::hmac(const std::string &data, const std::string &token) {
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state) {
+	return generate_signature_for_elliptics_file(slr, std::move(x_regional_host), ns_state
+			, boost::none);
+}
+std::tuple<std::string, std::string, std::string, std::string>
+proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+	, boost::optional<std::chrono::seconds> optional_expiration_time) {
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
 	if (proxy_settings(ns_state).sign_token.empty()) {
@@ -1075,11 +1082,15 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 			{
 				using namespace std::chrono;
+
+				auto now = system_clock::now().time_since_epoch();
+				auto expiration_time = optional_expiration_time.get_value_or(
+						proxy_settings(ns_state).redirect_expire_time);
+
 				std::ostringstream ts_oss;
 				ts_oss
 					<< std::hex
-					<< (duration_cast<microseconds>(system_clock::now().time_since_epoch())
-							+ proxy_settings(ns_state).redirect_expire_time).count();
+					<< duration_cast<microseconds>(now + expiration_time).count();
 				ts = ts_oss.str();
 			}
 

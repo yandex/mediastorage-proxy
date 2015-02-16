@@ -235,6 +235,11 @@ public:
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
 
+	std::tuple<std::string, std::string, std::string, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+		, boost::optional<std::chrono::seconds> optional_expiration_time);
+
 	void
 	update_elliptics_remotes();
 
