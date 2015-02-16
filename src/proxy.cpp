@@ -288,6 +288,10 @@ proxy::~proxy() {
 		m_elliptics_node.reset();
 	}
 	MDS_LOG_INFO("Mediastorage-proxy stops: done");
+
+	MDS_LOG_INFO("Mediastorage-proxy stops: handystats");
+	HANDY_FINALIZE();
+	MDS_LOG_INFO("Mediastorage-proxy stops: done");
 }
 
 bool proxy::initialize(const rapidjson::Value &config) {
