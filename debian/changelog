@@ -1,3 +1,12 @@
+mediastorage-proxy (0.83.2) lucid; urgency=low
+
+  * MDS-715: Option expiration-time is implemented
+    Handler download-info has option expiration-time to customise
+    expiration time of signature. The option can be used only if
+    namespace's option custom-expiration-time is set.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 17 Feb 2015 00:22:53 +0400
+
 mediastorage-proxy (0.83.1) lucid; urgency=low
 
   * MDS-732: the writer state machine is changed
