@@ -1,3 +1,9 @@
+mediastorage-proxy (0.83.3) lucid; urgency=low
+
+  * Handler downloadinfo was a bit refactored
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 17 Feb 2015 19:45:52 +0400
+
 mediastorage-proxy (0.83.2) lucid; urgency=low
 
   * MDS-715: Option expiration-time is implemented
