@@ -6,6 +6,7 @@
 #include <thevoid/stream.hpp>
 
 #include <string>
+#include <utility>
 
 namespace elliptics {
 
@@ -25,6 +26,36 @@ public:
 			, const ioremap::elliptics::error_info &error);
 
 private:
+	mastermind::namespace_state_t
+	get_namespace_state(const std::string &path, const std::string &handler);
+
+	void
+	check_signature();
+
+	void
+	check_query_args();
+
+	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
+	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
+
+	void
+	process_get(ioremap::elliptics::session session, const ioremap::elliptics::key key);
+
+	void
+	send_response(std::tuple<std::string, std::string, std::string, std::string> res);
+
+	std::string
+	xml_response(std::tuple<std::string, std::string, std::string, std::string> res);
+
+	kora::dynamic_t
+	json_response_impl(std::tuple<std::string, std::string, std::string, std::string> res);
+
+	std::string
+	json_response(std::tuple<std::string, std::string, std::string, std::string> res);
+
+	std::string
+	jsonp_response(std::tuple<std::string, std::string, std::string, std::string> res);
+
 	mastermind::namespace_state_t ns_state;
 	std::string x_regional_host;
 	std::string handler_name;
