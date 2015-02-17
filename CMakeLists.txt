@@ -34,6 +34,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/upload_multipart.cpp
 	${PROJECT_SOURCE_DIR}/src/get.cpp
 	${PROJECT_SOURCE_DIR}/src/delete.cpp
+	${PROJECT_SOURCE_DIR}/src/download_info.cpp
 	${PROJECT_SOURCE_DIR}/src/lookup_result.cpp
 	${PROJECT_SOURCE_DIR}/src/data_container.cpp
 	${PROJECT_SOURCE_DIR}/src/ranges.cpp

@@ -120,31 +120,6 @@ public:
 		size_t total_size;
 	};
 
-	struct req_download_info
-		: public ioremap::thevoid::simple_request_stream<proxy>
-		, public std::enable_shared_from_this<req_download_info>
-	{
-		req_download_info(const std::string &handler_name_);
-		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
-
-	private:
-		mastermind::namespace_state_t ns_state;
-		std::string x_regional_host;
-		std::string handler_name;
-		boost::optional<std::chrono::seconds> expiration_time;
-	};
-
-	struct req_download_info_1 : public req_download_info {
-		req_download_info_1();
-		static const std::string handler_name;
-	};
-
-	struct req_download_info_2 : public req_download_info {
-		req_download_info_2();
-		static const std::string handler_name;
-	};
-
 	struct req_ping
 		: public ioremap::thevoid::simple_request_stream<proxy>
 		, public std::enable_shared_from_this<req_ping>
