@@ -1,3 +1,9 @@
+mediastorage-proxy (0.82.3) lucid; urgency=low
+
+  * MDS-747: deadlock in multipart upload was fixed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 18 Feb 2015 17:39:36 +0400
+
 mediastorage-proxy (0.82.2) lucid; urgency=low
 
   * MDS-732: the writer state machine is changed

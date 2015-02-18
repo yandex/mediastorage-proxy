@@ -338,7 +338,7 @@ upload_multipart_t::sm_end() {
 
 void
 upload_multipart_t::start_writing() {
-	std::lock_guard<std::mutex> lock(buffered_writers_mutex);
+	std::lock_guard<std::recursive_mutex> lock(buffered_writers_mutex);
 	(void) lock;
 
 	if (is_error()) {
@@ -362,7 +362,7 @@ void
 upload_multipart_t::on_writer_is_finished(const std::string &current_filename
 		, const std::error_code &error_code) {
 	{
-		std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
+		std::lock_guard<std::recursive_mutex> lock_guard(buffered_writers_mutex);
 		auto it = buffered_writers.find(current_filename);
 
 		part_result_t result;
@@ -454,7 +454,7 @@ upload_multipart_t::interrupt_writers(error_type_tag e) {
 
 void
 upload_multipart_t::interrupt_writers() {
-	std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
+	std::lock_guard<std::recursive_mutex> lock_guard(buffered_writers_mutex);
 	(void) lock_guard;
 
 	MDS_LOG_INFO("interrupt writers");
