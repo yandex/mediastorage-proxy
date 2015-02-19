@@ -338,17 +338,20 @@ upload_multipart_t::sm_end() {
 
 void
 upload_multipart_t::start_writing() {
-	std::lock_guard<std::recursive_mutex> lock(buffered_writers_mutex);
-	(void) lock;
+	{
+		std::lock_guard<std::mutex> lock(buffered_writers_mutex);
+		(void) lock;
 
-	if (is_error()) {
-		multipart_context.interrupt(false);
-		return;
+		if (is_error()) {
+			multipart_context.interrupt(false);
+			return;
+		}
+
+		join_upload_tasks.defer();
+
+		buffered_writers.insert(std::make_pair(current_filename, buffered_writer));
 	}
 
-	join_upload_tasks.defer();
-
-	buffered_writers.insert(std::make_pair(current_filename, buffered_writer));
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
@@ -362,7 +365,7 @@ void
 upload_multipart_t::on_writer_is_finished(const std::string &current_filename
 		, const std::error_code &error_code) {
 	{
-		std::lock_guard<std::recursive_mutex> lock_guard(buffered_writers_mutex);
+		std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
 		auto it = buffered_writers.find(current_filename);
 
 		part_result_t result;
@@ -454,7 +457,7 @@ upload_multipart_t::interrupt_writers(error_type_tag e) {
 
 void
 upload_multipart_t::interrupt_writers() {
-	std::lock_guard<std::recursive_mutex> lock_guard(buffered_writers_mutex);
+	std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
 	(void) lock_guard;
 
 	MDS_LOG_INFO("interrupt writers");

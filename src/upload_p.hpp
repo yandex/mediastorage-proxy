@@ -233,7 +233,7 @@ private:
 	std::shared_ptr<buffered_writer_t> buffered_writer;
 	std::string current_filename;
 
-	std::recursive_mutex buffered_writers_mutex;
+	std::mutex buffered_writers_mutex;
 	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
 	std::vector<part_result_t> results;
 

@@ -106,11 +106,15 @@ elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, 
 		state = state_tag::writing;
 		write_impl(session, commit_coef, success_copies_num);
 		break;
+	case state_tag::interrupted:
+		buffers.clear();
+		on_finished(buffered_writer_errc::interrupted);
+		writer.reset();
+		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
 	case state_tag::completed:
 	case state_tag::failed:
-	case state_tag::interrupted:
 		throw buffered_writer_error(buffered_writer_errc::unexpected_event);
 	}
 }
