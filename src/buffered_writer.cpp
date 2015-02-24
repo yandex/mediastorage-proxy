@@ -99,7 +99,6 @@ void
 elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
 		, size_t success_copies_num) {
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::appending:
@@ -110,6 +109,7 @@ elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, 
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+		lock_guard.unlock();
 		on_finished(buffered_writer_errc::interrupted);
 		break;
 	case state_tag::writing:
@@ -248,7 +248,6 @@ elliptics::buffered_writer_t::write_chunk() {
 void
 elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) {
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::writing:
@@ -256,6 +255,7 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 			state = state_tag::failed;
 			result = writer->get_result();
 			writer.reset();
+			lock_guard.unlock();
 			on_finished(error_code);
 			break;
 		}
@@ -264,6 +264,7 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 			state = state_tag::completed;
 			result = writer->get_result();
 			writer.reset();
+			lock_guard.unlock();
 			on_finished(buffered_writer_errc::success);
 			break;
 		}
@@ -275,6 +276,7 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+		lock_guard.unlock();
 		on_finished(buffered_writer_errc::interrupted);
 		break;
 	case state_tag::appending:

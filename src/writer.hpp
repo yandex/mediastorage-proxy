@@ -122,7 +122,7 @@ private:
 	};
 
 	typedef std::recursive_mutex mutex_t;
-	typedef std::lock_guard<mutex_t> lock_guard_t;
+	typedef std::unique_lock<mutex_t> lock_guard_t;
 
 	ioremap::swarm::logger &
 	logger();
