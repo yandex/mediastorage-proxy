@@ -108,8 +108,9 @@ elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, 
 		break;
 	case state_tag::interrupted:
 		buffers.clear();
-		on_finished(buffered_writer_errc::interrupted);
+		result = writer->get_result();
 		writer.reset();
+		on_finished(buffered_writer_errc::interrupted);
 		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
@@ -175,9 +176,9 @@ elliptics::buffered_writer_t::is_interrupted() const {
 	return state_tag::interrupted == state;
 }
 
-const elliptics::buffered_writer_t::writer_ptr_t &
-elliptics::buffered_writer_t::get_writer() const {
-	return writer;
+const elliptics::writer_t::result_t &
+elliptics::buffered_writer_t::get_result() const {
+	return result;
 }
 
 ioremap::swarm::logger &
@@ -253,15 +254,17 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 	case state_tag::writing:
 		if (error_code) {
 			state = state_tag::failed;
-			on_finished(error_code);
+			result = writer->get_result();
 			writer.reset();
+			on_finished(error_code);
 			break;
 		}
 
 		if (buffers.empty()) {
 			state = state_tag::completed;
-			on_finished(buffered_writer_errc::success);
+			result = writer->get_result();
 			writer.reset();
+			on_finished(buffered_writer_errc::success);
 			break;
 		}
 
@@ -270,8 +273,9 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 	case state_tag::interrupting:
 		state = state_tag::interrupted;
 		buffers.clear();
-		on_finished(buffered_writer_errc::interrupted);
+		result = writer->get_result();
 		writer.reset();
+		on_finished(buffered_writer_errc::interrupted);
 		break;
 	case state_tag::appending:
 	case state_tag::completed:

@@ -67,6 +67,13 @@ public:
 
 	typedef std::vector<entry_info_t> entries_info_t;
 
+	struct result_t {
+		std::string id;
+		std::string key;
+		size_t total_size;
+		entries_info_t entries_info;
+	};
+
 	writer_t(ioremap::swarm::logger bh_logger_
 			, const ioremap::elliptics::session &session_, std::string key_
 			, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
@@ -79,8 +86,11 @@ public:
 	void
 	write(const ioremap::elliptics::data_pointer &data_pointer);
 
-	const entries_info_t &
+	result_t
 	get_result() const;
+
+	const entries_info_t &
+	get_entries_info() const;
 
 	bool
 	is_finished() const;

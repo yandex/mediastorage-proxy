@@ -166,8 +166,20 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 	}
 }
 
-const elliptics::writer_t::entries_info_t &
+elliptics::writer_t::result_t
 elliptics::writer_t::get_result() const {
+	result_t result;
+
+	result.id = get_id();
+	result.key = get_key();
+	result.total_size = get_total_size();
+	result.entries_info = get_entries_info();
+
+	return result;
+}
+
+const elliptics::writer_t::entries_info_t &
+elliptics::writer_t::get_entries_info() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 

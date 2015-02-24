@@ -84,6 +84,9 @@ public:
 	const writer_ptr_t &
 	get_writer() const;
 
+	const writer_t::result_t &
+	get_result() const;
+
 private:
 	enum class state_tag {
 		  appending
@@ -129,6 +132,7 @@ private:
 	size_t total_size;
 
 	writer_ptr_t writer;
+	writer_t::result_t result;
 };
 
 } // namespace elliptics
