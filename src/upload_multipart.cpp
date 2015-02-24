@@ -364,13 +364,6 @@ upload_multipart_t::start_writing() {
 void
 upload_multipart_t::on_writer_is_finished(const std::string &current_filename
 		, const std::error_code &error_code) {
-	{
-		std::lock_guard<std::mutex> lock_guard(buffered_writers_mutex);
-		auto it = buffered_writers.find(current_filename);
-		results.insert(std::make_pair(it->first, it->second->get_result()));
-		buffered_writers.erase(it);
-	}
-
 	if (error_code) {
 		const auto interrupted_error = make_error_code(buffered_writer_errc::interrupted);
 
@@ -455,6 +448,12 @@ upload_multipart_t::interrupt_writers() {
 
 void
 upload_multipart_t::on_writers_are_finished() {
+	for (auto it = buffered_writers.begin(), end = buffered_writers.end(); it != end; ++it) {
+		results.insert(std::make_pair(it->first, it->second->get_result()));
+	}
+
+	buffered_writers.clear();
+
 	if (is_error()) {
 		remove_files();
 		return;
