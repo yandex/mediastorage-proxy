@@ -1,3 +1,9 @@
+mediastorage-proxy (0.82.6) lucid; urgency=low
+
+  * Build-deps: handystats (<< 1.11)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 26 Feb 2015 00:26:14 +0400
+
 mediastorage-proxy (0.82.5) lucid; urgency=low
 
   * MDS-747: Obtaining results of writings was reorganized
