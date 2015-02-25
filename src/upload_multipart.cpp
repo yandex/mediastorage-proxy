@@ -150,6 +150,7 @@ upload_multipart_t::on_data(const boost::asio::const_buffer &buffer) {
 
 		// If multipart_context.state is equal to end, the join was already called in this task.
 		if (is_error() && multipart_state_tag::end != multipart_context.state) {
+			buffered_writer.reset();
 			join_upload_tasks();
 			return 0;
 		}
