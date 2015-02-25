@@ -24,14 +24,6 @@
 #include <string>
 
 #include <handystats/measuring_points.hpp>
-#include <handystats/module.h>
-
-#ifndef _HAVE_HANDY_MODULE_MDS
-	#define _HAVE_HANDY_MODULE_MDS 1
-#endif
-
-HANDY_MODULE(MDS)
-
 
 // mds.REQUEST (counter)
 //    - total number of requests
@@ -52,54 +44,36 @@ namespace elliptics {
 // REQUEST
 
 inline void MDS_REQUEST_START(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
+	HANDY_COUNTER_INCREMENT(("mds.%s", method.c_str()));
 
-	sprintf(metric_name, "mds.%s", method.c_str());
-	MDS_COUNTER_INCREMENT(metric_name);
+	HANDY_TIMER_START(("mds.%s.time", method.c_str()), instance_id);
 
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_START(metric_name, instance_id);
-
-	sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-	MDS_TIMER_START(metric_name, instance_id);
+	HANDY_TIMER_START(("mds.%s.reply.time", method.c_str()), instance_id);
 }
 
 inline void MDS_REQUEST_STOP(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_STOP(metric_name, instance_id);
+	HANDY_TIMER_STOP(("mds.%s.time", method.c_str()), instance_id);
 }
 
 inline void MDS_REQUEST_DISCARD(const std::string& method, const uint64_t& instance_id) {
-	char metric_name[256];
-
-	sprintf(metric_name, "mds.%s.time", method.c_str());
-	MDS_TIMER_DISCARD(metric_name, instance_id);
+	HANDY_TIMER_DISCARD(("mds.%s.time", method.c_str()), instance_id);
 }
 
 
 // REPLY
 
 inline void MDS_REQUEST_REPLY(const std::string& method, const int& code, const uint64_t& instance_id) {
-	char metric_name[256];
+	HANDY_COUNTER_INCREMENT(("mds.%s.reply.%d", method.c_str(), code));
 
-	sprintf(metric_name, "mds.%s.reply.%d", method.c_str(), code);
-	MDS_COUNTER_INCREMENT(metric_name);
-
-	sprintf(metric_name, "mds.%s.reply.%dxx", method.c_str(), code / 100);
-	MDS_COUNTER_INCREMENT(metric_name);
+	HANDY_COUNTER_INCREMENT(("mds.%s.reply.%dxx", method.c_str(), code / 100));
 
 	if (code / 100 != 2) {
-		sprintf(metric_name, "mds.%s.time", method.c_str());
-		MDS_TIMER_DISCARD(metric_name, instance_id);
+		HANDY_TIMER_DISCARD(("mds.%s.time", method.c_str()), instance_id);
 
-		sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-		MDS_TIMER_DISCARD(metric_name, instance_id);
+		HANDY_TIMER_DISCARD(("mds.%s.reply.time", method.c_str()), instance_id);
 	}
 	else {
-		sprintf(metric_name, "mds.%s.reply.time", method.c_str());
-		MDS_TIMER_STOP(metric_name, instance_id);
+		HANDY_TIMER_STOP(("mds.%s.reply.time", method.c_str()), instance_id);
 	}
 }
 
