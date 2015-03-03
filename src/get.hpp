@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
