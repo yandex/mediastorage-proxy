@@ -24,12 +24,12 @@ Build-Depends: debhelper (>=5),
  libcrypto++-dev,
  libyandex-utils-http,
  libcurl4-openssl-dev,
- handystats (>= 1.10.2),
+ handystats (>= 1.10.2), handystats (<< 1.11),
  libssl-dev,
 Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8), libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, elliptics-client(>= 2.26.3.31), handystats (>= 1.10.2), ubic,
+Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8), libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, elliptics-client(>= 2.26.3.31), handystats (>= 1.10.2), handystats (<< 1.11), ubic,
 Description: Proxy with elliptics support based on thevoid
 

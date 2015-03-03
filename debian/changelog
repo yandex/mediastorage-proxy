@@ -24,6 +24,44 @@ mediastorage-proxy (0.83.1) lucid; urgency=low
 
  -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 16 Feb 2015 16:31:17 +0400
 
+mediastorage-proxy (0.82.6) lucid; urgency=low
+
+  * Build-deps: handystats (<< 1.11)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 26 Feb 2015 00:26:14 +0400
+
+mediastorage-proxy (0.82.5) lucid; urgency=low
+
+  * MDS-747: Obtaining results of writings was reorganized
+  * MDS-747: Results will be obtained when async writes are finished
+  * MDS-747: writers state machines release mutex before process callbacks
+  * MDS-747: uploader must release all buffered_writers
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 25 Feb 2015 14:36:06 +0400
+
+mediastorage-proxy (0.82.4) lucid; urgency=low
+
+  * MDS-747: second attempt
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 19 Feb 2015 16:09:20 +0400
+
+mediastorage-proxy (0.82.3) lucid; urgency=low
+
+  * MDS-747: deadlock in multipart upload was fixed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 18 Feb 2015 17:39:36 +0400
+
+mediastorage-proxy (0.82.2) lucid; urgency=low
+
+  * MDS-732: the writer state machine is changed
+    get_result returns emtpy result in following states:
+    - waiting
+    - failed
+    Both states can be during writer callback is running.
+    Therefore throwing unexpected_event error is incorrect behaviour.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 16 Feb 2015 16:31:17 +0400
+
 mediastorage-proxy (0.82.1) lucid; urgency=low
 
   * MDS-713: finalize handystats on server's destruction.

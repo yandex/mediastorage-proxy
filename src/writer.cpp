@@ -166,8 +166,20 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 	}
 }
 
-const elliptics::writer_t::entries_info_t &
+elliptics::writer_t::result_t
 elliptics::writer_t::get_result() const {
+	result_t result;
+
+	result.id = get_id();
+	result.key = get_key();
+	result.total_size = get_total_size();
+	result.entries_info = get_entries_info();
+
+	return result;
+}
+
+const elliptics::writer_t::entries_info_t &
+elliptics::writer_t::get_entries_info() const {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -382,7 +394,6 @@ elliptics::writer_t::on_data_wrote(
 	} while (0)
 
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::writing:
@@ -398,6 +409,7 @@ elliptics::writer_t::on_data_wrote(
 				state = state_tag::waiting;
 			}
 
+			lock_guard.unlock();
 			on_complete(make_error_code(writer_errc::success));
 			return;
 		}
@@ -446,12 +458,12 @@ elliptics::writer_t::on_data_removed(
 		const ioremap::elliptics::sync_remove_result &entries
 		, const ioremap::elliptics::error_info &error_info) {
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::removing: {
 		MDS_LOG_INFO("remove is finished");
 		state = state_tag::failed;
+		lock_guard.unlock();
 		on_complete(make_error_code(errc_for_client));
 		break;
 	}
