@@ -1,3 +1,24 @@
+mediastorage-proxy (0.82.6) lucid; urgency=low
+
+  * Build-deps: handystats (<< 1.11)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 26 Feb 2015 00:26:14 +0400
+
+mediastorage-proxy (0.82.5) lucid; urgency=low
+
+  * MDS-747: Obtaining results of writings was reorganized
+  * MDS-747: Results will be obtained when async writes are finished
+  * MDS-747: writers state machines release mutex before process callbacks
+  * MDS-747: uploader must release all buffered_writers
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 25 Feb 2015 14:36:06 +0400
+
+mediastorage-proxy (0.82.4) lucid; urgency=low
+
+  * MDS-747: second attempt
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 19 Feb 2015 16:09:20 +0400
+
 mediastorage-proxy (0.82.3) lucid; urgency=low
 
   * MDS-747: deadlock in multipart upload was fixed

@@ -99,18 +99,23 @@ void
 elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
 		, size_t success_copies_num) {
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::appending:
 		state = state_tag::writing;
 		write_impl(session, commit_coef, success_copies_num);
 		break;
+	case state_tag::interrupted:
+		buffers.clear();
+		result = writer->get_result();
+		writer.reset();
+		lock_guard.unlock();
+		on_finished(buffered_writer_errc::interrupted);
+		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
 	case state_tag::completed:
 	case state_tag::failed:
-	case state_tag::interrupted:
 		throw buffered_writer_error(buffered_writer_errc::unexpected_event);
 	}
 }
@@ -171,9 +176,9 @@ elliptics::buffered_writer_t::is_interrupted() const {
 	return state_tag::interrupted == state;
 }
 
-const elliptics::buffered_writer_t::writer_ptr_t &
-elliptics::buffered_writer_t::get_writer() const {
-	return writer;
+const elliptics::writer_t::result_t &
+elliptics::buffered_writer_t::get_result() const {
+	return result;
 }
 
 ioremap::swarm::logger &
@@ -243,21 +248,24 @@ elliptics::buffered_writer_t::write_chunk() {
 void
 elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) {
 	lock_guard_t lock_guard(state_mutex);
-	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::writing:
 		if (error_code) {
 			state = state_tag::failed;
-			on_finished(error_code);
+			result = writer->get_result();
 			writer.reset();
+			lock_guard.unlock();
+			on_finished(error_code);
 			break;
 		}
 
 		if (buffers.empty()) {
 			state = state_tag::completed;
-			on_finished(buffered_writer_errc::success);
+			result = writer->get_result();
 			writer.reset();
+			lock_guard.unlock();
+			on_finished(buffered_writer_errc::success);
 			break;
 		}
 
@@ -266,8 +274,10 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 	case state_tag::interrupting:
 		state = state_tag::interrupted;
 		buffers.clear();
-		on_finished(buffered_writer_errc::interrupted);
+		result = writer->get_result();
 		writer.reset();
+		lock_guard.unlock();
+		on_finished(buffered_writer_errc::interrupted);
 		break;
 	case state_tag::appending:
 	case state_tag::completed:

@@ -136,13 +136,15 @@ upload_simple_t::on_write_is_done(const std::error_code &error_code) {
 
 void
 upload_simple_t::send_result() {
+	const auto &result = writer->get_result();
+
 	std::ostringstream oss;
 	oss 
 		<< "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-		<< "<post obj=\"" << encode_for_xml(writer->get_key())
-		<< "\" id=\"" << writer->get_id()
+		<< "<post obj=\"" << encode_for_xml(result.key)
+		<< "\" id=\"" << result.id
 		<< "\" groups=\"" << ns_state.settings().groups_count()
-		<< "\" size=\"" << writer->get_total_size()
+		<< "\" size=\"" << result.total_size
 		<< "\" key=\"";
 
 	if (proxy_settings(ns_state).static_couple.empty()) {
@@ -151,9 +153,9 @@ upload_simple_t::send_result() {
 
 	oss << encode_for_xml(filename) << "\">\n";
 
-	const auto &result = writer->get_result();
+	const auto &entries_info = result.entries_info;
 
-	for (auto it = result.begin(), end = result.end(); it != end; ++it) {
+	for (auto it = entries_info.begin(), end = entries_info.end(); it != end; ++it) {
 		oss
 			<< "<complete"
 			<< " addr=\"" << it->address << "\""
@@ -163,7 +165,7 @@ upload_simple_t::send_result() {
 	}
 
 	oss
-		<< "<written>" << result.size() << "</written>\n"
+		<< "<written>" << entries_info.size() << "</written>\n"
 		<< "</post>";
 
 	auto res_str = oss.str();

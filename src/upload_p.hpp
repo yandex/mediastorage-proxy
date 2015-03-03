@@ -159,14 +159,6 @@ private:
 		, client
 	};
 
-	struct part_result_t {
-		std::string name;
-		std::string key_id;
-		std::string key_remote;
-		size_t total_size;
-		writer_t::entries_info_t entries_info;
-	};
-
 	void sm_init();
 	void sm_headers();
 	void sm_body();
@@ -233,9 +225,9 @@ private:
 	std::shared_ptr<buffered_writer_t> buffered_writer;
 	std::string current_filename;
 
-	std::recursive_mutex buffered_writers_mutex;
+	std::mutex buffered_writers_mutex;
 	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
-	std::vector<part_result_t> results;
+	std::map<std::string, writer_t::result_t> results;
 
 };
 
