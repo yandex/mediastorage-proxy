@@ -70,7 +70,7 @@ public:
 	writer_t(ioremap::swarm::logger bh_logger_
 			, const ioremap::elliptics::session &session_, std::string key_
 			, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-			, callback_t on_complete_
+			, callback_t on_complete_, size_t limit_of_attempts_ = 1
 			);
 
 	void
@@ -158,6 +158,8 @@ private:
 	size_t success_copies_num;
 
 	callback_t on_complete;
+
+	size_t limit_of_attempts;
 
 	size_t written_size;
 	std::vector<int> bad_groups;
