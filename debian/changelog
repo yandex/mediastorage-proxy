@@ -1,3 +1,9 @@
+mediastorage-proxy (0.83.5) lucid; urgency=low
+
+  * Build-deps: libmastermind-dev (>= 8.26)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 19 Mar 2015 17:48:30 +0400
+
 mediastorage-proxy (0.83.4) lucid; urgency=low
 
   * Version is bumped to apply hotfix/MDS-747
