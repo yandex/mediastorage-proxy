@@ -61,7 +61,7 @@ public:
 
 	void
 	write(const ioremap::elliptics::session &session, size_t commit_coef
-			, size_t success_copies_num);
+			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts);
 
 	void
 	interrupt();
@@ -106,7 +106,7 @@ private:
 
 	void
 	write_impl(const ioremap::elliptics::session &session, size_t commit_coef
-			, size_t success_copies_num);
+			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts);
 
 	void
 	write_chunk();
