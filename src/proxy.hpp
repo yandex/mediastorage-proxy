@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -243,6 +243,7 @@ public:
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 	std::atomic<bool> cache_is_expired;
+	size_t limit_of_middle_chunk_attempts;
 
 	struct {
 		int def;

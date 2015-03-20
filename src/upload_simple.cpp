@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -52,7 +52,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			, *server()->write_session(http_request, couple), key
 			, *http_request.headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
-			, on_complete
+			, on_complete, server()->limit_of_middle_chunk_attempts
 			);
 }
 

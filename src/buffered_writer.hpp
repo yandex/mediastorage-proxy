@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -61,7 +61,7 @@ public:
 
 	void
 	write(const ioremap::elliptics::session &session, size_t commit_coef
-			, size_t success_copies_num);
+			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts);
 
 	void
 	interrupt();
@@ -109,7 +109,7 @@ private:
 
 	void
 	write_impl(const ioremap::elliptics::session &session, size_t commit_coef
-			, size_t success_copies_num);
+			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts);
 
 	void
 	write_chunk();

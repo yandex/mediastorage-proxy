@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -362,6 +362,14 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			for (auto it = json_handlers.Begin(); it != json_handlers.End(); ++it) {
 				header_protector.handlers.insert(it->GetString());
 			}
+		}
+
+		if (config.HasMember("retries")) {
+			const auto &json_rt = config["retries"];
+
+			limit_of_middle_chunk_attempts = get_int(json_rt, "limit-of-middle-chunk-attempts", 1);
+		} else {
+			limit_of_middle_chunk_attempts = 1;
 		}
 
 		if (config.HasMember("timeout-coefs")) {

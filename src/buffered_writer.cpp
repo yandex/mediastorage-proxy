@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -97,13 +97,13 @@ elliptics::buffered_writer_t::append(const char *data, size_t size) {
 
 void
 elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
-		, size_t success_copies_num) {
+		, size_t success_copies_num, size_t limit_of_middle_chunk_attempts) {
 	lock_guard_t lock_guard(state_mutex);
 
 	switch (state) {
 	case state_tag::appending:
 		state = state_tag::writing;
-		write_impl(session, commit_coef, success_copies_num);
+		write_impl(session, commit_coef, success_copies_num, limit_of_middle_chunk_attempts);
 		break;
 	case state_tag::interrupted:
 		buffers.clear();
@@ -222,7 +222,7 @@ elliptics::buffered_writer_t::append_impl(const char *data, size_t size) {
 
 void
 elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &session
-		, size_t commit_coef, size_t success_copies_num) {
+		, size_t commit_coef, size_t success_copies_num, size_t limit_of_middle_chunk_attempts) {
 	auto self = shared_from_this();
 	auto callback = [this, self] (const std::error_code &error_code) {
 		on_chunk_wrote(error_code);
@@ -230,7 +230,8 @@ elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &sess
 
 	writer = std::make_shared<writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t()), session, get_key()
-			, total_size, 0, commit_coef, success_copies_num, callback);
+			, total_size, 0, commit_coef, success_copies_num, callback
+			, limit_of_middle_chunk_attempts);
 
 	write_chunk();
 }

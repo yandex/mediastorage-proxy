@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -22,6 +22,7 @@
 #include "loggers.hpp"
 #include "utils.hpp"
 #include "lookup_result.hpp"
+#include "write_retrier.hpp"
 
 class error_category_t
 	: public std::error_category
@@ -75,7 +76,7 @@ elliptics::writer_error::writer_error(writer_errc e, const std::string &message)
 elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, const ioremap::elliptics::session &session_, std::string key_
 		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-		, callback_t on_complete_
+		, callback_t on_complete_, size_t limit_of_attempts_
 		)
 	: state(state_tag::waiting)
 	, errc_for_client(writer_errc::success)
@@ -87,6 +88,7 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 	, commit_coef(commit_coef_)
 	, success_copies_num(success_copies_num_)
 	, on_complete(std::move(on_complete_))
+	, limit_of_attempts(limit_of_attempts_)
 	, written_size(0)
 	, start_time(std::chrono::system_clock::now())
 {
@@ -344,7 +346,14 @@ elliptics::writer_t::write_impl(
 		} else {
 			log_chunk("plain", data_pointer.size());
 			state = state_tag::writing;
-			return session.write_plain(key, data_pointer, offset);
+
+			auto command = [key, data_pointer, offset] (ioremap::elliptics::session session)
+			-> ioremap::elliptics::async_write_result {
+				return session.write_plain(key, data_pointer, offset);
+			};
+
+			return try_write(ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+					, session, command, success_copies_num, limit_of_attempts);
 		}
 	}
 }
