@@ -335,13 +335,13 @@ elliptics::writer_t::write_impl(
 			log_chunk("plain", data_pointer.size());
 			state = state_tag::writing;
 
-			auto command = [=] (ioremap::elliptics::session session) {
+			auto command = [key, data_pointer, offset] (ioremap::elliptics::session session)
+			-> ioremap::elliptics::async_write_result {
 				return session.write_plain(key, data_pointer, offset);
 			};
 
 			return try_write(ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
 					, session, command, success_copies_num, limit_of_attempts);
-			//return session.write_plain(key, data_pointer, offset);
 		}
 	}
 }

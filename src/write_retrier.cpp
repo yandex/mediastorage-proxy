@@ -20,6 +20,8 @@
 #include "write_retrier.hpp"
 #include "loggers.hpp"
 
+#include <sstream>
+
 elliptics::write_retrier::write_retrier(
 		ioremap::swarm::logger bh_logger_
 		, ioremap::elliptics::session session_
@@ -34,12 +36,25 @@ elliptics::write_retrier::write_retrier(
 	, success_copies_num(success_copies_num_)
 	, limit_of_attempts(limit_of_attempts_)
 	, promise(std::move(promise_))
-	, number_of_attempts(0)
-{}
+	, complete_once([this] { complete(); })
+{
+	  session.set_error_handler(ioremap::elliptics::error_handlers::none);
+}
 
 void
 elliptics::write_retrier::start() {
-	try_next();
+	auto groups = session.get_groups();
+	promise.set_total(groups.size());
+
+	for (auto it = groups.begin(), end = groups.end(); it != end; ++it) {
+		auto group_session = session.clone();
+		group_session.set_groups({*it});
+
+		complete_once.defer();
+		try_group(std::move(group_session), 0);
+	}
+
+	complete_once();
 }
 
 ioremap::swarm::logger &
@@ -48,28 +63,94 @@ elliptics::write_retrier::logger() {
 }
 
 void
-elliptics::write_retrier::try_next() {
+elliptics::write_retrier::try_group(ioremap::elliptics::session group_session
+		, size_t number_of_attempts) {
 	auto self = shared_from_this();
 
-	auto callback = [this, self] (
+	auto callback = [this, self, group_session, number_of_attempts] (
 			const ioremap::elliptics::sync_write_result &entries
 			, const ioremap::elliptics::error_info &error_info) {
-		on_finished(entries, error_info);
+		on_finished(std::move(group_session), number_of_attempts, entries, error_info);
 	};
 
-	command(session).connect(callback);
+	std::ostringstream oss;
+	oss << "write session: group=" << group_session.get_groups()[0]
+		<< "; attempt=" << number_of_attempts << ";";
+	auto msg = oss.str();
+	MDS_LOG_INFO("%s", msg.c_str());
+
+	command(group_session).connect(callback);
 }
 
 void
-elliptics::write_retrier::on_finished(
-		const ioremap::elliptics::sync_write_result &entries
+elliptics::write_retrier::on_finished(ioremap::elliptics::session group_session, size_t number_of_attempts
+		, const ioremap::elliptics::sync_write_result &entries
 		, const ioremap::elliptics::error_info &error_info) {
-	promise.set_total(entries.size());
+	std::ostringstream oss;
+	oss << "write session is finished: group=" << group_session.get_groups()[0]
+		<< "; attempt=" << number_of_attempts << "; status=";
 
-	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
-		promise.process(*it);
+	if (!error_info) {
+		oss << "\"ok\"; description=\"success\"";
+	} else {
+		oss << "\"bad\"; description=\"" << error_info.message() << "\"";
 	}
 
+	number_of_attempts += 1;
+
+	bool process_entries = true;
+
+	switch (error_info.code()) {
+	case -ETIMEDOUT:
+		group_session.set_timeout(2 * group_session.get_timeout());
+	case -EINTR:
+	case -EAGAIN:
+	case -ENOMEM:
+	case -EBUSY:
+	case -EINVAL:
+	case -EMFILE:
+		process_entries = false;
+		break;
+	}
+
+	if (number_of_attempts == limit_of_attempts) {
+		process_entries = true;
+	}
+
+	if (process_entries) {
+		oss << "; decision=\"process result\"";
+		auto msg = oss.str();
+		MDS_LOG_INFO(msg.c_str());
+
+		for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
+			promise.process(*it);
+		}
+
+		if (error_info) {
+			init_error(error_info);
+		}
+
+		complete_once();
+		return;
+	}
+
+	oss << "; decision=\"try again\"";
+	auto msg = oss.str();
+	MDS_LOG_INFO(msg.c_str());
+	try_group(std::move(group_session), number_of_attempts);
+}
+
+void
+elliptics::write_retrier::init_error(const ioremap::elliptics::error_info &error_info_) {
+	std::lock_guard<std::mutex> lock_guard(error_info_mutex);
+
+	if (!error_info) {
+		error_info = error_info_;
+	}
+}
+
+void
+elliptics::write_retrier::complete() {
 	promise.complete(error_info);
 }
 

@@ -20,12 +20,15 @@
 #ifndef MDS_PROXY__SRC__WRITE_RETRIER__HPP
 #define MDS_PROXY__SRC__WRITE_RETRIER__HPP
 
+#include "deferred_function.hpp"
+
 #include <elliptics/session.hpp>
 
 #include <swarm/logger.hpp>
 
 #include <functional>
 #include <memory>
+#include <mutex>
 
 namespace elliptics {
 
@@ -55,11 +58,18 @@ private:
 	logger();
 
 	void
-	try_next();
+	try_group(ioremap::elliptics::session group_session, size_t number_of_attempts);
 
 	void
-	on_finished(const ioremap::elliptics::sync_write_result &entries
+	on_finished(ioremap::elliptics::session group_session, size_t number_of_attempts
+			, const ioremap::elliptics::sync_write_result &entries
 			, const ioremap::elliptics::error_info &error_info);
+
+	void
+	init_error(const ioremap::elliptics::error_info &error_info_);
+
+	void
+	complete();
 
 	ioremap::swarm::logger bh_logger;
 	ioremap::elliptics::session session;
@@ -68,7 +78,9 @@ private:
 	size_t limit_of_attempts;
 	ioremap::elliptics::async_write_result::handler promise;
 
-	size_t number_of_attempts;
+	std::mutex error_info_mutex;
+	ioremap::elliptics::error_info error_info;
+	deferred_function_t complete_once;
 
 };
 
