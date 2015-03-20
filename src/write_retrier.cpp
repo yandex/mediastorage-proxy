@@ -38,7 +38,7 @@ elliptics::write_retrier::write_retrier(
 	, promise(std::move(promise_))
 	, complete_once([this] { complete(); })
 {
-	  session.set_error_handler(ioremap::elliptics::error_handlers::none);
+	session.set_error_handler(ioremap::elliptics::error_handlers::none);
 }
 
 void

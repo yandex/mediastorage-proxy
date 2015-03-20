@@ -364,6 +364,14 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			}
 		}
 
+		if (config.HasMember("retries")) {
+			const auto &json_rt = config["retries"];
+
+			limit_of_middle_chunk_attempts = get_int(json_rt, "limit-of-middle-chunk-attempts", 1);
+		} else {
+			limit_of_middle_chunk_attempts = 1;
+		}
+
 		if (config.HasMember("timeout-coefs")) {
 			const auto &json = config["timeout-coefs"];
 
