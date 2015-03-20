@@ -1,3 +1,11 @@
+mediastorage-proxy (0.83.6) lucid; urgency=low
+
+  * MDS-668: Bad middle chunk could be retried
+    Option retries/limit-of-middle-chunk-attempts is used to configure limits
+    of attempts for writing
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 20 Mar 2015 19:34:54 +0400
+
 mediastorage-proxy (0.83.5) lucid; urgency=low
 
   * Build-deps: libmastermind-dev (>= 8.26)
