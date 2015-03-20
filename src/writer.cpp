@@ -339,7 +339,8 @@ elliptics::writer_t::write_impl(
 				return session.write_plain(key, data_pointer, offset);
 			};
 
-			return try_write(session, command, success_copies_num, limit_of_attempts);
+			return try_write(ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+					, session, command, success_copies_num, limit_of_attempts);
 			//return session.write_plain(key, data_pointer, offset);
 		}
 	}

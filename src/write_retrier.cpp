@@ -18,15 +18,18 @@
 */
 
 #include "write_retrier.hpp"
+#include "loggers.hpp"
 
 elliptics::write_retrier::write_retrier(
-		ioremap::elliptics::session session_
+		ioremap::swarm::logger bh_logger_
+		, ioremap::elliptics::session session_
 		, command_t command_
 		, size_t success_copies_num_
 		, size_t limit_of_attempts_
 		, ioremap::elliptics::async_write_result::handler promise_
 		)
-	: session(std::move(session_))
+	: bh_logger(std::move(bh_logger_))
+	, session(std::move(session_))
 	, command(std::move(command_))
 	, success_copies_num(success_copies_num_)
 	, limit_of_attempts(limit_of_attempts_)
@@ -37,6 +40,11 @@ elliptics::write_retrier::write_retrier(
 void
 elliptics::write_retrier::start() {
 	try_next();
+}
+
+ioremap::swarm::logger &
+elliptics::write_retrier::logger() {
+	return bh_logger;
 }
 
 void
@@ -67,7 +75,8 @@ elliptics::write_retrier::on_finished(
 
 ioremap::elliptics::async_write_result
 elliptics::try_write(
-		ioremap::elliptics::session session
+		ioremap::swarm::logger bh_logger
+		, ioremap::elliptics::session session
 		, write_retrier::command_t command
 		, size_t success_copies_num
 		, size_t limit_of_attempts
@@ -75,7 +84,7 @@ elliptics::try_write(
 	ioremap::elliptics::async_write_result future(session);
 	ioremap::elliptics::async_write_result::handler promise(future);
 
-	std::make_shared<write_retrier>(session.clone(), std::move(command), success_copies_num
+	std::make_shared<write_retrier>(std::move(bh_logger), session.clone(), std::move(command), success_copies_num
 			, limit_of_attempts, std::move(promise))->start();
 
 	return future;

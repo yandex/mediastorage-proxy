@@ -22,6 +22,8 @@
 
 #include <elliptics/session.hpp>
 
+#include <swarm/logger.hpp>
+
 #include <functional>
 #include <memory>
 
@@ -37,7 +39,8 @@ public:
 		command_t;
 
 	write_retrier(
-			ioremap::elliptics::session session_
+			ioremap::swarm::logger bh_logger_
+			, ioremap::elliptics::session session_
 			, command_t command_
 			, size_t success_copies_num_
 			, size_t limit_of_attempts_
@@ -48,6 +51,9 @@ public:
 	start();
 
 private:
+	ioremap::swarm::logger &
+	logger();
+
 	void
 	try_next();
 
@@ -55,6 +61,7 @@ private:
 	on_finished(const ioremap::elliptics::sync_write_result &entries
 			, const ioremap::elliptics::error_info &error_info);
 
+	ioremap::swarm::logger bh_logger;
 	ioremap::elliptics::session session;
 	command_t command;
 	size_t success_copies_num;
@@ -67,7 +74,8 @@ private:
 
 ioremap::elliptics::async_write_result
 try_write(
-		ioremap::elliptics::session session
+		ioremap::swarm::logger bh_logger
+		, ioremap::elliptics::session session
 		, write_retrier::command_t command
 		, size_t success_copies_num
 		, size_t limit_of_attempts
