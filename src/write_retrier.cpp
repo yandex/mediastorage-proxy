@@ -28,6 +28,7 @@ elliptics::write_retrier::write_retrier(
 		, command_t command_
 		, size_t success_copies_num_
 		, size_t limit_of_attempts_
+		, double scale_retry_timeout_
 		, ioremap::elliptics::async_write_result::handler promise_
 		)
 	: bh_logger(std::move(bh_logger_))
@@ -35,6 +36,7 @@ elliptics::write_retrier::write_retrier(
 	, command(std::move(command_))
 	, success_copies_num(success_copies_num_)
 	, limit_of_attempts(limit_of_attempts_)
+	, scale_retry_timeout(scale_retry_timeout_)
 	, promise(std::move(promise_))
 	, complete_once([this] { complete(); })
 {
@@ -75,7 +77,7 @@ elliptics::write_retrier::try_group(ioremap::elliptics::session group_session
 
 	std::ostringstream oss;
 	oss << "write session: group=" << group_session.get_groups()[0]
-		<< "; attempt=" << number_of_attempts << ";";
+		<< "; attempt=" << number_of_attempts + 1 << ";";
 	auto msg = oss.str();
 	MDS_LOG_INFO("%s", msg.c_str());
 
@@ -88,7 +90,7 @@ elliptics::write_retrier::on_finished(ioremap::elliptics::session group_session,
 		, const ioremap::elliptics::error_info &error_info) {
 	std::ostringstream oss;
 	oss << "write session is finished: group=" << group_session.get_groups()[0]
-		<< "; attempt=" << number_of_attempts << "; status=";
+		<< "; attempt=" << number_of_attempts + 1 << "; status=";
 
 	if (!error_info) {
 		oss << "\"ok\"; description=\"success\"";
@@ -102,7 +104,7 @@ elliptics::write_retrier::on_finished(ioremap::elliptics::session group_session,
 
 	switch (error_info.code()) {
 	case -ETIMEDOUT:
-		group_session.set_timeout(2 * group_session.get_timeout());
+		group_session.set_timeout(scale_retry_timeout * group_session.get_timeout());
 	case -EINTR:
 	case -EAGAIN:
 	case -ENOMEM:
@@ -161,12 +163,14 @@ elliptics::try_write(
 		, write_retrier::command_t command
 		, size_t success_copies_num
 		, size_t limit_of_attempts
+		, double scale_retry_timeout
 		) {
 	ioremap::elliptics::async_write_result future(session);
 	ioremap::elliptics::async_write_result::handler promise(future);
 
-	std::make_shared<write_retrier>(std::move(bh_logger), session.clone(), std::move(command), success_copies_num
-			, limit_of_attempts, std::move(promise))->start();
+	std::make_shared<write_retrier>(std::move(bh_logger), session.clone(), std::move(command)
+			, success_copies_num, limit_of_attempts, scale_retry_timeout
+			, std::move(promise))->start();
 
 	return future;
 }

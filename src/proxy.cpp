@@ -56,6 +56,10 @@ int get_int(const rapidjson::Value &config, const char *name, int def_val = 0) {
 	return config.HasMember(name) ? config[name].GetInt() : def_val;
 }
 
+double get_double(const rapidjson::Value &config, const char *name, double def_val = 0) {
+	return config.HasMember(name) ? config[name].GetDouble() : def_val;
+}
+
 bool get_bool(const rapidjson::Value &config, const char *name, bool def_val = false) {
 	return config.HasMember(name) ? config[name].GetBool() : def_val;
 }
@@ -368,8 +372,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 			const auto &json_rt = config["retries"];
 
 			limit_of_middle_chunk_attempts = get_int(json_rt, "limit-of-middle-chunk-attempts", 1);
+			scale_retry_timeout = get_double(json_rt, "scale-retry-timeout", 1);
 		} else {
 			limit_of_middle_chunk_attempts = 1;
+			scale_retry_timeout = 1;
 		}
 
 		if (config.HasMember("timeout-coefs")) {
