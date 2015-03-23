@@ -53,6 +53,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			, *http_request.headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
 			, on_complete, server()->limit_of_middle_chunk_attempts
+			, server()->scale_rety_timeout
 			);
 }
 

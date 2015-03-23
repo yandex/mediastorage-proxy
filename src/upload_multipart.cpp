@@ -354,7 +354,8 @@ upload_multipart_t::start_writing() {
 	buffered_writer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate
 			, proxy_settings(ns_state).success_copies_num
-			, server()->limit_of_middle_chunk_attempts);
+			, server()->limit_of_middle_chunk_attempts
+			, server()->scale_rety_timeout);
 
 	buffered_writer.reset();
 }

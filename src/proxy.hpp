@@ -243,7 +243,10 @@ public:
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 	std::atomic<bool> cache_is_expired;
+
+	// write retries
 	size_t limit_of_middle_chunk_attempts;
+	double scale_retry_timeout;
 
 	struct {
 		int def;

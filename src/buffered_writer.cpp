@@ -97,14 +97,16 @@ elliptics::buffered_writer_t::append(const char *data, size_t size) {
 
 void
 elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
-		, size_t success_copies_num, size_t limit_of_middle_chunk_attempts) {
+		, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
+		, double scale_retry_timeout) {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
 	switch (state) {
 	case state_tag::appending:
 		state = state_tag::writing;
-		write_impl(session, commit_coef, success_copies_num, limit_of_middle_chunk_attempts);
+		write_impl(session, commit_coef, success_copies_num, limit_of_middle_chunk_attempts
+				, scale_retry_timeout);
 		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
@@ -217,7 +219,8 @@ elliptics::buffered_writer_t::append_impl(const char *data, size_t size) {
 
 void
 elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &session
-		, size_t commit_coef, size_t success_copies_num, size_t limit_of_middle_chunk_attempts) {
+		, size_t commit_coef, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
+		, double scale_retry_timeout) {
 	auto self = shared_from_this();
 	auto callback = [this, self] (const std::error_code &error_code) {
 		on_chunk_wrote(error_code);
@@ -226,7 +229,7 @@ elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &sess
 	writer = std::make_shared<writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t()), session, get_key()
 			, total_size, 0, commit_coef, success_copies_num, callback
-			, limit_of_middle_chunk_attempts);
+			, limit_of_middle_chunk_attempts, scale_retry_timeout);
 
 	write_chunk();
 }
