@@ -76,7 +76,7 @@ elliptics::writer_error::writer_error(writer_errc e, const std::string &message)
 elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, const ioremap::elliptics::session &session_, std::string key_
 		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-		, callback_t on_complete_, size_t limit_of_attempts_
+		, callback_t on_complete_, size_t limit_of_attempts_, double scale_retry_timeout_
 		)
 	: state(state_tag::waiting)
 	, errc_for_client(writer_errc::success)
@@ -89,6 +89,7 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 	, success_copies_num(success_copies_num_)
 	, on_complete(std::move(on_complete_))
 	, limit_of_attempts(limit_of_attempts_)
+	, scale_retry_timeout(scale_retry_timeout_)
 	, written_size(0)
 	, start_time(std::chrono::system_clock::now())
 {
@@ -353,7 +354,7 @@ elliptics::writer_t::write_impl(
 			};
 
 			return try_write(ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-					, session, command, success_copies_num, limit_of_attempts);
+					, session, command, success_copies_num, limit_of_attempts, scale_retry_timeout);
 		}
 	}
 }

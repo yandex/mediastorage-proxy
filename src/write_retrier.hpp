@@ -47,6 +47,7 @@ public:
 			, command_t command_
 			, size_t success_copies_num_
 			, size_t limit_of_attempts_
+			, double scale_retry_timeout_
 			, ioremap::elliptics::async_write_result::handler promise
 			);
 
@@ -76,6 +77,7 @@ private:
 	command_t command;
 	size_t success_copies_num;
 	size_t limit_of_attempts;
+	double scale_retry_timeout;
 	ioremap::elliptics::async_write_result::handler promise;
 
 	std::mutex error_info_mutex;
@@ -91,6 +93,7 @@ try_write(
 		, write_retrier::command_t command
 		, size_t success_copies_num
 		, size_t limit_of_attempts
+		, double scale_retry_timeout
 		);
 
 } // namespace elliptics
