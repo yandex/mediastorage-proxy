@@ -1,3 +1,10 @@
+mediastorage-proxy (0.83.7) lucid; urgency=low
+
+  * MDS-668: Option scale-retry-timeout is added
+  * MDS-668: attemps are counting from 1 to whatever
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 23 Mar 2015 17:07:23 +0400
+
 mediastorage-proxy (0.83.6) lucid; urgency=low
 
   * MDS-668: Bad middle chunk could be retried
