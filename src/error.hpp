@@ -17,31 +17,47 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "utils.hpp"
+#ifndef MDS_PROXY__SRC__ERROR__HPP
+#define MDS_PROXY__SRC__ERROR__HPP
 
-std::string
-elliptics::encode_for_xml(const std::string &string) {
-	std::ostringstream oss;
+#include "loggers.hpp"
 
-	std::string::size_type pos = 0;
+#include <stdexcept>
 
-	do {
-		auto pos2 = string.find_first_of("\"\'<>&", pos);
-		oss << string.substr(pos, pos2 - pos);
-		pos = pos2;
+namespace elliptics {
 
-		if (pos != std::string::npos) {
-			switch (string[pos]) {
-			case '\"': oss << "&quot;"; break;
-			case '\'': oss << "&apos;"; break;
-			case '<': oss << "&lt;"; break;
-			case '>': oss << "&gt;"; break;
-			case '&': oss << "&amp;"; break;
-			}
-			pos += 1;
-		}
-	} while (pos != std::string::npos && pos < string.size());
+class proxy_error : public std::runtime_error
+{
+public:
+	proxy_error(const std::string &message)
+		: std::runtime_error(message)
+	{}
+};
 
-	return oss.str();
-}
+class http_error : public proxy_error
+{
+public:
+	http_error(int http_status_, const std::string &message)
+		: proxy_error(message)
+		, m_http_status(http_status_)
+	{}
+
+	int
+	http_status() const {
+		return m_http_status;
+	}
+
+	bool
+	is_server_error() const {
+		return m_http_status >= 500 && m_http_status <= 599;
+	}
+
+
+private:
+	int m_http_status;
+};
+
+} // namespace elliptics
+
+#endif /* MDS_PROXY__SRC__ERROR__HPP */
 

@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -69,6 +69,7 @@ struct settings_t
 		: redirect_content_length_threshold(-1)
 		, can_choose_couple_to_upload(false)
 		, multipart_content_length_threshold(0)
+		, custom_expiration_time(false)
 		, success_copies_num(-1)
 	{}
 
@@ -89,6 +90,7 @@ struct settings_t
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
+	bool custom_expiration_time;
 
 	int success_copies_num;
 };
@@ -116,30 +118,6 @@ public:
 		ioremap::elliptics::key key;
 		boost::optional<ioremap::elliptics::session> session;
 		size_t total_size;
-	};
-
-	struct req_download_info
-		: public ioremap::thevoid::simple_request_stream<proxy>
-		, public std::enable_shared_from_this<req_download_info>
-	{
-		req_download_info(const std::string &handler_name_);
-		void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-		void on_finished(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
-
-	private:
-		mastermind::namespace_state_t ns_state;
-		std::string x_regional_host;
-		std::string handler_name;
-	};
-
-	struct req_download_info_1 : public req_download_info {
-		req_download_info_1();
-		static const std::string handler_name;
-	};
-
-	struct req_download_info_2 : public req_download_info {
-		req_download_info_2();
-		static const std::string handler_name;
 	};
 
 	struct req_ping
@@ -233,6 +211,11 @@ public:
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
 
+	std::tuple<std::string, std::string, std::string, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+		, boost::optional<std::chrono::seconds> optional_expiration_time);
+
 	void
 	update_elliptics_remotes();
 
@@ -260,6 +243,10 @@ public:
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
 	std::atomic<bool> cache_is_expired;
+
+	// write retries
+	size_t limit_of_middle_chunk_attempts;
+	double scale_retry_timeout;
 
 	struct {
 		int def;

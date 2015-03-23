@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -357,7 +357,9 @@ upload_multipart_t::start_writing() {
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate
-			, proxy_settings(ns_state).success_copies_num);
+			, proxy_settings(ns_state).success_copies_num
+			, server()->limit_of_middle_chunk_attempts
+			, server()->scale_retry_timeout);
 
 	buffered_writer.reset();
 }

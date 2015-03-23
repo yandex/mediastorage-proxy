@@ -1,6 +1,6 @@
 /*
 	Mediastorage-proxy is a HTTP proxy for mediastorage based on elliptics
-	Copyright (C) 2013-2014 Yandex
+	Copyright (C) 2013-2015 Yandex
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -77,7 +77,7 @@ public:
 	writer_t(ioremap::swarm::logger bh_logger_
 			, const ioremap::elliptics::session &session_, std::string key_
 			, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-			, callback_t on_complete_
+			, callback_t on_complete_, size_t limit_of_attempts_ = 1, double scale_retry_timeout_ = 1
 			);
 
 	void
@@ -168,6 +168,9 @@ private:
 	size_t success_copies_num;
 
 	callback_t on_complete;
+
+	size_t limit_of_attempts;
+	double scale_retry_timeout;
 
 	size_t written_size;
 	std::vector<int> bad_groups;
