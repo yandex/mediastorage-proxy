@@ -77,7 +77,7 @@ elliptics::write_retrier::try_group(ioremap::elliptics::session group_session
 
 	std::ostringstream oss;
 	oss << "write session: group=" << group_session.get_groups()[0]
-		<< "; attempt=" << number_of_attempts << ";";
+		<< "; attempt=" << number_of_attempts + 1 << ";";
 	auto msg = oss.str();
 	MDS_LOG_INFO("%s", msg.c_str());
 
@@ -90,7 +90,7 @@ elliptics::write_retrier::on_finished(ioremap::elliptics::session group_session,
 		, const ioremap::elliptics::error_info &error_info) {
 	std::ostringstream oss;
 	oss << "write session is finished: group=" << group_session.get_groups()[0]
-		<< "; attempt=" << number_of_attempts << "; status=";
+		<< "; attempt=" << number_of_attempts + 1 << "; status=";
 
 	if (!error_info) {
 		oss << "\"ok\"; description=\"success\"";
