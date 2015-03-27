@@ -212,21 +212,20 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 	lookup_result_entry_opt.reset(entry);
 
 	m_session->set_groups({entry.command()->id.group_id});
-	total_size = entry.file_info()->size;
 	uint64_t tsec = entry.file_info()->mtime.tsec;
 
-	auto res = process_precondition_headers(tsec, total_size);
+	auto res = process_precondition_headers(tsec, total_size());
 
 	if (std::get<0>(res)) {
 		return;
 	}
 
 	// TODO: change declaration of try_to_redirect_request
-	if (try_to_redirect_request({entry}, total_size, std::get<1>(res))) {
+	if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
 		return;
 	}
 
-	start_reading(total_size, std::get<1>(res));
+	start_reading(total_size(), std::get<1>(res));
 }
 
 void
@@ -395,7 +394,7 @@ elliptics::req_get::read_and_send_ranges(ranges_t ranges, std::list<std::string>
 
 void
 elliptics::req_get::process_whole_file() {
-	auto current_size = std::min(static_cast<size_t>(server()->m_read_chunk_size), total_size);
+	auto current_size = std::min(static_cast<size_t>(server()->m_read_chunk_size), total_size());
 
 	auto result_callback = std::bind(&req_get::detect_content_type, shared_from_this()
 			, std::placeholders::_1);
@@ -448,7 +447,7 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 	std::function<void ()> next;
 	std::function<void ()> error_callback = std::bind(&req_get::on_error, shared_from_this());
 
-	if (total_size == data_pointer.size()) {
+	if (total_size() == data_pointer.size()) {
 		if (!bad_groups.empty()) {
 			if (auto write_session = server()->write_session(request(), bad_groups)) {
 				{
@@ -471,7 +470,7 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 		std::function<void ()> close_callback = std::bind(&req_get::request_is_finished, shared_from_this());
 
 		auto offset = data_pointer.size();
-		auto size = total_size - offset;
+		auto size = total_size() - offset;
 
 		next = std::bind(&req_get::read_and_send_range, shared_from_this()
 				, offset, size, std::move(close_callback), error_callback);
@@ -869,6 +868,15 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 			, std::function<void (const boost::system::error_code &)>());
 }
 
+size_t
+req_get::total_size() {
+	if (!lookup_result_entry_opt) {
+		return 0;
+	}
+
+	return lookup_result_entry_opt->file_info()->size;
+}
+
 void req_get::on_error() {
 	send_reply(500);
 	MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
@@ -892,7 +900,7 @@ req_get::get_session() {
 		session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
 		if (server()->timeout_coef.data_flow_rate) {
 			session.set_timeout(
-					session.get_timeout() + total_size / server()->timeout_coef.data_flow_rate);
+					session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
 		}
 
 	} else {

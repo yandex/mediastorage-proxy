@@ -147,6 +147,9 @@ private:
 			, const size_t size, bool send_whole_file);
 	void start_reading(const size_t size, bool send_whole_file);
 
+	size_t
+	total_size();
+
 	void
 	on_error();
 
@@ -163,8 +166,6 @@ private:
 	std::string key;
 	parallel_lookuper_ptr_t parallel_lookuper_ptr;
 	boost::optional<ie::lookup_result_entry> lookup_result_entry_opt;
-
-	size_t total_size;
 
 	bool m_first_chunk;
 	bool some_data_were_sent;
