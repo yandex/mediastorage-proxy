@@ -42,8 +42,11 @@ elliptics::parallel_lookuper_t::next_lookup_result() {
 	ioremap::elliptics::async_lookup_result::handler promise(future);
 
 	if (!results.empty()) {
-		process_promise(promise, results.front());
+		auto result = std::move(results.front());
 		results.pop_front();
+
+		lock_guard.unlock();
+		process_promise(promise, result);
 		return future;
 	}
 
@@ -52,6 +55,7 @@ elliptics::parallel_lookuper_t::next_lookup_result() {
 		return future;
 	}
 
+	lock_guard.unlock();
 	process_promise(promise);
 	return future;
 }
@@ -81,8 +85,11 @@ elliptics::parallel_lookuper_t::on_lookup(const ioremap::elliptics::sync_lookup_
 	result_t result{entries, error_info};
 
 	if (!promises.empty()) {
-		process_promise(promises.front(), result);
+		auto promise = std::move(promises.front());
 		promises.pop_front();
+
+		lock_guard.unlock();
+		process_promise(promise, result);
 		return;
 	}
 
