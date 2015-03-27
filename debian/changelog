@@ -1,3 +1,9 @@
+mediastorage-proxy (0.84.1) lucid; urgency=low
+
+  * MDS-829: Handler can repick group during reading in case of error occurs.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 16:39:33 +0400
+
 mediastorage-proxy (0.83.7) lucid; urgency=low
 
   * MDS-668: Option scale-retry-timeout is added
