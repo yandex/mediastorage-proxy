@@ -1,3 +1,9 @@
+mediastorage-proxy (0.84.5) lucid; urgency=low
+
+  * Parallel_lookuper unlocks state before set value into promice
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 20:21:33 +0400
+
 mediastorage-proxy (0.84.4) lucid; urgency=low
 
   * Version bump because of missmerge
