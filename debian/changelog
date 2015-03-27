@@ -1,3 +1,9 @@
+mediastorage-proxy (0.84.2) lucid; urgency=low
+
+  * One should check lookup result contains entries because of ELL-250.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 18:54:55 +0400
+
 mediastorage-proxy (0.84.1) lucid; urgency=low
 
   * MDS-829: Handler can repick group during reading in case of error occurs.
