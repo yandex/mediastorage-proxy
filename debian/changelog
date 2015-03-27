@@ -1,3 +1,9 @@
+mediastorage-proxy (0.84.3) lucid; urgency=low
+
+  * MDS-764: Upload handler replies 400 for unknown namespace
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 19:16:48 +0400
+
 mediastorage-proxy (0.84.2) lucid; urgency=low
 
   * One should check lookup result contains entries because of ELL-250.
