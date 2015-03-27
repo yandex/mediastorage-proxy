@@ -34,181 +34,456 @@
 #include <functional>
 #include <chrono>
 #include <ctime>
+#include <algorithm>
 
-namespace elliptics {
+namespace boost {
+namespace asio {
 
-class get_helper_t
-	: public std::enable_shared_from_this<get_helper_t>
-{
-public:
-	enum class chunk_type_tag {
-		first, middle, last, single
-	};
+boost::asio::const_buffers_1
+buffer(const ioremap::elliptics::data_pointer &data_pointer) {
+	return {data_pointer.data(), data_pointer.size()};
+}
 
-	typedef std::function<void (const std::shared_ptr<get_helper_t> &)> result_callback_t;
-	typedef std::function<void (void)> error_callback_t;
+} // namespace asio
+} // namespace boost
 
-	get_helper_t(ioremap::swarm::logger bh_logger_
-			, std::string key_, size_t offset_, size_t size_, size_t chunk_size_)
-		: bh_logger(std::move(bh_logger_))
-		, key(std::move(key_))
-		, offset(offset_)
-		, size(size_)
-		, chunk_size(chunk_size_)
-		, read_size(0)
+void
+elliptics::req_get::find_first_group(
+		std::function<void (const ie::lookup_result_entry &)> on_result
+		, std::function<void ()> on_error) {
+	if (parallel_lookuper_ptr->results_left()) {
+		MDS_LOG_INFO("find next first group");
+
+		auto future = parallel_lookuper_ptr->next_lookup_result();
+
+		auto next = std::bind(&req_get::next_first_group_is_found, shared_from_this()
+				, std::placeholders::_1, std::placeholders::_2
+				, std::move(on_result), std::move(on_error));
+
+		future.connect(next);
+		return;
+	}
+
+	all_groups_were_processed();
+}
+
+void
+elliptics::req_get::next_first_group_is_found(const ie::sync_lookup_result &entries
+		, const ie::error_info &error_info
+		, std::function<void (const ie::lookup_result_entry &)> on_result
+		, std::function<void ()> on_error) {
+	const auto &entry = entries.front();
+	auto group_id = entry.command()->id.group_id;
+
+	std::ostringstream oss;
+	oss << "group " << group_id << " was found";
+
+	if (check_lookup_result_entry(entry)) {
+		oss << " and will be used for subsequent processing";
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+
+		on_result(entry);
+		return;
+	}
+
+	oss << " and cannot be used: \"" << error_info.message() << "\"";
+	auto msg = oss.str();
+	MDS_LOG_ERROR("%s", msg.c_str());
+
+	find_first_group(std::move(on_result), std::move(on_error));
+}
+
+void
+elliptics::req_get::find_other_group(
+		std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	if (parallel_lookuper_ptr->results_left()) {
+		MDS_LOG_INFO("find next group");
+		auto future = parallel_lookuper_ptr->next_lookup_result();
+
+		auto next = std::bind(&req_get::next_other_group_is_found, shared_from_this()
+				, std::placeholders::_1, std::placeholders::_2
+				, std::move(on_result), std::move(on_error));
+
+		future.connect(next);
+		return;
+	}
+
+	all_groups_were_processed();
+}
+
+void
+elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entries
+		, const ie::error_info &error_info
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	const auto &entry = entries.front();
+	auto group_id = entry.command()->id.group_id;
+
+	std::ostringstream oss;
+	oss << "group " << group_id << " was found";
+
+	if (!check_lookup_result_entry(entry)) {
+		oss << " and cannot be used: \"" << error_info.message() << "\"";
+		auto msg = oss.str();
+		MDS_LOG_ERROR("%s", msg.c_str());
+
+		find_other_group(std::move(on_result), std::move(on_error));
+		return;
+	}
+
+	if (some_data_were_sent && !lookup_result_entries_are_equal(*lookup_result_entry_opt, entry)) {
+		oss << " and cannot be used: \"group has different checksums and/or timestamp\"";
+		auto msg = oss.str();
+		MDS_LOG_ERROR("%s", msg.c_str());
+
+		find_other_group(std::move(on_result), std::move(on_error));
+		return;
+	}
+
+	oss << " and will be used for subsequent processing";
+	auto msg = oss.str();
+	MDS_LOG_INFO("%s", msg.c_str());
+
+	m_first_chunk = true;
+	m_session->set_groups({entry.command()->id.group_id});
+	on_result();
+}
+
+void
+elliptics::req_get::all_groups_were_processed() {
+	if (!has_internal_storage_error) {
+		MDS_LOG_INFO("all groups were processed: file not found");
+		send_reply(404);
+		MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
+	} else {
+		MDS_LOG_ERROR("all groups were processed: cannot read file");
+		send_reply(500);
+		MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
+	}
+}
+
+bool
+elliptics::req_get::check_lookup_result_entry(const ie::lookup_result_entry &entry) {
+	auto status = entry.status();
+
+	if (!status) {
+		return true;
+	}
+
+	switch (status) {
+	case -ENOENT:
+	case -EBADFD:
+	case -EILSEQ:
+		bad_groups.push_back(entry.command()->id.group_id);
+	}
+
+	if (status != -ENOENT) {
+		has_internal_storage_error = true;
+	}
+
+	return false;
+}
+
+bool
+elliptics::req_get::lookup_result_entries_are_equal(const ie::lookup_result_entry &lhs
+		, const ie::lookup_result_entry &rhs) {
+	const auto *lhs_fi = lhs.file_info();
+	const auto *rhs_fi = rhs.file_info();
+
+	const auto &lhs_mtime = lhs_fi->mtime;
+	const auto &rhs_mtime = rhs_fi->mtime;
+
+	if (std::make_tuple(lhs_mtime.tsec, lhs_mtime.tnsec)
+			!= std::make_tuple(rhs_mtime.tsec, rhs_mtime.tnsec)) {
+		return false;
+	}
+
+	if (!std::equal(lhs_fi->checksum, lhs_fi->checksum + DNET_CSUM_SIZE, rhs_fi->checksum)) {
+		return false;
+	}
+
+	return true;
+}
+
+void
+elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
+	lookup_result_entry_opt.reset(entry);
+
+	m_session->set_groups({entry.command()->id.group_id});
+	uint64_t tsec = entry.file_info()->mtime.tsec;
+
+	auto res = process_precondition_headers(tsec, total_size());
+
+	if (std::get<0>(res)) {
+		return;
+	}
+
+	// TODO: change declaration of try_to_redirect_request
+	if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
+		return;
+	}
+
+	start_reading(total_size(), std::get<1>(res));
+}
+
+void
+elliptics::req_get::read_chunk(size_t offset, size_t size
+		, std::function<void (const ie::read_result_entry &)> on_result
+		, std::function<void ()> on_error) {
+	auto session = get_session();
+
 	{
 		std::ostringstream oss;
-		oss
-			<< "start reading:"
-			<< " key=" << key.remote()
-			<< " offset=" << offset
-			<< " size=" << size
-			<< " chunk-size=" << chunk_size;
+		oss << "read chunk: offset=" << offset << "; size=" << size
+			<< "; groups=" << session.get_groups() << ";";
 		auto msg = oss.str();
 		MDS_LOG_INFO("%s", msg.c_str());
 	}
 
-	void
-	read(ioremap::elliptics::session session // We need to pass session in each call
-			// to be able to change timeout and ioflags settings to avoid problems with
-			// checksum computing
-			, result_callback_t result_callback, error_callback_t error_callback) {
-		auto current_size = std::min(chunk_size, size);
+	auto future = session.read_data(key, offset, size);
 
-		{
-			std::ostringstream oss;
-			oss
-				<< "get chunk:"
-				<< " key=" << key.remote()
-				<< " groups=" << session.get_groups()
-				<< " chunk-size=" << current_size
-				<< " offset=" << offset
-				<< " data-left=" << (size - offset);
+	auto callback = std::bind(&req_get::read_chunk_is_finished, shared_from_this()
+			, std::placeholders::_1, std::placeholders::_2
+			, utils::ms_timestamp_t{}
+			, offset, size
+			, std::move(on_result), std::move(on_error));
 
-			auto msg = oss.str();
+	future.connect(callback);
+}
 
-			MDS_LOG_INFO("%s", msg.c_str());
-		}
+void
+elliptics::req_get::read_chunk_is_finished(
+		const ie::sync_read_result &entries
+		, const ie::error_info &error_info
+		, utils::ms_timestamp_t ms_timestamp
+		, size_t offset, size_t size
+		, std::function<void (const ie::read_result_entry &)> on_result
+		, std::function<void ()> on_error) {
+	std::ostringstream oss;
+	oss << "chunk reading was finished: spent-time=" << ms_timestamp.str() << "; status=\""
+		<< (error_info ? "bad" : "ok") << "\"; description=\"";
 
-		auto future = session.read_data(key, offset, current_size);
-		offset += current_size;
-		size -= current_size;
+	if (error_info) {
+		oss << error_info.message() << "\";";
+		auto msg = oss.str();
+		MDS_LOG_ERROR("%s", msg.c_str());
 
-		future.connect(std::bind(&get_helper_t::on_read_data, shared_from_this()
-					, std::placeholders::_1, std::placeholders::_2
-					, std::chrono::system_clock::now()
-					, std::move(result_callback), std::move(error_callback)));
+		auto next = std::bind(&req_get::read_chunk, shared_from_this()
+				, offset, size, std::move(on_result), on_error);
+
+		find_other_group(std::move(next), std::move(on_error));
+		return;
 	}
 
-	boost::asio::const_buffer
-	const_buffer() const {
-		return boost::asio::const_buffer(data_pointer.data(), data_pointer.size());
+	oss << "success\";";
+	auto msg = oss.str();
+	MDS_LOG_INFO("%s", msg.c_str());
+
+	on_result(entries.front());
+}
+
+void
+elliptics::req_get::send_chunk(ie::data_pointer data_pointer
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	MDS_LOG_INFO("send chunk");
+	auto callback = std::bind(&req_get::send_chunk_is_finished, shared_from_this()
+			, std::placeholders::_1
+			, utils::ms_timestamp_t{}
+			, std::move(on_result), std::move(on_error));
+	send_data(std::move(data_pointer), std::move(callback));
+}
+
+void
+elliptics::req_get::send_chunk_is_finished(const boost::system::error_code &error_code
+		, utils::ms_timestamp_t ms_timestamp
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	some_data_were_sent = true;
+	std::ostringstream oss;
+	oss << "chink was sent: spent-time=" << ms_timestamp.str() << "; status=\""
+		<< (error_code ? "bad" : "ok") << "\"; description=\"";
+
+	if (error_code) {
+		oss << error_code.message() << "\";";
+		auto msg = oss.str();
+		MDS_LOG_ERROR("%s", msg.c_str());
+
+		on_error();
+		return;
 	}
 
-	dnet_time
-	timestamp() const {
-		return data_timestamp;
-	}
+	oss << "success\";";
+	auto msg = oss.str();
+	MDS_LOG_INFO("%s", msg.c_str());
 
-	chunk_type_tag
-	chunk() const {
-		return chunk_type;
-	}
+	on_result();
+}
 
-private:
-	ioremap::swarm::logger &
-	logger() {
-		return bh_logger;
-	}
+void
+elliptics::req_get::read_and_send_chunk(size_t offset, size_t size
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	auto self = shared_from_this();
+	auto next = [this, self, on_result, on_error] (const ie::read_result_entry &entry) {
+		send_chunk(std::move(entry.file()), std::move(on_result), std::move(on_error));
+	};
 
-	void
-	on_read_data(const ioremap::elliptics::sync_read_result &result
-			, const ioremap::elliptics::error_info &error_info
-			, std::chrono::system_clock::time_point start_time_point
-			, result_callback_t result_callback, error_callback_t error_callback) {
+	read_chunk(offset, size, std::move(next), std::move(on_error));
+}
 
-#define LOG_RESULT(VERBOSITY, STATUS) \
-		do { \
-			auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>( \
-					std::chrono::system_clock::now() - start_time_point \
-					).count(); \
-			 \
-			std::ostringstream oss; \
-			oss \
-				<< "get is finished:" \
-				<< " key=" << key.remote() \
-				<< " spent-time=" << spent_time << "ms" \
-				<< " status=" << STATUS \
-				<< " chunk-type="; \
-			 \
-			switch (chunk_type) { \
-			case chunk_type_tag::first: \
-				oss << "first"; \
-				break; \
-			case chunk_type_tag::middle: \
-				oss << "middle"; \
-				break; \
-			case chunk_type_tag::last: \
-				oss << "last"; \
-				break; \
-			case chunk_type_tag::single: \
-				oss << "single"; \
-				break; \
-			} \
-			 \
-			auto msg = oss.str(); \
-			MDS_LOG_##VERBOSITY("%s", msg.c_str()); \
-		} while (false)
+void
+elliptics::req_get::read_and_send_range(size_t offset, size_t size
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	// TODO: m_read_chunk_size should be size_t
+	auto current_size = std::min(static_cast<size_t>(server()->m_read_chunk_size), size);
+	auto next_offset = offset + current_size;
+	auto next_size = size - current_size;
 
-		chunk_type = chunk_type_tag::middle;
-
-		if (read_size == 0) {
-			chunk_type = chunk_type_tag::first;
-		}
-
-		if (size == 0) {
-			if (chunk_type == chunk_type_tag::first) {
-				chunk_type = chunk_type_tag::single;
-			} else {
-				chunk_type = chunk_type_tag::last;
-			}
-		}
-
-		if (error_info) {
-			LOG_RESULT(ERROR, "bad");
-			MDS_LOG_ERROR("%s", error_info.message().c_str());
-			error_callback();
+	auto self = shared_from_this();
+	auto next = [this, self, next_offset, next_size, on_result, on_error] () {
+		if (next_size == 0) {
+			on_result();
 			return;
 		}
 
-		data_pointer = result.front().file();
-		data_timestamp = result.front().io_attribute()->timestamp;
+		read_and_send_range(next_offset, next_size, std::move(on_result), std::move(on_error));
+	};
 
-		read_size += data_pointer.size();
+	read_and_send_chunk(offset, size, std::move(next), std::move(on_error));
+}
 
-		LOG_RESULT(INFO, "ok");
+void
+elliptics::req_get::read_and_send_ranges(ranges_t ranges, std::list<std::string> ranges_headers
+		, std::function<void ()> on_result
+		, std::function<void ()> on_error) {
+	auto self = shared_from_this();
+	auto boundary = ranges_headers.front();
+	ranges_headers.pop_front();
 
-#undef LOG_RESULT
+	if (ranges.empty()) {
+		auto next = [self, on_result, on_error] (const boost::system::error_code &error_code) {
+			if (error_code) {
+				on_error();
+				return;
+			}
 
-		result_callback(shared_from_this());
+			on_result();
+		};
+
+		send_data(std::move(boundary), std::move(next));
+		return;
 	}
 
-	ioremap::swarm::logger bh_logger;
+	send_data(std::move(boundary)
+			, std::function<void (const boost::system::error_code &)>());
 
-	ioremap::elliptics::key key;
+	auto range = ranges.front();
+	ranges.pop_front();
 
-	size_t offset;
-	size_t size;
-	size_t chunk_size;
-	size_t read_size;
+	auto next = [this, self, ranges, ranges_headers, on_result, on_error] () {
+		read_and_send_ranges(std::move(ranges), std::move(ranges_headers)
+				, std::move(on_result), std::move(on_error));
+	};
 
-	ioremap::elliptics::data_pointer data_pointer;
-	dnet_time data_timestamp;
-	chunk_type_tag chunk_type;
-};
+	read_and_send_range(range.offset, range.size, std::move(next), std::move(on_error));
+}
 
-void req_get::on_request(const ioremap::thevoid::http_request &http_request
-		, const boost::asio::const_buffer &buffer) {
+void
+elliptics::req_get::process_whole_file() {
+	auto current_size = std::min(static_cast<size_t>(server()->m_read_chunk_size), total_size());
+
+	auto result_callback = std::bind(&req_get::detect_content_type, shared_from_this()
+			, std::placeholders::_1);
+	auto error_callback = std::bind(&req_get::on_error, shared_from_this());
+	read_chunk(0, current_size, std::move(result_callback), std::move(error_callback));
+}
+
+void
+elliptics::req_get::process_range(size_t offset, size_t size) {
+	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+	send_headers(std::move(prospect_http_response)
+			, std::function<void (const boost::system::error_code &)>());
+
+	std::function<void ()> close_callback = std::bind(&req_get::request_is_finished, shared_from_this());
+	std::function<void ()> error_callback = std::bind(&req_get::on_error, shared_from_this());
+
+	read_and_send_range(offset, size, std::move(close_callback), std::move(error_callback));
+}
+
+void
+elliptics::req_get::process_ranges(ranges_t ranges, std::list<std::string> boundaries) {
+	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+	send_headers(std::move(prospect_http_response)
+			, std::function<void (const boost::system::error_code &)>());
+
+	std::function<void ()> close_callback = std::bind(&req_get::request_is_finished, shared_from_this());
+	std::function<void ()> error_callback = std::bind(&req_get::on_error, shared_from_this());
+
+	read_and_send_ranges(std::move(ranges), std::move(boundaries)
+			, std::move(close_callback), std::move(error_callback));
+}
+
+void
+elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
+	if (NULL == server()->m_magic.get()) {
+		server()->m_magic.reset(new magic_provider());
+	}
+
+	const auto &data_pointer = entry.file();
+	auto content_type = server()->m_magic->type(static_cast<const char *>(data_pointer.data())
+			, data_pointer.size());
+
+	prospect_http_response.headers().set_content_type(content_type);
+
+	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+
+	send_headers(std::move(prospect_http_response)
+			, std::function<void (const boost::system::error_code &)>());
+
+	std::function<void ()> next;
+	std::function<void ()> error_callback = std::bind(&req_get::on_error, shared_from_this());
+
+	if (total_size() == data_pointer.size()) {
+		if (!bad_groups.empty()) {
+			if (auto write_session = server()->write_session(request(), bad_groups)) {
+				{
+					std::ostringstream oss;
+					oss << "mds-proxy recovers file! groups=" << bad_groups;
+					const auto &msg = oss.str();
+					MDS_LOG_INFO("%s", msg.c_str());
+				}
+
+				write_session->set_timestamp(entry.io_attribute()->timestamp);
+				write_session->write_data(key, data_pointer, 0);
+			} else {
+				MDS_LOG_ERROR("oops, file cannot be recovered: write-session is uninitialized");
+				return;
+			}
+		}
+
+		next = std::bind(&req_get::request_is_finished, shared_from_this());
+	} else {
+		std::function<void ()> close_callback = std::bind(&req_get::request_is_finished, shared_from_this());
+
+		auto offset = data_pointer.size();
+		auto size = total_size() - offset;
+
+		next = std::bind(&req_get::read_and_send_range, shared_from_this()
+				, offset, size, std::move(close_callback), error_callback);
+	}
+
+	send_chunk(std::move(data_pointer), std::move(next), std::move(error_callback));
+}
+
+namespace elliptics {
+
+void
+req_get::on_request(const ioremap::thevoid::http_request &http_request
+		, const boost::asio::const_buffer &const_buffer) {
 	MDS_REQUEST_START("get", reinterpret_cast<uint64_t>(this->reply().get()));
 
 	MDS_LOG_INFO("Get: handle request");
@@ -264,6 +539,8 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	m_first_chunk = true;
+	some_data_were_sent = false;
+	has_internal_storage_error = false;
 
 	{
 		std::ostringstream oss;
@@ -271,67 +548,27 @@ void req_get::on_request(const ioremap::thevoid::http_request &http_request
 		auto msg = oss.str();
 		MDS_LOG_INFO("%s", msg.c_str());
 	}
+
+
 	{
 		auto ioflags = m_session->get_ioflags();
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
-		m_session->set_filter(ioremap::elliptics::filters::all);
-		auto alr = m_session->quorum_lookup(key);
-		alr.connect(wrap(std::bind(&req_get::on_lookup, shared_from_this(),
-					std::placeholders::_1, std::placeholders::_2)));
+		m_session->set_filter(ie::filters::all);
+
+		parallel_lookuper_ptr = make_parallel_lookuper(
+				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+				, *m_session, key);
+
 		m_session->set_ioflags(ioflags);
+		m_session->set_filter(ie::filters::positive);
+
+		auto next_callback = std::bind(&req_get::process_group_info
+				, shared_from_this(), std::placeholders::_1);
+		auto error_callback = std::bind(&req_get::on_error, shared_from_this());
+
+		find_first_group(std::move(next_callback), std::move(error_callback));
 	}
-}
-
-void req_get::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
-	if (error) {
-		if (error.code() == -ENOENT) {
-			MDS_LOG_INFO("Get: file not found");
-			send_reply(404);
-			MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
-		} else {
-			MDS_LOG_ERROR("Get: %s", error.message().c_str());
-			send_reply(500);
-			MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
-		}
-		return;
-	}
-
-	uint64_t tsec = 0;
-
-	{
-		std::vector<int> groups;
-		for (auto it = slr.begin(), end = slr.end(); it != end; ++it) {
-			auto group_id = it->command()->id.group_id;
-
-			switch (it->status())
-			{
-			case 0:
-				groups.push_back(group_id);
-				total_size = it->file_info()->size;
-				tsec = it->file_info()->mtime.tsec;
-				break;
-			case -ENOENT:
-			case -EBADFD:
-			case -EILSEQ:
-				bad_groups.push_back(group_id);
-			}
-		}
-		m_session->set_groups(groups);
-		m_session->set_filter(ioremap::elliptics::filters::positive);
-	}
-
-	auto res = process_precondition_headers(tsec, total_size);
-
-	if (std::get<0>(res)) {
-		return;
-	}
-
-	if (try_to_redirect_request(slr, total_size, std::get<1>(res))) {
-		return;
-	}
-
-	start_reading(total_size, std::get<1>(res));
 }
 
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
@@ -486,7 +723,7 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	return std::make_tuple(false, send_whole_file);
 }
 
-bool req_get::try_to_redirect_request(const ioremap::elliptics::sync_lookup_result &slr
+bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 		, const size_t size, bool send_whole_file) {
 
 	{
@@ -556,14 +793,11 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 
 	if (send_whole_file || !range_header) {
 		prospect_http_response.headers().set_content_length(size);
+		process_whole_file();
+		return;
+	}
 
-		auto get_helper = make_get_helper(0, size);
-
-		callback_t tmp = std::bind(&req_get::on_read_is_done, shared_from_this());
-		get_helper->read(get_session(), std::bind(&req_get::on_simple_read, shared_from_this()
-					, std::placeholders::_1, std::move(tmp))
-				, std::bind(&req_get::on_error, shared_from_this()));
-	} else if (auto ranges = parse_range_header(*range_header, size)) {
+	if (auto ranges = parse_range_header(*range_header, size)) {
 		prospect_http_response.set_code(206);
 
 		if (ranges->size() == 1) {
@@ -574,183 +808,73 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 			prospect_http_response.headers().set("Content-Range"
 					, make_content_range_header(range.offset, range.size, size));
 
-			MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-			send_headers(std::move(prospect_http_response)
-					, std::function<void (const boost::system::error_code &)>());
+			process_range(range.offset, range.size);
+			return;
+		}
 
-			auto get_helper = make_get_helper(range.offset, range.size);
+		auto boundary = make_boundary();
 
-			callback_t tmp = std::bind(&req_get::on_read_is_done, shared_from_this());
-			get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
-						, std::placeholders::_1, std::move(tmp))
-					, std::bind(&req_get::on_error, shared_from_this()));
-		} else {
-			auto boundary = make_boundary();
+		prospect_http_response.headers().set_content_type(
+				"multipart/byteranges; boundary=" + boundary);
 
-			prospect_http_response.headers().set_content_type(
-					"multipart/byteranges; boundary=" + boundary);
+		size_t content_length = 0;
+		std::list<std::string> ranges_headers;
 
-			size_t content_length = 0;
-			std::list<std::string> ranges_headers;
+		{
+			for (auto begin_it = ranges->begin(), it = begin_it, end_it = ranges->end();
+					it != end_it; ++it) {
+				std::ostringstream oss;
 
+				if (it != begin_it) {
+					oss << "\r\n";
+				}
+
+				oss
+					<< "--" << boundary << "\r\n"
+					<< "Content-Type: application/octet-stream\r\n"
+					<< "Content-Range: "
+					<< make_content_range_header(it->offset, it->size, size)
+					<< "\r\n\r\n";
+
+				auto headers = oss.str();
+
+				content_length += headers.size();
+				content_length += it->size;
+				ranges_headers.emplace_back(std::move(headers));
+			}
 			{
-				for (auto begin_it = ranges->begin(), it = begin_it, end_it = ranges->end();
-						it != end_it; ++it) {
-					std::ostringstream oss;
-
-					if (it != begin_it) {
-						oss << "\r\n";
-					}
-
-					oss
-						<< "--" << boundary << "\r\n"
-						<< "Content-Type: application/octet-stream\r\n"
-						<< "Content-Range: "
-						<< make_content_range_header(it->offset, it->size, size)
-						<< "\r\n\r\n";
-
-					auto headers = oss.str();
-
-					content_length += headers.size();
-					content_length += it->size;
-					ranges_headers.emplace_back(std::move(headers));
-				}
-				{
-					std::ostringstream oss;
-					oss << "\r\n--" << boundary << "--\r\n";
-					auto last_boundary = oss.str();
-					content_length += last_boundary.size();
-					ranges_headers.emplace_back(std::move(last_boundary));
-				}
-			}
-
-			prospect_http_response.headers().set_content_length(content_length);
-
-			MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-			send_headers(std::move(prospect_http_response)
-					, std::function<void (const boost::system::error_code &)>());
-
-			read_range(std::move(*ranges), std::move(ranges_headers));
-		}
-	} else {
-		prospect_http_response.set_code(416);
-		prospect_http_response.headers().set_content_length(0);
-		prospect_http_response.headers().set("Content-Range"
-				, "bytes */" + boost::lexical_cast<std::string>(size));
-
-		MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-		send_headers(std::move(prospect_http_response)
-				, std::function<void (const boost::system::error_code &)>());
-		return;
-	}
-}
-
-std::shared_ptr<get_helper_t> req_get::make_get_helper(size_t offset, size_t size) {
-	return std::make_shared<get_helper_t>(
-				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-				, key, offset, size
-				, server()->m_read_chunk_size);
-}
-
-void req_get::on_simple_read(const std::shared_ptr<get_helper_t> &get_helper
-		, callback_t read_is_done) {
-	auto chunk_type = get_helper->chunk();
-
-	if (chunk_type == get_helper_t::chunk_type_tag::first ||
-			chunk_type == get_helper_t::chunk_type_tag::single) {
-		if (NULL == server()->m_magic.get()) {
-			server()->m_magic.reset(new magic_provider());
-		}
-
-		const auto &buffer = get_helper->const_buffer();
-		prospect_http_response.headers().set_content_type(server()->m_magic->type(
-					boost::asio::buffer_cast<const char *>(buffer)
-					, boost::asio::buffer_size(buffer)));
-
-		MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-		send_headers(std::move(prospect_http_response)
-				, std::function<void (const boost::system::error_code &)>());
-	}
-
-	if (chunk_type == get_helper_t::chunk_type_tag::single) {
-		if (!bad_groups.empty()) {
-			if (auto write_session = server()->write_session(request(), bad_groups)) {
-				{
-					std::ostringstream oss;
-					oss << "mds-proxy recovers file! groups=" << bad_groups;
-					const auto &msg = oss.str();
-					MDS_LOG_INFO("%s", msg.c_str());
-				}
-
-				const auto &const_buffer = get_helper->const_buffer();
-				write_session->set_timestamp(get_helper->timestamp());
-				write_session->write_data(key, ioremap::elliptics::data_pointer::from_raw(
-							const_cast<void *>(boost::asio::buffer_cast<const void *>(const_buffer))
-							, boost::asio::buffer_size(const_buffer)), 0);
-			} else {
-				MDS_LOG_ERROR("oops, file cannot be recovered: write-session is uninitialized");
-				return;
+				std::ostringstream oss;
+				oss << "\r\n--" << boundary << "--\r\n";
+				auto last_boundary = oss.str();
+				content_length += last_boundary.size();
+				ranges_headers.emplace_back(std::move(last_boundary));
 			}
 		}
-	}
 
-	on_simple_range_read(get_helper, std::move(read_is_done));
-}
+		prospect_http_response.headers().set_content_length(content_length);
 
-void req_get::on_simple_range_read(const std::shared_ptr<get_helper_t> &get_helper
-		, callback_t read_is_done) {
-	send_data(get_helper->const_buffer(), std::bind(&req_get::on_simple_data_sent
-				, shared_from_this(), std::placeholders::_1, get_helper, std::move(read_is_done)));
-}
+		process_ranges(std::move(*ranges), std::move(ranges_headers));
 
-void req_get::on_simple_data_sent(const boost::system::error_code &error_code
-		, const std::shared_ptr<get_helper_t> &get_helper
-		, callback_t read_is_done) {
-	auto chunk_type = get_helper->chunk();
-
-	if (error_code) {
-		MDS_LOG_ERROR("Get: error during chunk sending: %s", error_code.message().c_str());
-		if (chunk_type == get_helper_t::chunk_type_tag::first ||
-				chunk_type == get_helper_t::chunk_type_tag::single) {
-			send_reply(500);
-			MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
-		}
 		return;
 	}
 
-	MDS_LOG_INFO("Get: chunk was sent");
+	prospect_http_response.set_code(416);
+	prospect_http_response.headers().set_content_length(0);
+	prospect_http_response.headers().set("Content-Range"
+			, "bytes */" + boost::lexical_cast<std::string>(size));
 
-	if (chunk_type == get_helper_t::chunk_type_tag::last ||
-			chunk_type == get_helper_t::chunk_type_tag::single) {
-		read_is_done();
-		return;
-	}
-
-	get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
-				, std::placeholders::_1, std::move(read_is_done))
-			, std::bind(&req_get::on_error, shared_from_this()));
+	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+	send_headers(std::move(prospect_http_response)
+			, std::function<void (const boost::system::error_code &)>());
 }
 
-void req_get::read_range(ranges_t ranges, std::list<std::string> ranges_headers) {
-	if (ranges.empty()) {
-		send_data(std::move(ranges_headers.front())
-				, std::bind(&req_get::on_read_is_done, shared_from_this()));
-	} else {
-		send_data(std::move(ranges_headers.front())
-				, std::function<void (const boost::system::error_code &)>());
-		ranges_headers.pop_front();
-
-		auto range = ranges.front();
-		ranges.pop_front();
-
-		auto get_helper = make_get_helper(range.offset, range.size);
-
-		callback_t tmp = std::bind(&req_get::read_range, shared_from_this()
-				, std::move(ranges), std::move(ranges_headers));
-		get_helper->read(get_session(), std::bind(&req_get::on_simple_range_read, shared_from_this()
-					, std::placeholders::_1, tmp)
-				, std::bind(&req_get::on_error, shared_from_this()));
+size_t
+req_get::total_size() {
+	if (!lookup_result_entry_opt) {
+		return 0;
 	}
+
+	return lookup_result_entry_opt->file_info()->size;
 }
 
 void req_get::on_error() {
@@ -758,12 +882,14 @@ void req_get::on_error() {
 	MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
 }
 
-void req_get::on_read_is_done() {
+void
+req_get::request_is_finished() {
 	reply()->close(boost::system::error_code());
 	MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
 }
 
-ioremap::elliptics::session req_get::get_session() {
+ie::session
+req_get::get_session() {
 	auto session = m_session->clone();
 
 	session.set_timeout(server()->timeout.read);
@@ -771,9 +897,10 @@ ioremap::elliptics::session req_get::get_session() {
 	if (m_first_chunk) {
 		m_first_chunk = false;
 
+		session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
 		if (server()->timeout_coef.data_flow_rate) {
 			session.set_timeout(
-					session.get_timeout() + total_size / server()->timeout_coef.data_flow_rate);
+					session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
 		}
 
 	} else {
