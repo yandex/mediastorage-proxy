@@ -72,6 +72,12 @@ elliptics::req_get::next_first_group_is_found(const ie::sync_lookup_result &entr
 		, const ie::error_info &error_info
 		, std::function<void (const ie::lookup_result_entry &)> on_result
 		, std::function<void ()> on_error) {
+	if (entries.empty()) {
+		MDS_LOG_ERROR("lookup result contains no entries: %s", error_info.message().c_str());
+		find_first_group(std::move(on_result), std::move(on_error));
+		return;
+	}
+
 	const auto &entry = entries.front();
 	auto group_id = entry.command()->id.group_id;
 
@@ -118,6 +124,12 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 		, const ie::error_info &error_info
 		, std::function<void ()> on_result
 		, std::function<void ()> on_error) {
+	if (entries.empty()) {
+		MDS_LOG_ERROR("lookup result contains no entries: %s", error_info.message().c_str());
+		find_other_group(std::move(on_result), std::move(on_error));
+		return;
+	}
+
 	const auto &entry = entries.front();
 	auto group_id = entry.command()->id.group_id;
 
