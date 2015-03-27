@@ -72,7 +72,15 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		MDS_LOG_DEBUG("%s", oss.str().c_str());
 	}
 
-	auto file_info = server()->get_file_info(http_request);
+	std::tuple<std::string, mastermind::namespace_state_t> file_info;
+
+	try {
+		file_info = server()->get_file_info(http_request);
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("cannot parse file info: %s", ex.what());
+		send_reply(400);
+		return;
+	}
 
 	auto ns_state = std::get<1>(file_info);
 
