@@ -1,3 +1,9 @@
+mediastorage-proxy (0.84.4) lucid; urgency=low
+
+  * Version bump because of missmerge
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 19:19:12 +0400
+
 mediastorage-proxy (0.84.3) lucid; urgency=low
 
   * MDS-764: Upload handler replies 400 for unknown namespace
