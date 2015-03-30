@@ -365,7 +365,7 @@ elliptics::req_get::read_and_send_range(size_t offset, size_t size
 		read_and_send_range(next_offset, next_size, std::move(on_result), std::move(on_error));
 	};
 
-	read_and_send_chunk(offset, size, std::move(next), std::move(on_error));
+	read_and_send_chunk(offset, current_size, std::move(next), std::move(on_error));
 }
 
 void
