@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.5) lucid; urgency=low
+
+  * Proxy replies 500 in case of read fail
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 22:54:55 +0400
+
 mediastorage-proxy (0.85.4) lucid; urgency=low
 
   * Chunked reading was fixed
