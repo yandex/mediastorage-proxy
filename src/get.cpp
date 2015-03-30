@@ -285,6 +285,7 @@ elliptics::req_get::read_chunk_is_finished(
 		auto next = std::bind(&req_get::read_chunk, shared_from_this()
 				, offset, size, std::move(on_result), on_error);
 
+		has_internal_storage_error = true;
 		find_other_group(std::move(next), std::move(on_error));
 		return;
 	}
