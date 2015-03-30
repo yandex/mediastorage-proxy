@@ -525,6 +525,27 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
+	if (request().url().query().has_item("expiration-time")) {
+		if (!proxy_settings(ns_state).custom_expiration_time) {
+			MDS_LOG_ERROR("using of expiration-time is prohibited");
+			send_reply(403);
+			MDS_REQUEST_REPLY("get", 403, reinterpret_cast<uint64_t>(this->reply().get()));
+			return;
+		}
+
+		auto expiration_time_str = *request().url().query().item_value("expiration-time");
+
+		try {
+			expiration_time = std::chrono::seconds(
+					boost::lexical_cast<size_t>(expiration_time_str));
+		} catch (const std::exception &ex) {
+			MDS_LOG_ERROR("cannot parse expiration-time: %s", ex.what());
+			send_reply(400);
+			MDS_REQUEST_REPLY("get", 400, reinterpret_cast<uint64_t>(this->reply().get()));
+			return;
+		}
+	}
+
 	if (!server()->check_basic_auth(ns_state.name(), proxy_settings(ns_state).auth_key_for_read
 				, http_request.headers().get("Authorization"))) {
 		auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
@@ -775,7 +796,8 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 		}
 
 		auto res = server()->generate_signature_for_elliptics_file(slr
-				, headers.get("X-Regional-Host").get_value_or(""), ns_state);
+				, headers.get("X-Regional-Host").get_value_or(""), ns_state
+				, expiration_time);
 
 		std::stringstream oss;
 		oss

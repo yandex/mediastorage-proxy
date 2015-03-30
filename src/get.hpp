@@ -172,6 +172,8 @@ private:
 	bool has_internal_storage_error;
 
 	std::vector<int> bad_groups;
+
+	boost::optional<std::chrono::seconds> expiration_time;
 };
 
 } // namespace elliptics
