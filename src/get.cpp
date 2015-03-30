@@ -441,15 +441,25 @@ elliptics::req_get::process_ranges(ranges_t ranges, std::list<std::string> bound
 
 void
 elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
-	if (NULL == server()->m_magic.get()) {
-		server()->m_magic.reset(new magic_provider());
-	}
-
 	const auto &data_pointer = entry.file();
-	auto content_type = server()->m_magic->type(static_cast<const char *>(data_pointer.data())
-			, data_pointer.size());
 
-	prospect_http_response.headers().set_content_type(content_type);
+	{
+		utils::ms_timestamp_t ms_timestamp;
+		if (NULL == server()->m_magic.get()) {
+			server()->m_magic.reset(new magic_provider());
+		}
+
+		auto content_type = server()->m_magic->type(static_cast<const char *>(data_pointer.data())
+				, data_pointer.size());
+
+		prospect_http_response.headers().set_content_type(content_type);
+
+		std::ostringstream oss;
+		oss << "content-type was detected: type=\"" << content_type
+			<<  "\"; spent-time=" << ms_timestamp.str();
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
 
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 
