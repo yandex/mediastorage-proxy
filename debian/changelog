@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.2) lucid; urgency=low
+
+  * MDS-469: Group must be greater than zero
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 16:05:20 +0400
+
 mediastorage-proxy (0.85.1) lucid; urgency=low
 
   * MDS-852: Option expiration-time was added for get handler
