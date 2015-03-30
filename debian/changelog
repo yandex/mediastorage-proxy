@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.3) lucid; urgency=low
+
+  * MDS-887: Log for libmagic was added
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 19:06:58 +0400
+
 mediastorage-proxy (0.85.2) lucid; urgency=low
 
   * MDS-469: Group must be greater than zero
