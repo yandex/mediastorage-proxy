@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.6) lucid; urgency=low
+
+  * MDS-887: First 10KB of data are used to detect content type
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 31 Mar 2015 15:51:51 +0400
+
 mediastorage-proxy (0.85.5) lucid; urgency=low
 
   * Proxy replies 500 in case of read fail
