@@ -8,7 +8,7 @@ Build-Depends: debhelper (>=5),
  libthevoid2 (>= 0.7.2.0), libthevoid2 (<< 0.8),
  libthevoid-dev (>= 0.7.2.0), libthevoid-dev (<< 0.8),
  libmastermind-dev (>= 8.26),
- elliptics-dev (>= 2.26.3.33-6), elliptics-dev (<< 2.26.3.34),
+ elliptics-dev (>= 2.26.3.33-6),
  cocaine-framework-native (>= 0.11), cocaine-framework-native (<< 0.12),
  cocaine-framework-native-dev (>= 0.11), cocaine-framework-native-dev (<< 0.12),
  libcocaine-core2 (>= 0.11), libcocaine-core2 (<< 0.12),
@@ -30,6 +30,6 @@ Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8), libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, elliptics-client(>= 2.26.3.33-6), elliptics-client(<< 2.26.3.34), handystats (>= 1.10.2), handystats (<< 1.11), ubic,
+Depends: ${shlibs:Depends}, libthevoid2 (>= 0.7.0.3), libthevoid2 (<< 0.8), libswarm2 (>= 0.7.0.3), libswarm2 (<< 0.8), libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, elliptics-client(>= 2.26.3.33-6), handystats (>= 1.10.2), handystats (<< 1.11), ubic,
 Description: Proxy with elliptics support based on thevoid
 
