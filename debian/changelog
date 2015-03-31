@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.8) lucid; urgency=low
+
+  * MDS-770: Multipart name's length could be one
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 31 Mar 2015 20:05:26 +0400
+
 mediastorage-proxy (0.85.7) lucid; urgency=low
 
   * Build-deps: remove elliptics-dev (<< 2.26.3.34)
