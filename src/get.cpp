@@ -450,8 +450,10 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 			server()->m_magic.reset(new magic_provider());
 		}
 
+		// Fisrt 10KB of data should be enough to detect content type
+		static size_t MAGIC_SIZE = 10 * 1024;
 		auto content_type = server()->m_magic->type(static_cast<const char *>(data_pointer.data())
-				, data_pointer.size());
+				, std::min(data_pointer.size(), MAGIC_SIZE));
 
 		prospect_http_response.headers().set_content_type(content_type);
 
