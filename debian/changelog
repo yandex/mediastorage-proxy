@@ -1,3 +1,11 @@
+mediastorage-proxy (0.85.9) lucid; urgency=low
+
+  * debian/control: depends on swarm/thevoid (>= 0.8, << 0.9)
+  * upload_simple: added try_next_chunk() method's call to receive first
+    chunk.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 01 Apr 2015 22:11:09 +0400
+
 mediastorage-proxy (0.85.8) lucid; urgency=low
 
   * MDS-770: Multipart name's length could be one
