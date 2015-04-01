@@ -55,6 +55,9 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			, on_complete, server()->limit_of_middle_chunk_attempts
 			, server()->scale_retry_timeout
 			);
+
+	// It's required to call try_next_chunk() method to receive first chunk of data
+	try_next_chunk();
 }
 
 void
