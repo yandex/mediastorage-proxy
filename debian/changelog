@@ -1,3 +1,10 @@
+mediastorage-proxy (0.85.11) lucid; urgency=low
+
+  * MDS-888: The marker will be logged if headers are sent and request is
+    failed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 03 Apr 2015 17:56:22 +0400
+
 mediastorage-proxy (0.85.10) lucid; urgency=low
 
   * Deps: thevoid/swarm (>= 0.8.1)
