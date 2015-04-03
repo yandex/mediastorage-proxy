@@ -64,7 +64,7 @@ elliptics::req_get::find_first_group(
 		return;
 	}
 
-	all_groups_were_processed();
+	all_groups_were_processed(std::move(on_error));
 }
 
 void
@@ -116,7 +116,7 @@ elliptics::req_get::find_other_group(
 		return;
 	}
 
-	all_groups_were_processed();
+	all_groups_were_processed(std::move(on_error));
 }
 
 void
@@ -164,16 +164,14 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 }
 
 void
-elliptics::req_get::all_groups_were_processed() {
+elliptics::req_get::all_groups_were_processed(std::function<void ()> on_error) {
 	if (!has_internal_storage_error) {
 		MDS_LOG_INFO("all groups were processed: file not found");
-		send_reply(404);
-		MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
 	} else {
 		MDS_LOG_ERROR("all groups were processed: cannot read file");
-		send_reply(500);
-		MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
 	}
+
+	on_error();
 }
 
 bool
@@ -418,6 +416,7 @@ elliptics::req_get::process_whole_file() {
 void
 elliptics::req_get::process_range(size_t offset, size_t size) {
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+	headers_were_sent = true;
 	send_headers(std::move(prospect_http_response)
 			, std::function<void (const boost::system::error_code &)>());
 
@@ -430,6 +429,7 @@ elliptics::req_get::process_range(size_t offset, size_t size) {
 void
 elliptics::req_get::process_ranges(ranges_t ranges, std::list<std::string> boundaries) {
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
+	headers_were_sent = true;
 	send_headers(std::move(prospect_http_response)
 			, std::function<void (const boost::system::error_code &)>());
 
@@ -466,6 +466,7 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
 
+	headers_were_sent = true;
 	send_headers(std::move(prospect_http_response)
 			, std::function<void (const boost::system::error_code &)>());
 
@@ -585,6 +586,7 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	m_first_chunk = true;
+	headers_were_sent = false;
 	some_data_were_sent = false;
 	has_internal_storage_error = false;
 
@@ -925,8 +927,21 @@ req_get::total_size() {
 }
 
 void req_get::on_error() {
-	send_reply(500);
-	MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
+	if (headers_were_sent) {
+		MDS_LOG_ERROR("error occured after headers were sent and cannot be reported to the client");
+		reply()->close(boost::system::errc::make_error_code(
+					boost::system::errc::operation_canceled));
+		MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
+		return;
+	}
+
+	if (!has_internal_storage_error) {
+		send_reply(404);
+		MDS_REQUEST_REPLY("get", 404, reinterpret_cast<uint64_t>(this->reply().get()));
+	} else {
+		send_reply(500);
+		MDS_REQUEST_REPLY("get", 500, reinterpret_cast<uint64_t>(this->reply().get()));
+	}
 }
 
 void
