@@ -79,7 +79,7 @@ private:
 			, std::function<void ()> on_error);
 
 	void
-	all_groups_were_processed();
+	all_groups_were_processed(std::function<void ()> on_error);
 
 	bool
 	check_lookup_result_entry(const ie::lookup_result_entry &entry);
@@ -168,6 +168,7 @@ private:
 	boost::optional<ie::lookup_result_entry> lookup_result_entry_opt;
 
 	bool m_first_chunk;
+	bool headers_were_sent;
 	bool some_data_were_sent;
 	bool has_internal_storage_error;
 
