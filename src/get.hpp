@@ -20,9 +20,23 @@
 #ifndef SRC__GET__HPP
 #define SRC__GET__HPP
 
+#include <boost/asio/buffer.hpp>
+#include <elliptics/utils.hpp>
+
+namespace boost {
+namespace asio {
+
+const_buffers_1
+buffer(const ioremap::elliptics::data_pointer &data_pointer);
+
+} // namespace asio
+} // namespace boost
+
 #include "proxy.hpp"
 
 #include "ranges.hpp"
+#include "lookuper.hpp"
+#include "timestamp.hpp"
 
 #include <elliptics/session.hpp>
 
@@ -33,51 +47,134 @@
 
 namespace elliptics {
 
-class get_helper_t;
+namespace ie = ioremap::elliptics;
 
 struct req_get
 	: public ioremap::thevoid::simple_request_stream<proxy>
 	, public std::enable_shared_from_this<req_get>
 {
-	void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-	void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
+	void
+	on_request(const ioremap::thevoid::http_request &http_request
+			, const boost::asio::const_buffer &const_buffer);
+
 private:
-	typedef std::function<void (void)> callback_t;
+	void
+	find_first_group(std::function<void (const ie::lookup_result_entry &)> on_result
+			, std::function<void ()> on_error);
+
+	void
+	next_first_group_is_found(const ie::sync_lookup_result &entries
+			, const ie::error_info &error_info
+			, std::function<void (const ie::lookup_result_entry &)> on_result
+			, std::function<void ()> on_error);
+
+	void
+	find_other_group(std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	next_other_group_is_found(const ie::sync_lookup_result &entries
+			, const ie::error_info &error_info
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	all_groups_were_processed(std::function<void ()> on_error);
+
+	bool
+	check_lookup_result_entry(const ie::lookup_result_entry &entry);
+
+	bool
+	lookup_result_entries_are_equal(const ie::lookup_result_entry &lhs
+			, const ie::lookup_result_entry &rhs);
+
+	void
+	process_group_info(const ie::lookup_result_entry &entry);
+
+	void
+	read_chunk(size_t offset, size_t size
+			, std::function<void (const ie::read_result_entry &)> on_result
+			, std::function<void ()> on_error);
+
+	void
+	read_chunk_is_finished(
+			const ie::sync_read_result &entries
+			, const ie::error_info &error_info
+			, utils::ms_timestamp_t ms_timestamp
+			, size_t offset, size_t size
+			, std::function<void (const ie::read_result_entry &)> on_result
+			, std::function<void ()> on_error);
+
+	void
+	send_chunk(ie::data_pointer data_pointer
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	send_chunk_is_finished(const boost::system::error_code &error_code
+			, utils::ms_timestamp_t ms_timestamp
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	read_and_send_chunk(size_t offset, size_t size
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	read_and_send_range(size_t offset, size_t size
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+	void
+	read_and_send_ranges(ranges_t ranges, std::list<std::string> ranges_headers
+			, std::function<void ()> on_result
+			, std::function<void ()> on_error);
+
+	void
+	process_whole_file();
+
+	void
+	process_range(size_t offset, size_t size);
+
+	void
+	process_ranges(ranges_t ranges, std::list<std::string> boundaries);
+
+	void
+	detect_content_type(const ie::read_result_entry &entry);
 
 	std::tuple<bool, bool> process_precondition_headers(const time_t timestamp, const size_t size);
-	bool try_to_redirect_request(const ioremap::elliptics::sync_lookup_result &slr
+	bool try_to_redirect_request(const ie::sync_lookup_result &slr
 			, const size_t size, bool send_whole_file);
 	void start_reading(const size_t size, bool send_whole_file);
 
-	std::shared_ptr<get_helper_t> make_get_helper(size_t offset, size_t size);
+	size_t
+	total_size();
 
-	void on_simple_read(const std::shared_ptr<get_helper_t> &get_helper, callback_t read_is_done);
-	void on_simple_range_read(const std::shared_ptr<get_helper_t> &get_helper
-			, callback_t read_is_done);
+	void
+	on_error();
 
-	void on_simple_data_sent(const boost::system::error_code &error_code
-			, const std::shared_ptr<get_helper_t> &get_helper
-			, callback_t read_is_done);
+	void
+	request_is_finished();
 
-	void read_range(ranges_t ranges, std::list<std::string> ranges_headers);
-
-	void on_error();
-
-	void on_read_is_done();
-
-	ioremap::elliptics::session get_session();
+	ie::session
+	get_session();
 
 	ioremap::thevoid::http_response prospect_http_response;
 
-	boost::optional<ioremap::elliptics::session> m_session;
+	boost::optional<ie::session> m_session;
 	mastermind::namespace_state_t ns_state;
 	std::string key;
-
-	size_t total_size;
+	parallel_lookuper_ptr_t parallel_lookuper_ptr;
+	boost::optional<ie::lookup_result_entry> lookup_result_entry_opt;
 
 	bool m_first_chunk;
+	bool headers_were_sent;
+	bool some_data_were_sent;
+	bool has_internal_storage_error;
 
 	std::vector<int> bad_groups;
+
+	boost::optional<std::chrono::seconds> expiration_time;
 };
 
 } // namespace elliptics

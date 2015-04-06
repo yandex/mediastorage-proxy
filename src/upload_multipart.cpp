@@ -226,9 +226,9 @@ upload_multipart_t::sm_headers() {
 	}
 
 	auto name_begin = headers.find('\"', name_pos) + 1;
-	auto name_end = headers.find('\"', name_begin + 1);
+	auto name_end = headers.find('\"', name_begin);
 
-	if (name_end - name_begin == 1) {
+	if (name_end - name_begin == 0) {
 		MDS_LOG_INFO("incorrect body: trace 4");
 		multipart_context.interrupt(true);
 		return;

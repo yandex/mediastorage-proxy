@@ -1,3 +1,105 @@
+mediastorage-proxy (0.85.11) lucid; urgency=low
+
+  * MDS-888: The marker will be logged if headers are sent and request is
+    failed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 03 Apr 2015 17:56:22 +0400
+
+mediastorage-proxy (0.85.10) lucid; urgency=low
+
+  * Deps: thevoid/swarm (>= 0.8.1)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 02 Apr 2015 17:09:47 +0400
+
+mediastorage-proxy (0.85.9) lucid; urgency=low
+
+  * debian/control: depends on swarm/thevoid (>= 0.8, << 0.9)
+  * upload_simple: added try_next_chunk() method's call to receive first
+    chunk.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 01 Apr 2015 22:11:09 +0400
+
+mediastorage-proxy (0.85.8) lucid; urgency=low
+
+  * MDS-770: Multipart name's length could be one
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 31 Mar 2015 20:05:26 +0400
+
+mediastorage-proxy (0.85.7) lucid; urgency=low
+
+  * Build-deps: remove elliptics-dev (<< 2.26.3.34)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 31 Mar 2015 17:13:06 +0400
+
+mediastorage-proxy (0.85.6) lucid; urgency=low
+
+  * MDS-887: First 10KB of data are used to detect content type
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 31 Mar 2015 15:51:51 +0400
+
+mediastorage-proxy (0.85.5) lucid; urgency=low
+
+  * Proxy replies 500 in case of read fail
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 22:54:55 +0400
+
+mediastorage-proxy (0.85.4) lucid; urgency=low
+
+  * Chunked reading was fixed
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 19:58:54 +0400
+
+mediastorage-proxy (0.85.3) lucid; urgency=low
+
+  * MDS-887: Log for libmagic was added
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 19:06:58 +0400
+
+mediastorage-proxy (0.85.2) lucid; urgency=low
+
+  * MDS-469: Group must be greater than zero
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 16:05:20 +0400
+
+mediastorage-proxy (0.85.1) lucid; urgency=low
+
+  * MDS-852: Option expiration-time was added for get handler
+    Handler get has option expiration-time to customise
+    expiration time of signature. The option can be used only if
+    namespace's option custom-expiration-time is set.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 30 Mar 2015 15:38:19 +0400
+
+mediastorage-proxy (0.84.5) lucid; urgency=low
+
+  * Parallel_lookuper unlocks state before set value into promice
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 20:21:33 +0400
+
+mediastorage-proxy (0.84.4) lucid; urgency=low
+
+  * Version bump because of missmerge
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 19:19:12 +0400
+
+mediastorage-proxy (0.84.3) lucid; urgency=low
+
+  * MDS-764: Upload handler replies 400 for unknown namespace
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 19:16:48 +0400
+
+mediastorage-proxy (0.84.2) lucid; urgency=low
+
+  * One should check lookup result contains entries because of ELL-250.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 18:54:55 +0400
+
+mediastorage-proxy (0.84.1) lucid; urgency=low
+
+  * MDS-829: Handler can repick group during reading in case of error occurs.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 27 Mar 2015 16:39:33 +0400
+
 mediastorage-proxy (0.83.7) lucid; urgency=low
 
   * MDS-668: Option scale-retry-timeout is added

@@ -33,6 +33,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/upload.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_simple.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_multipart.cpp
+	${PROJECT_SOURCE_DIR}/src/lookuper.cpp
 	${PROJECT_SOURCE_DIR}/src/get.cpp
 	${PROJECT_SOURCE_DIR}/src/delete.cpp
 	${PROJECT_SOURCE_DIR}/src/download_info.cpp
