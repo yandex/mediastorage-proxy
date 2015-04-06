@@ -56,8 +56,28 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			, server()->scale_retry_timeout
 			);
 
-	// It's required to call try_next_chunk() method to receive first chunk of data
-	try_next_chunk();
+	{
+		auto next = [this, self] (util::expected<bool> can_continue) {
+			try {
+				if (can_continue.get()) {
+					MDS_LOG_INFO("key can be written");
+					try_next_chunk();
+					return;
+				}
+
+				MDS_LOG_INFO("key cannot be written");
+				send_reply(403);
+			} catch (const std::exception &ex) {
+				MDS_LOG_ERROR("cannot check key for update: %s", ex.what());
+				send_reply(500);
+			}
+		};
+
+		can_be_written(
+				make_shared_logger(logger())
+				, *server()->lookup_session(http_request, couple), key, ns_state
+				, std::move(next));
+	}
 }
 
 void
