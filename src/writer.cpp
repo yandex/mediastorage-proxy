@@ -488,47 +488,15 @@ elliptics::writer_t::on_data_removed(
 	}
 }
 
-elliptics::can_be_written_t::can_be_written_t(
-		ioremap::swarm::logger bh_logger_
-		, ioremap::elliptics::session session_
-		, std::string key_
-		, mastermind::namespace_state_t ns_state_
-		, std::function<void (bool)> on_result_
-		, std::function<void ()> on_error_)
-	: bh_logger(std::move(bh_logger_))
-	, session(session_.clone())
-	, key(std::move(key_))
-	, ns_state(std::move(ns_state_))
-	, on_result(std::move(on_result_))
-	, on_error(std::move(on_error_))
-{
-	session.set_filter(ioremap::elliptics::filters::all);
-}
+#define logger() *shared_logger
+
+namespace detail {
 
 void
-elliptics::can_be_written_t::start() {
-	if (!proxy_settings(ns_state).check_for_update) {
-		MDS_LOG_INFO("check for update is disabled for the namespace");
-		on_result(true);
-		return;
-	}
-
-	auto future = session.parallel_lookup(key);
-
-	auto next = std::bind(&can_be_written_t::on_lookup, shared_from_this()
-			, std::placeholders::_1, std::placeholders::_2);
-
-	future.connect(next);
-}
-
-ioremap::swarm::logger &
-elliptics::can_be_written_t::logger() {
-	return bh_logger;
-}
-
-void
-elliptics::can_be_written_t::on_lookup(const ioremap::elliptics::sync_lookup_result &entries
-		, const ioremap::elliptics::error_info &error_info) {
+can_be_written_on_lookup(shared_logger_t shared_logger
+		, const ioremap::elliptics::sync_lookup_result &entries
+		, const ioremap::elliptics::error_info &error_info
+		, std::function<void (util::expected<bool>)> next) {
 
 	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
 		const int group_id = it->command()->id.group_id;
@@ -539,31 +507,45 @@ elliptics::can_be_written_t::on_lookup(const ioremap::elliptics::sync_lookup_res
 
 		if (it->status() == 0) {
 			MDS_LOG_INFO("key was found in group=%d", group_id);
-			on_result(false);
+			next(false);
 			return;
 		}
 
 		const auto entry_error_info = it->error();
 		MDS_LOG_ERROR("cannot check group=%d: %s", group_id , entry_error_info.message().c_str());
-		on_error();
+		
+		next(util::expected_from_exception<std::runtime_error>("cannot check some group"));
 		return;
 	}
 
 	MDS_LOG_INFO("key was not found in any group");
-	on_result(true);
+	next(true);
 }
 
+} // namespace detail
+
 void
-elliptics::can_be_written(
-		ioremap::swarm::logger bh_logger
+elliptics::can_be_written(shared_logger_t shared_logger
 		, ioremap::elliptics::session session
 		, std::string key
 		, mastermind::namespace_state_t ns_state
-		, std::function<void (bool)> on_result
-		, std::function<void ()> on_error) {
-	auto command = std::make_shared<can_be_written_t>(
-			std::move(bh_logger), std::move(session), std::move(key), std::move(ns_state)
-			, std::move(on_result), std::move(on_error));
-	command->start();
+		, std::function<void (util::expected<bool>)> next) {
+
+	if (!proxy_settings(ns_state).check_for_update) {
+		MDS_LOG_INFO("check for update is disabled for the namespace");
+		next(true);
+		return;
+	}
+
+	session = session.clone();
+	session.set_filter(ioremap::elliptics::filters::all);
+
+	auto future = session.parallel_lookup(key);
+
+	auto next_ = std::bind(&detail::can_be_written_on_lookup, shared_logger
+			, std::placeholders::_1, std::placeholders::_2
+			, std::move(next));
+
+	future.connect(next_);
 }
 

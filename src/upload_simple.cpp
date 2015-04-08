@@ -57,26 +57,26 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			);
 
 	{
-		auto on_result = [this, self] (bool can_continue) {
-			if (can_continue) {
-				MDS_LOG_INFO("key can be written");
-				try_next_chunk();
-				return;
+		auto next = [this, self] (util::expected<bool> can_continue) {
+			try {
+				if (can_continue.get()) {
+					MDS_LOG_INFO("key can be written");
+					try_next_chunk();
+					return;
+				}
+
+				MDS_LOG_INFO("key cannot be written");
+				send_reply(403);
+			} catch (const std::exception &ex) {
+				MDS_LOG_ERROR("cannot check key for update: %s", ex.what());
+				send_reply(500);
 			}
-
-			MDS_LOG_INFO("key cannot be written");
-			send_reply(403);
-		};
-
-		auto on_error = [this, self] () {
-			MDS_LOG_ERROR("cannot check key for update");
-			send_reply(500);
 		};
 
 		can_be_written(
-				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
+				make_shared_logger(logger())
 				, *server()->lookup_session(http_request, couple), key, ns_state
-				, std::move(on_result), std::move(on_error));
+				, std::move(next));
 	}
 }
 

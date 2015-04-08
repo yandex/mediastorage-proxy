@@ -20,6 +20,9 @@
 #ifndef MDS_PROXY__SRC__UPLOADER__HPP
 #define MDS_PROXY__SRC__UPLOADER__HPP
 
+#include "loggers.hpp"
+#include "expected.hpp"
+
 #include <elliptics/session.hpp>
 
 #include <swarm/logger.hpp>
@@ -182,45 +185,12 @@ private:
 	entries_info_t entries_info;
 };
 
-class can_be_written_t
-	: public std::enable_shared_from_this<can_be_written_t>
-{
-public:
-	can_be_written_t(
-		ioremap::swarm::logger bh_logger_
-		, ioremap::elliptics::session session_
-		, std::string key_
-		, mastermind::namespace_state_t ns_state_
-		, std::function<void (bool)> on_result_
-		, std::function<void ()> on_error_);
-
-	void
-	start();
-
-private:
-	ioremap::swarm::logger &
-	logger();
-
-	void
-	on_lookup(const ioremap::elliptics::sync_lookup_result &entries
-			, const ioremap::elliptics::error_info &error_info);
-
-	ioremap::swarm::logger bh_logger;
-	ioremap::elliptics::session session;
-	std::string key;
-	mastermind::namespace_state_t ns_state;
-	std::function<void (bool)> on_result;
-	std::function<void ()> on_error;
-};
-
 void
-can_be_written(
-		ioremap::swarm::logger bh_logger
+can_be_written(shared_logger_t shared_logger
 		, ioremap::elliptics::session session
 		, std::string key
 		, mastermind::namespace_state_t ns_state
-		, std::function<void (bool)> on_result
-		, std::function<void ()> on_error);
+		, std::function<void (util::expected<bool>)> next);
 
 } // namespace elliptics
 
