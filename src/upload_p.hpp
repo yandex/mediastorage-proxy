@@ -22,11 +22,15 @@
 
 #include "upload.hpp"
 #include "writer.hpp"
+#include "couple_iterator.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
 
+#include <libmastermind/mastermind.hpp>
+
 #include <fstream>
 #include <list>
+#include <stdexcept>
 
 namespace elliptics {
 
