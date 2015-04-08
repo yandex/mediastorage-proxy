@@ -36,6 +36,8 @@ struct expected_with_exception {
 template <typename T>
 class expected {
 public:
+	typedef std::function<void (expected<T>)> callback_t;
+
 	template <typename E>
 	static
 	expected<T>
@@ -177,6 +179,8 @@ private:
 template <>
 class expected<void> {
 public:
+	typedef std::function<void (expected<void>)> callback_t;
+
 	template <typename E>
 	static
 	expected<void>
