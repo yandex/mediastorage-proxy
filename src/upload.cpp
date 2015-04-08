@@ -109,70 +109,10 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		}
 	}
 
-	couple_t couple;
+	auto couple_iterator = create_couple_iterator(http_request, ns_state, total_size);
 
-	if (auto arg = http_request.url().query().item_value("couple_id")) {
-		if (!proxy_settings(ns_state).can_choose_couple_to_upload) {
-			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
-			send_reply(403);
-			return;
-		}
-
-		int couple_id = 0;
-
-		try {
-			couple_id = boost::lexical_cast<int>(*arg);
-		} catch (...) {
-			MDS_LOG_INFO("couple_id is malformed: \"%s\"", arg->c_str());
-			send_reply(400);
-			return;
-		}
-
-		couple = ns_state.couples().get_couple_groups(couple_id);
-
-		if (couple.empty()) {
-			MDS_LOG_INFO("cannot obtain couple by couple_id: %d", couple_id);
-			send_reply(400);
-			return;
-		}
-
-		if (couple_id != *std::min_element(couple.begin(), couple.end())) {
-			MDS_LOG_INFO("client tried to use no minimum group as couple_id: %d", couple_id);
-			send_reply(400);
-			return;
-		}
-
-		auto space = ns_state.couples().free_effective_space(couple_id);
-
-		if (space < total_size) {
-			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
-			send_reply(507);
-			return;
-		}
-
-		{
-			std::ostringstream oss;
-			oss << couple;
-			auto couple_str = oss.str();
-			MDS_LOG_INFO("use couple chosen by client: %s", couple_str.c_str());
-		}
-
-	} else {
-		try {
-			couple = server()->groups_for_upload(ns_state, total_size);
-		} catch (const mastermind::not_enough_memory_error &e) {
-			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-				, static_cast<int>(ns_state.settings().groups_count())
-				, ns_state.name().c_str(), e.code().message().c_str());
-			send_reply(507);
-			return;
-		} catch (const std::system_error &e) {
-			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
-				, static_cast<int>(ns_state.settings().groups_count())
-				, ns_state.name().c_str(), e.code().message().c_str());
-			send_reply(500);
-			return;
-		}
+	if (!couple_iterator) {
+		return;
 	}
 
 	if (auto content_type_opt = http_request.headers().content_type()) {
@@ -192,13 +132,14 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			}
 
 			request_stream = make_request_stream<upload_multipart_t>(server(), reply()
-					, std::move(ns_state), std::move(couple));
+					, std::move(ns_state), couple_iterator->next().groups);
 		}
 	}
 
 	if (!request_stream) {
 		request_stream = make_request_stream<upload_simple_t>(server(), reply()
-				, std::move(ns_state), std::move(couple), std::move(std::get<0>(file_info)));
+				, std::move(ns_state), *couple_iterator
+				, std::move(std::get<0>(file_info)));
 	}
 
 	request_stream->on_headers(std::move(http_request));
@@ -215,4 +156,77 @@ upload_t::on_close(const boost::system::error_code &error) {
 }
 
 } // elliptics
+
+boost::optional<elliptics::couple_iterator_t>
+elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request &http_request
+		, const mastermind::namespace_state_t &ns_state, size_t total_size) {
+	if (auto arg = http_request.url().query().item_value("couple_id")) {
+		if (!proxy_settings(ns_state).can_choose_couple_to_upload) {
+			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
+			send_reply(403);
+			return boost::none;
+		}
+
+		int couple_id = 0;
+
+		try {
+			couple_id = boost::lexical_cast<int>(*arg);
+		} catch (...) {
+			MDS_LOG_INFO("couple_id is malformed: \"%s\"", arg->c_str());
+			send_reply(400);
+			return boost::none;
+		}
+
+		auto couple = ns_state.couples().get_couple_groups(couple_id);
+
+		if (couple.empty()) {
+			MDS_LOG_INFO("cannot obtain couple by couple_id: %d", couple_id);
+			send_reply(400);
+			return boost::none;
+		}
+
+		if (couple_id != *std::min_element(couple.begin(), couple.end())) {
+			MDS_LOG_INFO("client tried to use no minimum group as couple_id: %d", couple_id);
+			send_reply(400);
+			return boost::none;
+		}
+
+		auto space = ns_state.couples().free_effective_space(couple_id);
+
+		if (space < total_size) {
+			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
+			send_reply(507);
+			return boost::none;
+		}
+
+		{
+			std::ostringstream oss;
+			oss << couple;
+			auto couple_str = oss.str();
+			MDS_LOG_INFO("use couple chosen by client: %s", couple_str.c_str());
+		}
+
+		return couple_iterator_t(couple);
+	} else {
+		try {
+			if (!proxy_settings(ns_state).static_couple.empty()) {
+				return couple_iterator_t(proxy_settings(ns_state).static_couple);
+			}
+
+			return couple_iterator_t(ns_state.weights().couple_sequence(total_size));
+		} catch (const mastermind::not_enough_memory_error &e) {
+			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+				, static_cast<int>(ns_state.settings().groups_count())
+				, ns_state.name().c_str(), e.code().message().c_str());
+			send_reply(507);
+			return boost::none;
+		} catch (const std::system_error &e) {
+			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
+				, static_cast<int>(ns_state.settings().groups_count())
+				, ns_state.name().c_str(), e.code().message().c_str());
+			send_reply(500);
+			return boost::none;
+		}
+	}
+}
 
