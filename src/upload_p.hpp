@@ -96,7 +96,7 @@ struct upload_simple_t
 	, public std::enable_shared_from_this<upload_simple_t>
 {
 	upload_simple_t(mastermind::namespace_state_t ns_state_
-			, couple_t couple_, std::string filename_);
+			, couple_iterator_t couple_iterator_, std::string filename_);
 
 	void
 	on_request(const ioremap::thevoid::http_request &http_request);
@@ -131,6 +131,7 @@ struct upload_simple_t
 
 private:
 	mastermind::namespace_state_t ns_state;
+	couple_iterator_t couple_iterator;
 	couple_t couple;
 	int couple_id;
 	std::string filename;

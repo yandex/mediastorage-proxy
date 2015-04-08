@@ -21,15 +21,18 @@
 
 namespace elliptics {
 
-upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_, couple_t couple_, std::string filename_)
+upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
+		, couple_iterator_t couple_iterator_, std::string filename_)
 	: ns_state(std::move(ns_state_))
-	, couple(std::move(couple_))
-	, couple_id(*std::min_element(couple.begin(), couple.end()))
+	, couple_iterator(std::move(couple_iterator_))
 	, filename(std::move(filename_))
 	, key(ns_state.name() + '.' + filename)
 	, m_single_chunk(false)
 	, deferred_fallback([this] { fallback(); })
 {
+	auto couple_info = couple_iterator.next();
+	couple = couple_info.groups;
+	couple_id = couple_info.id;
 }
 
 void
