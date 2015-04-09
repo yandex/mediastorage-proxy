@@ -241,12 +241,9 @@ elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &sess
 
 void
 elliptics::buffered_writer_t::write_chunk() {
-	{
-		const auto &buffer = buffers.front();
-		writer->write(buffer.data(), buffer.size());
-	}
-
+	auto buffer = std::move(buffers.front());
 	buffers.pop_front();
+	writer->write(buffer.data(), buffer.size());
 }
 
 void
