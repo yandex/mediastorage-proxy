@@ -28,6 +28,6 @@ Standards-Version: 3.9.1
 
 Package: mediastorage-proxy
 Architecture: any
-Depends: ${shlibs:Depends}, libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, elliptics-client(>= 2.26.3.33-6), elliptics-client(<< 2.26.3.34), handystats (>= 1.10.2), handystats (<< 1.11), ubic,
+Depends: ${shlibs:Depends}, libyandex-ubic-shared-perl, libfcgi-procmanager-perl, libfcgi-perl, libfcgi-client-perl, libbsd-resource-perl, liblwp-protocol-http-socketunixalt-perl, handystats (>= 1.10.2), handystats (<< 1.11), ubic,
 Description: Proxy with elliptics support based on thevoid
 
