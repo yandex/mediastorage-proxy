@@ -39,6 +39,9 @@
 
 namespace elliptics {
 
+typedef int group_t;
+typedef std::vector<group_t> groups_t;
+
 typedef std::vector<int> couple_t;
 
 template <typename T>
