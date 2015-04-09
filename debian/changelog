@@ -1,3 +1,9 @@
+mediastorage-proxy (0.86.1) lucid; urgency=low
+
+  * Deps: thevoid/swarm version 3
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 09 Apr 2015 15:06:56 +0400
+
 mediastorage-proxy (0.85.11) lucid; urgency=low
 
   * MDS-888: The marker will be logged if headers are sent and request is
