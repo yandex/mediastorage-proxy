@@ -531,6 +531,13 @@ elliptics::can_be_written(shared_logger_t shared_logger
 		, mastermind::namespace_state_t ns_state
 		, util::expected<bool>::callback_t next) {
 
+	{
+		std::ostringstream oss;
+		oss << "check for update couple " << session.get_groups();
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
+
 	if (!proxy_settings(ns_state).check_for_update) {
 		MDS_LOG_INFO("check for update is disabled for the namespace");
 		next(true);
