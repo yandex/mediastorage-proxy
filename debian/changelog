@@ -1,3 +1,9 @@
+mediastorage-proxy (0.86.3) lucid; urgency=low
+
+  * Buffered writer clears buffers before async call
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 10 Apr 2015 00:32:44 +0400
+
 mediastorage-proxy (0.86.2) lucid; urgency=low
 
   * Deps: Let shlibs detect dependency on elliptics
