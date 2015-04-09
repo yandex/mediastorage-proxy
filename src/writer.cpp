@@ -496,7 +496,7 @@ void
 can_be_written_on_lookup(shared_logger_t shared_logger
 		, const ioremap::elliptics::sync_lookup_result &entries
 		, const ioremap::elliptics::error_info &error_info
-		, std::function<void (util::expected<bool>)> next) {
+		, util::expected<bool>::callback_t next) {
 
 	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
 		const int group_id = it->command()->id.group_id;
@@ -529,7 +529,7 @@ elliptics::can_be_written(shared_logger_t shared_logger
 		, ioremap::elliptics::session session
 		, std::string key
 		, mastermind::namespace_state_t ns_state
-		, std::function<void (util::expected<bool>)> next) {
+		, util::expected<bool>::callback_t next) {
 
 	if (!proxy_settings(ns_state).check_for_update) {
 		MDS_LOG_INFO("check for update is disabled for the namespace");
