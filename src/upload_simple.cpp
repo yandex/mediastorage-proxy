@@ -42,8 +42,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 	lookup_session = *server()->lookup_session(http_request, {});
 	write_session = *server()->write_session(http_request, {});
 
-	auto query_list = http_request.url().query();
-	offset = get_arg<uint64_t>(query_list, "offset", 0);
+	offset = get_arg<uint64_t>(http_request.url().query(), "offset", 0);
 
 	auto self = shared_from_this();
 	auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
