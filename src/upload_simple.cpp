@@ -27,7 +27,6 @@ upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
 	, couple_iterator(std::move(couple_iterator_))
 	, filename(std::move(filename_))
 	, key(ns_state.name() + '.' + filename)
-	, m_single_chunk(false)
 	, deferred_fallback([this] { fallback(); })
 	, can_retry_couple(true)
 	, has_internal_error(false)
@@ -64,21 +63,6 @@ void
 upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
 	const char *buffer_data = boost::asio::buffer_cast<const char *>(buffer);
 	const size_t buffer_size = boost::asio::buffer_size(buffer);
-
-	// Fix flags to single_chunk if first chunk == data size 
-	if ((flags & last_chunk) && m_single_chunk && (buffer_size == 0)) {
-		MDS_LOG_INFO("on_chunk: skipping empty commit");
-		return;
-	}
-
-	if ((flags == first_chunk) && (buffer_size == writer->get_total_size())) {
-		MDS_LOG_INFO("on_chunk: fixing flags to single_chunk");
-		flags = single_chunk;
-	}
-
-	if (flags == single_chunk) {
-		m_single_chunk = true;
-	}
 
 	auto chunk = ioremap::elliptics::data_pointer::from_raw(
 		reinterpret_cast<void *>(const_cast<char *>(buffer_data)), buffer_size);

@@ -91,8 +91,6 @@ private:
 	std::string filename;
 	std::string key;
 
-	bool m_single_chunk;
-
 	std::shared_ptr<writer_t> writer;
 	ioremap::elliptics::data_pointer data_pointer;
 
@@ -254,7 +252,6 @@ private:
 	std::mutex buffered_writers_mutex;
 	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
 	std::map<std::string, writer_t::result_t> results;
-
 };
 
 } // namespace elliptics
