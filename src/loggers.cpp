@@ -19,6 +19,11 @@
 
 #include "loggers.hpp"
 
+ioremap::swarm::logger
+copy_logger(const ioremap::swarm::logger &logger) {
+	return ioremap::swarm::logger{logger, blackhole::log::attributes_t()};
+}
+
 shared_logger_t
 make_shared_logger(const ioremap::swarm::logger &logger) {
 	typedef ioremap::swarm::logger logger_t;

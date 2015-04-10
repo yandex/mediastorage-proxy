@@ -34,6 +34,9 @@
 
 typedef std::shared_ptr<ioremap::swarm::logger> shared_logger_t;
 
+ioremap::swarm::logger
+copy_logger(const ioremap::swarm::logger &logger);
+
 shared_logger_t
 make_shared_logger(const ioremap::swarm::logger &logger);
 
