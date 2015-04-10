@@ -22,7 +22,8 @@
 #include "lookup_result.hpp"
 
 #include "upload.hpp"
-#include "upload_p.hpp"
+#include "upload_simple.hpp"
+#include "upload_multipart.hpp"
 
 #include <swarm/url.hpp>
 
