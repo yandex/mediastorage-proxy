@@ -304,6 +304,7 @@ elliptics::upload_simple_t::process_chunk(ioremap::elliptics::data_pointer chunk
 	// only on second call. The method is deferred by one call before each chunk writing, is called
 	// after each chunk writing is finished and is called in on_error.
 	deferred_fallback.defer();
+
 	writer->write(chunk);
 }
 
@@ -312,6 +313,9 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 	if (error_code != make_error_code(writer_errc::insufficient_storage)) {
 		has_internal_error = true;
 	}
+
+	ns_state.weights().set_feedback(couple_info.id
+			, mastermind::namespace_state_t::weights_t::feedback_tag::temporary_unavailable);
 
 	if (can_retry_couple) {
 		writer.reset();
