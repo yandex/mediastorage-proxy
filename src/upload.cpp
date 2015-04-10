@@ -138,7 +138,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	if (!request_stream) {
 		request_stream = make_request_stream<upload_simple_t>(server(), reply()
-				, std::move(ns_state), couple_iterator->next().groups
+				, std::move(ns_state), *couple_iterator
 				, std::move(std::get<0>(file_info)));
 	}
 
