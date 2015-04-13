@@ -23,6 +23,7 @@
 #include <swarm/logger.hpp>
 #include <cocaine/framework/logging.hpp>
 #include <elliptics/session.hpp>
+#include <memory>
 
 #define MDS_LOG(verb, ...) BH_LOG(logger(), verb, __VA_ARGS__)
 #define MDS_LOG_ERROR(...) MDS_LOG(SWARM_LOG_ERROR, __VA_ARGS__)
@@ -30,6 +31,14 @@
 #define MDS_LOG_INFO(...) MDS_LOG(SWARM_LOG_INFO, __VA_ARGS__)
 #define MDS_LOG_NOTICE(...) MDS_LOG(SWARM_LOG_NOTICE, __VA_ARGS__)
 #define MDS_LOG_DEBUG(...) MDS_LOG(SWARM_LOG_DEBUG, __VA_ARGS__)
+
+typedef std::shared_ptr<ioremap::swarm::logger> shared_logger_t;
+
+ioremap::swarm::logger
+copy_logger(const ioremap::swarm::logger &logger);
+
+shared_logger_t
+make_shared_logger(const ioremap::swarm::logger &logger);
 
 class cocaine_logger_t : public cocaine::framework::logger_t {
 public:
