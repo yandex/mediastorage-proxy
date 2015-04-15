@@ -22,11 +22,17 @@
 
 #include "upload.hpp"
 #include "writer.hpp"
+#include "couple_iterator.hpp"
+#include "expected.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
 
+#include <libmastermind/mastermind.hpp>
+
 #include <fstream>
 #include <list>
+#include <stdexcept>
+#include <functional>
 
 namespace elliptics {
 
@@ -35,7 +41,7 @@ struct upload_simple_t
 	, public std::enable_shared_from_this<upload_simple_t>
 {
 	upload_simple_t(mastermind::namespace_state_t ns_state_
-			, couple_t couple_, std::string filename_);
+			, couple_iterator_t couple_iterator_, std::string filename_);
 
 	void
 	on_request(const ioremap::thevoid::http_request &http_request);
@@ -62,24 +68,42 @@ struct upload_simple_t
 	fallback();
 
 	void
-	remove();
-
-	void
-	on_removed(const ioremap::elliptics::sync_remove_result &result
-			, const ioremap::elliptics::error_info &error_info);
+	remove(const util::expected<void>::callback_t next);
 
 private:
+	void
+	get_next_couple_info(util::expected<mastermind::couple_info_t>::callback_t next);
+
+	void
+	process_couple_info(mastermind::couple_info_t couple_info_);
+
+	void
+	process_chunk(ioremap::elliptics::data_pointer chunk);
+
+	void
+	process_chunk_write_error(const std::error_code &error_code);
+
+	std::shared_ptr<writer_t>
+	make_writer(const groups_t &groups);
+
 	mastermind::namespace_state_t ns_state;
-	couple_t couple;
-	int couple_id;
+	couple_iterator_t couple_iterator;
 	std::string filename;
 	std::string key;
 
-	bool m_single_chunk;
-
 	std::shared_ptr<writer_t> writer;
+	ioremap::elliptics::data_pointer data_pointer;
 
 	deferred_function_t deferred_fallback;
+
+	boost::optional<ioremap::elliptics::session> lookup_session;
+	boost::optional<ioremap::elliptics::session> write_session;
+
+	size_t offset;
+	mastermind::couple_info_t couple_info;
+	bool can_retry_couple;
+
+	bool has_internal_error;
 };
 
 struct upload_multipart_t
@@ -228,7 +252,6 @@ private:
 	std::mutex buffered_writers_mutex;
 	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
 	std::map<std::string, writer_t::result_t> results;
-
 };
 
 } // namespace elliptics

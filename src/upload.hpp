@@ -23,8 +23,11 @@
 #include "utils.hpp"
 #include "proxy.hpp"
 #include "loggers.hpp"
+#include "couple_iterator.hpp"
 
 #include <thevoid/stream.hpp>
+
+#include <boost/optional.hpp>
 
 #include <map>
 #include <vector>
@@ -47,6 +50,10 @@ public:
 	on_close(const boost::system::error_code &error);
 
 private:
+	boost::optional<couple_iterator_t>
+	create_couple_iterator(const ioremap::thevoid::http_request &http_request
+			, const mastermind::namespace_state_t &ns_state, size_t total_size);
+
 	std::shared_ptr<base_request_stream> request_stream;
 };
 

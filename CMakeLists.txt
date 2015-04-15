@@ -42,6 +42,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/ranges.cpp
 	${PROJECT_SOURCE_DIR}/src/cdn_cache.cpp
 	${PROJECT_SOURCE_DIR}/src/utils.cpp
+	${PROJECT_SOURCE_DIR}/src/loggers.cpp
 	)
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)

@@ -71,6 +71,7 @@ struct settings_t
 		, multipart_content_length_threshold(0)
 		, custom_expiration_time(false)
 		, success_copies_num(-1)
+		, check_for_update(true)
 	{}
 
 	std::string name;
@@ -93,6 +94,8 @@ struct settings_t
 	bool custom_expiration_time;
 
 	int success_copies_num;
+
+	bool check_for_update;
 };
 
 const settings_t &
