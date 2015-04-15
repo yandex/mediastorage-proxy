@@ -104,6 +104,7 @@ private:
 	bool can_retry_couple;
 
 	bool has_internal_error;
+	size_t attempt_to_choose_a_couple;
 };
 
 } // namespace elliptics

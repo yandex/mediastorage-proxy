@@ -30,6 +30,7 @@ upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
 	, deferred_fallback([this] { fallback(); })
 	, can_retry_couple(true)
 	, has_internal_error(false)
+	, attempt_to_choose_a_couple(0)
 {
 }
 
@@ -231,6 +232,15 @@ elliptics::upload_simple_t::get_next_couple_info(
 
 	auto self = shared_from_this();
 	auto couple_info = couple_iterator.next();
+
+	++attempt_to_choose_a_couple;
+	{
+		std::ostringstream oss;
+		oss << "process request with couple=" << couple_info.groups
+			<< "; attempt=" << attempt_to_choose_a_couple;
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
 
 	auto next_ = [this, self, couple_info, next] (util::expected<bool> result) {
 		try {
