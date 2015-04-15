@@ -60,7 +60,7 @@ public:
 
 	static
 	expected<T>
-	from_exception() {
+	from_current_exception() {
 		return from_exception(std::current_exception());
 	}
 
@@ -70,7 +70,7 @@ public:
 		try {
 			return expected(function());
 		} catch (...) {
-			return from_exception();
+			return from_current_exception();
 		}
 	}
 
@@ -202,7 +202,7 @@ public:
 
 	static
 	expected<void>
-	from_exception() {
+	from_current_exception() {
 		return from_exception(std::current_exception());
 	}
 
@@ -212,7 +212,7 @@ public:
 		try {
 			return expected(function());
 		} catch (...) {
-			return from_exception();
+			return from_current_exception();
 		}
 	}
 
