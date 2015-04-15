@@ -354,10 +354,7 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 		return;
 	}
 
-	if (error_code == make_error_code(writer_errc::insufficient_storage)) {
-		send_reply(507);
-	} else {
-		send_reply(500);
-	}
+	// Means insufficient_storage error
+	send_reply(507);
 }
 
