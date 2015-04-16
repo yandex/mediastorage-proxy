@@ -17,70 +17,24 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef MDS_PROXY__SRC__UPLOAD__P_HPP
-#define MDS_PROXY__SRC__UPLOAD__P_HPP
+#ifndef MDS_PROXY__SRC__UPLOAD_MULTIPART__HPP
+#define MDS_PROXY__SRC__UPLOAD_MULTIPART__HPP
 
 #include "upload.hpp"
 #include "writer.hpp"
+#include "couple_iterator.hpp"
+#include "expected.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
 
+#include <libmastermind/mastermind.hpp>
+
 #include <fstream>
 #include <list>
+#include <stdexcept>
+#include <functional>
 
 namespace elliptics {
-
-struct upload_simple_t
-	: public ioremap::thevoid::buffered_request_stream<proxy>
-	, public std::enable_shared_from_this<upload_simple_t>
-{
-	upload_simple_t(mastermind::namespace_state_t ns_state_
-			, couple_t couple_, std::string filename_);
-
-	void
-	on_request(const ioremap::thevoid::http_request &http_request);
-
-	void
-	on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags);
-
-	void
-	on_error(const boost::system::error_code &error_code);
-
-	void
-	on_write_is_done(const std::error_code &error_code);
-
-	void
-	send_result();
-
-	void
-	headers_are_sent(const std::string &res_str, const boost::system::error_code &error_code);
-
-	void
-	data_is_sent(const boost::system::error_code &error_code);
-
-	void
-	fallback();
-
-	void
-	remove();
-
-	void
-	on_removed(const ioremap::elliptics::sync_remove_result &result
-			, const ioremap::elliptics::error_info &error_info);
-
-private:
-	mastermind::namespace_state_t ns_state;
-	couple_t couple;
-	int couple_id;
-	std::string filename;
-	std::string key;
-
-	bool m_single_chunk;
-
-	std::shared_ptr<writer_t> writer;
-
-	deferred_function_t deferred_fallback;
-};
 
 struct upload_multipart_t
 	: public ioremap::thevoid::request_stream<proxy>
@@ -228,10 +182,9 @@ private:
 	std::mutex buffered_writers_mutex;
 	std::map<std::string, std::shared_ptr<buffered_writer_t>> buffered_writers;
 	std::map<std::string, writer_t::result_t> results;
-
 };
 
 } // namespace elliptics
 
-#endif /* MDS_PROXY__SRC__UPLOAD__P_HPP */
+#endif /* MDS_PROXY__SRC__UPLOAD_MULTIPART__HPP */
 

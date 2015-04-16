@@ -1086,6 +1086,8 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 			= features_config.at<bool>("custom-expiration-time", false);
 	}
 
+	settings->check_for_update = config.at<bool>("check-for-update", true);
+
 	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));
 }
 

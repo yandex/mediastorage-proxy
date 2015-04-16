@@ -20,9 +20,14 @@
 #ifndef MDS_PROXY__SRC__UPLOADER__HPP
 #define MDS_PROXY__SRC__UPLOADER__HPP
 
+#include "loggers.hpp"
+#include "expected.hpp"
+
 #include <elliptics/session.hpp>
 
 #include <swarm/logger.hpp>
+
+#include <libmastermind/mastermind.hpp>
 
 #include <memory>
 #include <functional>
@@ -180,6 +185,12 @@ private:
 	entries_info_t entries_info;
 };
 
+void
+can_be_written(shared_logger_t shared_logger
+		, ioremap::elliptics::session session
+		, std::string key
+		, mastermind::namespace_state_t ns_state
+		, util::expected<bool>::callback_t next);
 
 } // namespace elliptics
 

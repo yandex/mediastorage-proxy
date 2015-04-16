@@ -23,6 +23,7 @@
 #include "utils.hpp"
 #include "lookup_result.hpp"
 #include "write_retrier.hpp"
+#include "proxy.hpp"
 
 class error_category_t
 	: public std::error_category
@@ -485,5 +486,73 @@ elliptics::writer_t::on_data_removed(
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
 	}
+}
+
+#define logger() *shared_logger
+
+namespace detail {
+
+void
+can_be_written_on_lookup(shared_logger_t shared_logger
+		, const ioremap::elliptics::sync_lookup_result &entries
+		, const ioremap::elliptics::error_info &error_info
+		, util::expected<bool>::callback_t next) {
+
+	for (auto it = entries.begin(), end = entries.end(); it != end; ++it) {
+		const int group_id = it->command()->id.group_id;
+
+		if (it->status() == -ENOENT) {
+			continue;
+		}
+
+		if (it->status() == 0) {
+			MDS_LOG_INFO("key was found in group=%d", group_id);
+			next(false);
+			return;
+		}
+
+		const auto entry_error_info = it->error();
+		MDS_LOG_ERROR("cannot check group=%d: %s", group_id , entry_error_info.message().c_str());
+		
+		next(util::expected_from_exception<std::runtime_error>("cannot check some group"));
+		return;
+	}
+
+	MDS_LOG_INFO("key was not found in any group");
+	next(true);
+}
+
+} // namespace detail
+
+void
+elliptics::can_be_written(shared_logger_t shared_logger
+		, ioremap::elliptics::session session
+		, std::string key
+		, mastermind::namespace_state_t ns_state
+		, util::expected<bool>::callback_t next) {
+
+	{
+		std::ostringstream oss;
+		oss << "check for update couple " << session.get_groups();
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
+
+	if (!proxy_settings(ns_state).check_for_update) {
+		MDS_LOG_INFO("check for update is disabled for the namespace");
+		next(true);
+		return;
+	}
+
+	session = session.clone();
+	session.set_filter(ioremap::elliptics::filters::all);
+
+	auto future = session.parallel_lookup(key);
+
+	auto next_ = std::bind(&detail::can_be_written_on_lookup, shared_logger
+			, std::placeholders::_1, std::placeholders::_2
+			, std::move(next));
+
+	future.connect(next_);
 }
 
