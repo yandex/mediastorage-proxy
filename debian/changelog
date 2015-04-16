@@ -1,3 +1,11 @@
+mediastorage-proxy (0.87.1) lucid; urgency=low
+
+  * Key is checked for existence before be written according to MDS-638.
+  * Couple retries mechanism was implemented for simple upload according to
+    MDS-670.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 16 Apr 2015 14:12:25 +0400
+
 mediastorage-proxy (0.86.3) lucid; urgency=low
 
   * Buffered writer clears buffers before async call
