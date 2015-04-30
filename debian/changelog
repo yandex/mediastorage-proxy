@@ -1,3 +1,9 @@
+mediastorage-proxy (0.85.11~meteo) lucid; urgency=low
+
+  * Turn off checksums for get-meteo
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 30 Apr 2015 20:46:43 +0400
+
 mediastorage-proxy (0.85.11) lucid; urgency=low
 
   * MDS-888: The marker will be logged if headers are sent and request is
