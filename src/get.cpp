@@ -956,6 +956,10 @@ req_get::get_session() {
 
 	session.set_timeout(server()->timeout.read);
 
+	if (ns_state.name() == "meteo") {
+		m_first_chunk = false;
+	}
+
 	if (m_first_chunk) {
 		m_first_chunk = false;
 
