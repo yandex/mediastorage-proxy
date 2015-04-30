@@ -1,3 +1,10 @@
+mediastorage-proxy (0.87.2) lucid; urgency=low
+
+  * MDS-993: Couple retry was fixed
+    First chunk is copied to be possible used for couple retries.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 30 Apr 2015 23:08:09 +0400
+
 mediastorage-proxy (0.87.1) lucid; urgency=low
 
   * Key is checked for existence before be written according to MDS-638.
