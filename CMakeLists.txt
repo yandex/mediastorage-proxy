@@ -30,6 +30,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/writer.cpp
 	${PROJECT_SOURCE_DIR}/src/write_retrier.cpp
 	${PROJECT_SOURCE_DIR}/src/buffered_writer.cpp
+	${PROJECT_SOURCE_DIR}/src/remove.cpp
 	${PROJECT_SOURCE_DIR}/src/upload.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_simple.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_multipart.cpp
