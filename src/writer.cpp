@@ -143,7 +143,10 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
 
 			auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
 					, std::placeholders::_1, std::placeholders::_2, std::move(next));
+
+			lock_guard.unlock();
 			async_result.connect(next_);
+			lock_guard.lock();
 			return;
 		}
 
@@ -153,7 +156,10 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
 
 		auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
 				, std::placeholders::_1, std::placeholders::_2, std::move(next));
+
+		lock_guard.unlock();
 		async_result.connect(next_);
+		lock_guard.lock();
 		break;
 	}
 	case state_tag::writing:
@@ -415,14 +421,17 @@ elliptics::writer_t::on_data_wrote(
 
 			lock_guard.unlock();
 			next(make_error_code(writer_errc::success));
+			lock_guard.lock();
 			return;
 		}
 
 		LOG_RESULT(ERROR, "bad");
 
 		state = state_tag::failed;
+
 		lock_guard.unlock();
 		next(make_error_code(choose_errc_for_client(entries)));
+		lock_guard.lock();
 		break;
 	}
 	case state_tag::waiting:
