@@ -1,3 +1,14 @@
+mediastorage-proxy (0.88.1) lucid; urgency=low
+
+  * MDS-958: Response will be 507 if -ENOSPC was occured
+  * Remove operation was refactored
+  * MDS-1042: Double remove was fixed
+  * MDS-932: Writer and buffered writer takes callbacks in action methods
+  * MDS-1045: Data is copied into data_pointer before be passed into writer
+  * MDS-1046: Proxy does not use recursive mutex anymore
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Sat, 16 May 2015 00:29:22 +0400
+
 mediastorage-proxy (0.87.2) lucid; urgency=low
 
   * MDS-993: Couple retry was fixed
