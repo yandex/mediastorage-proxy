@@ -21,6 +21,7 @@
 #define MDS_PROXY__SRC__DELETE__HPP
 
 #include "proxy.hpp"
+#include "remove.hpp"
 
 namespace elliptics {
 
@@ -30,7 +31,7 @@ struct req_delete
 {
 	void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
 	void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
-	void on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error);
+	void on_finished(util::expected<remove_result_t> result);
 
 private:
 	std::string url_str;
