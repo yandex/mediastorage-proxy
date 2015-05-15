@@ -162,7 +162,6 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 	}
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
@@ -193,7 +192,6 @@ elliptics::writer_t::get_entries_info() const {
 		return entries_info;
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::removing:
 	// Default is needed only for avoding compile warning:
 	// 'control reaches end of non-void function'
 	default:
@@ -425,63 +423,18 @@ elliptics::writer_t::on_data_wrote(
 
 		LOG_RESULT(ERROR, "bad");
 
-		state = state_tag::removing;
-		errc_for_client = choose_errc_for_client(entries);
-
-		{
-			auto groups = session.get_groups();
-			groups.insert(groups.end(), bad_groups.begin(), bad_groups.end());
-			session.set_groups(groups);
-		}
-
-		{
-			std::ostringstream oss;
-			oss
-				<< "remove start:"
-				<< " key=" << key.remote()
-				<< " groups=" << session.get_groups()
-				;
-			auto msg = oss.str();
-			MDS_LOG_INFO("%s", msg.c_str());
-		}
-
-		// TODO: need to set remove-timeout
-		auto async_result = session.remove(key);
-		async_result.connect(std::bind(&writer_t::on_data_removed
-					, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		state = state_tag::failed;
+		lock_guard.unlock();
+		on_complete(make_error_code(choose_errc_for_client(entries)));
 		break;
 	}
 	case state_tag::waiting:
-	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
 	}
 
 #undef LOG_RESULT
-}
-
-void
-elliptics::writer_t::on_data_removed(
-		const ioremap::elliptics::sync_remove_result &entries
-		, const ioremap::elliptics::error_info &error_info) {
-	lock_guard_t lock_guard(state_mutex);
-
-	switch (state) {
-	case state_tag::removing: {
-		MDS_LOG_INFO("remove is finished");
-		state = state_tag::failed;
-		lock_guard.unlock();
-		on_complete(make_error_code(errc_for_client));
-		break;
-	}
-	case state_tag::waiting:
-	case state_tag::writing:
-	case state_tag::committing:
-	case state_tag::committed:
-	case state_tag::failed:
-		throw writer_error(writer_errc::unexpected_event);
-	}
 }
 
 #define logger() *shared_logger

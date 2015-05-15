@@ -120,7 +120,6 @@ private:
 		  waiting
 		, writing
 		, committing
-		, removing
 		, committed
 		, failed
 	};
@@ -151,10 +150,6 @@ private:
 
 	void
 	on_data_wrote(const ioremap::elliptics::sync_write_result &entries
-			, const ioremap::elliptics::error_info &error_info);
-
-	void
-	on_data_removed(const ioremap::elliptics::sync_remove_result &entries
 			, const ioremap::elliptics::error_info &error_info);
 
 	state_tag state;
