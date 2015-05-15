@@ -120,7 +120,6 @@ private:
 		  waiting
 		, writing
 		, committing
-		, need_remove
 		, removing
 		, committed
 		, failed

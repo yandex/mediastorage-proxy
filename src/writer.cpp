@@ -162,7 +162,6 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 	}
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::need_remove:
 	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
@@ -194,7 +193,6 @@ elliptics::writer_t::get_entries_info() const {
 		return entries_info;
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::need_remove:
 	case state_tag::removing:
 	// Default is needed only for avoding compile warning:
 	// 'control reaches end of non-void function'
@@ -454,7 +452,6 @@ elliptics::writer_t::on_data_wrote(
 		break;
 	}
 	case state_tag::waiting:
-	case state_tag::need_remove:
 	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
@@ -481,7 +478,6 @@ elliptics::writer_t::on_data_removed(
 	case state_tag::waiting:
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::need_remove:
 	case state_tag::committed:
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
