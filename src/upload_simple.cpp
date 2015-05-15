@@ -29,8 +29,8 @@ upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
 	, key(ns_state.name() + '.' + filename)
 	, deferred_fallback([this] { fallback(); })
 	, can_retry_couple(true)
-	, has_internal_error(false)
 	, attempt_to_choose_a_couple(0)
+	, internal_error(internal_error_errc::none)
 {
 }
 
@@ -52,7 +52,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			try_next_chunk();
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
-			send_reply(500);
+			send_error(internal_error_errc::general_error);
 		}
 	};
 
@@ -324,8 +324,10 @@ elliptics::upload_simple_t::process_chunk(ioremap::elliptics::data_pointer chunk
 
 void
 elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &error_code) {
-	if (error_code != make_error_code(writer_errc::insufficient_storage)) {
-		has_internal_error = true;
+	if (error_code == make_error_code(writer_errc::insufficient_storage)) {
+		update_internal_error(internal_error_errc::insufficient_storage);
+	} else {
+		update_internal_error(internal_error_errc::general_error);
 	}
 
 	ns_state.weights().set_feedback(couple_info.id
@@ -349,7 +351,7 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 					process_chunk(data_pointer);
 				} catch (const std::exception &ex) {
 					MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
-					send_reply(500);
+					send_error(internal_error_errc::general_error);
 				}
 			};
 
@@ -363,12 +365,33 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 	MDS_LOG_ERROR("could not write file into storage: %s"
 			, error_code.message().c_str());
 
-	if (has_internal_error) {
-		send_reply(500);
-		return;
-	}
+	send_error();
+}
 
-	// Means insufficient_storage error
-	send_reply(507);
+void
+elliptics::upload_simple_t::update_internal_error(internal_error_errc errc) {
+	if (static_cast<size_t>(internal_error) < static_cast<size_t>(errc)) {
+		internal_error = errc;
+	}
+}
+
+void
+elliptics::upload_simple_t::send_error() {
+	switch(internal_error) {
+	case internal_error_errc::none:
+		throw std::runtime_error("cannot send 5xx error code because there is no error");
+	case internal_error_errc::general_error:
+		send_reply(500);
+		break;
+	case internal_error_errc::insufficient_storage:
+		send_reply(507);
+		break;
+	}
+}
+
+void
+elliptics::upload_simple_t::send_error(internal_error_errc errc) {
+	update_internal_error(errc);
+	send_error();
 }
 
