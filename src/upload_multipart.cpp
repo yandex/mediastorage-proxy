@@ -561,14 +561,13 @@ upload_multipart_t::remove_files() {
 	if (auto session = server()->remove_session(http_request, couple)) {
 		MDS_LOG_INFO("removing uploaded files");
 
-		for (auto it = results.begin(), end = results.end(); it != end; ++it) {
-			auto key = it->second.key;
-			join_remove_tasks.defer();
+		auto shared_logger = make_shared_logger(logger());
+		auto next = std::bind(&upload_multipart_t::on_removed, shared_from_this()
+				, std::placeholders::_1);
 
-			MDS_LOG_INFO("remove %s", key.c_str());
-			auto future = session->clone().remove(key);
-			future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
-						, key, std::placeholders::_1, std::placeholders::_2));
+		for (auto it = results.begin(), end = results.end(); it != end; ++it) {
+			join_remove_tasks.defer();
+			elliptics::remove(shared_logger, *session, it->second.key, next);
 		}
 
 		join_remove_tasks();
@@ -578,14 +577,9 @@ upload_multipart_t::remove_files() {
 }
 
 void
-upload_multipart_t::on_removed(const std::string &key
-		, const ioremap::elliptics::sync_remove_result &result
-		, const ioremap::elliptics::error_info &error_info) {
-	if (error_info) {
-		MDS_LOG_ERROR("cannot remove file \"%s\"", key.c_str());
-	} else {
-		MDS_LOG_INFO("File \"%s\" was removed", key.c_str());
-	}
+upload_multipart_t::on_removed(util::expected<remove_result_t> result) {
+	// The remove result does not affect handler's flow
+	(void) result;
 
 	join_remove_tasks();
 }
