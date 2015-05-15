@@ -17,30 +17,44 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef MDS_PROXY__SRC__DELETE__HPP
-#define MDS_PROXY__SRC__DELETE__HPP
+#ifndef MDS_PROXY__SRC__REMOVE__HPP
+#define MDS_PROXY__SRC__REMOVE__HPP
 
-#include "proxy.hpp"
-#include "remove.hpp"
+#include "loggers.hpp"
+#include "expected.hpp"
+
+#include <elliptics/session.hpp>
+
+#include <string>
 
 namespace elliptics {
 
-struct req_delete
-	: public ioremap::thevoid::simple_request_stream<proxy>
-	, public std::enable_shared_from_this<req_delete>
-{
-	void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
-	void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
-	void on_finished(util::expected<remove_result_t> result);
+class remove_result_t {
+public:
+	remove_result_t(bool has_bad_response_, bool not_found_);
+
+	bool
+	is_failed() const;
+
+	bool
+	is_successful() const;
+
+	bool
+	key_was_not_found() const;
 
 private:
-	std::string url_str;
-	ioremap::elliptics::key key;
-	boost::optional<ioremap::elliptics::session> session;
-	size_t total_size;
+	bool has_bad_response;
+	bool not_found;
+
 };
+
+void
+remove(shared_logger_t shared_logger
+		, ioremap::elliptics::session session
+		, std::string key
+		, util::expected<remove_result_t>::callback_t next);
 
 } // namespace elliptics
 
-#endif /* MDS_PROXY__SRC__DELETE__HPP */
+#endif /* MDS_PROXY__SRC__REMOVE__HPP */
 

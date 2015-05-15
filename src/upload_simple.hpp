@@ -26,6 +26,7 @@
 #include "expected.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
+#include "remove.hpp"
 
 #include <libmastermind/mastermind.hpp>
 
@@ -68,7 +69,7 @@ struct upload_simple_t
 	fallback();
 
 	void
-	remove(const util::expected<void>::callback_t next);
+	remove(const util::expected<remove_result_t>::callback_t next);
 
 private:
 	enum class internal_error_errc {
