@@ -119,13 +119,6 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 }
 
 void
-elliptics::writer_t::write(const char *data, size_t size, callback_t next) {
-	write(ioremap::elliptics::data_pointer::from_raw(
-			reinterpret_cast<void *>(const_cast<char *>(data)), size)
-			, std::move(next));
-}
-
-void
 elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
 		, callback_t next) {
 	lock_guard_t lock_guard(state_mutex);

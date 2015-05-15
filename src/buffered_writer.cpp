@@ -243,7 +243,8 @@ elliptics::buffered_writer_t::write_chunk(callback_t next) {
 		on_chunk_wrote(error_code, std::move(next));
 	};
 
-	writer->write(buffer.data(), buffer.size(), std::move(next_));
+	auto chunk = ioremap::elliptics::data_pointer::copy(buffer.data(), buffer.size());
+	writer->write(std::move(chunk), std::move(next_));
 }
 
 void
