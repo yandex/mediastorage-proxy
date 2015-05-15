@@ -262,17 +262,12 @@ elliptics::upload_simple_t::make_writer(const groups_t &groups) {
 	auto session = write_session->clone();
 	session.set_groups(groups);
 
-	auto self = shared_from_this();
-	auto on_complete = [this, self] (const std::error_code &error_code) {
-		on_write_is_done(error_code);
-	};
-
 	return std::make_shared<writer_t>(
 			copy_logger(logger())
 			, session, key
 			, *request().headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
-			, on_complete, server()->limit_of_middle_chunk_attempts
+			, server()->limit_of_middle_chunk_attempts
 			, server()->scale_retry_timeout
 			);
 }
@@ -304,7 +299,12 @@ elliptics::upload_simple_t::process_chunk(ioremap::elliptics::data_pointer chunk
 	// after each chunk writing is finished and is called in on_error.
 	deferred_fallback.defer();
 
-	writer->write(chunk);
+	auto self = shared_from_this();
+	auto next = [this, self] (const std::error_code &error_code) {
+		on_write_is_done(error_code);
+	};
+
+	writer->write(chunk, std::move(next));
 }
 
 void

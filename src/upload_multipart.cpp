@@ -253,14 +253,10 @@ upload_multipart_t::sm_headers() {
 	}
 
 	current_filename = name;
-	auto self = shared_from_this();
-	auto callback = [this, self, current_filename] (const std::error_code &error_code) {
-		on_writer_is_finished(current_filename, error_code);
-	};
 
 	buffered_writer = std::make_shared<buffered_writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, ns_state.name() + '.' + name, server()->m_write_chunk_size, std::move(callback));
+			, ns_state.name() + '.' + name, server()->m_write_chunk_size);
 
 	multipart_context.state = multipart_state_tag::body;
 }
@@ -353,13 +349,19 @@ upload_multipart_t::start_writing() {
 		buffered_writers.insert(std::make_pair(current_filename, buffered_writer));
 	}
 
+	auto self = shared_from_this();
+	auto next = [this, self, current_filename] (const std::error_code &error_code) {
+		on_writer_is_finished(current_filename, error_code);
+	};
+
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate
 			, proxy_settings(ns_state).success_copies_num
 			, server()->limit_of_middle_chunk_attempts
-			, server()->scale_retry_timeout);
+			, server()->scale_retry_timeout
+			, std::move(next));
 
 	buffered_writer.reset();
 }
