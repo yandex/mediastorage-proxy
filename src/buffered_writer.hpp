@@ -97,7 +97,7 @@ private:
 		, interrupted
 	};
 
-	typedef std::recursive_mutex mutex_t;
+	typedef std::mutex mutex_t;
 	typedef std::unique_lock<mutex_t> lock_guard_t;
 	typedef std::vector<char> buffer_t;
 
@@ -108,12 +108,13 @@ private:
 	append_impl(const char *data, size_t size);
 
 	void
-	write_impl(const ioremap::elliptics::session &session, size_t commit_coef
+	write_impl(lock_guard_t &lock_guard
+			, const ioremap::elliptics::session &session, size_t commit_coef
 			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
 			, double scale_retry_timeout, callback_t next);
 
 	void
-	write_chunk(callback_t next);
+	write_chunk(lock_guard_t &lock_guard, callback_t next);
 
 	void
 	on_chunk_wrote(const std::error_code &error_code, callback_t next);

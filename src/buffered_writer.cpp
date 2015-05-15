@@ -103,15 +103,17 @@ elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, 
 	switch (state) {
 	case state_tag::appending:
 		state = state_tag::writing;
-		write_impl(session, commit_coef, success_copies_num, limit_of_middle_chunk_attempts
-				, scale_retry_timeout, std::move(next));
+		write_impl(lock_guard, session, commit_coef, success_copies_num
+				, limit_of_middle_chunk_attempts, scale_retry_timeout, std::move(next));
 		break;
 	case state_tag::interrupted:
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+
 		lock_guard.unlock();
 		next(buffered_writer_errc::interrupted);
+		lock_guard.lock();
 		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
@@ -222,7 +224,8 @@ elliptics::buffered_writer_t::append_impl(const char *data, size_t size) {
 }
 
 void
-elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &session
+elliptics::buffered_writer_t::write_impl(lock_guard_t &lock_guard
+		, const ioremap::elliptics::session &session
 		, size_t commit_coef, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
 		, double scale_retry_timeout, callback_t next) {
 	writer = std::make_shared<writer_t>(
@@ -230,11 +233,11 @@ elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &sess
 			, total_size, 0, commit_coef, success_copies_num
 			, limit_of_middle_chunk_attempts, scale_retry_timeout);
 
-	write_chunk(std::move(next));
+	write_chunk(lock_guard, std::move(next));
 }
 
 void
-elliptics::buffered_writer_t::write_chunk(callback_t next) {
+elliptics::buffered_writer_t::write_chunk(lock_guard_t &lock_guard, callback_t next) {
 	auto buffer = std::move(buffers.front());
 	buffers.pop_front();
 
@@ -244,7 +247,10 @@ elliptics::buffered_writer_t::write_chunk(callback_t next) {
 	};
 
 	auto chunk = ioremap::elliptics::data_pointer::copy(buffer.data(), buffer.size());
+
+	lock_guard.unlock();
 	writer->write(std::move(chunk), std::move(next_));
+	lock_guard.lock();
 }
 
 void
@@ -257,8 +263,10 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code, 
 			state = state_tag::failed;
 			result = writer->get_result();
 			writer.reset();
+
 			lock_guard.unlock();
 			next(error_code);
+			lock_guard.lock();
 			break;
 		}
 
@@ -266,20 +274,24 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code, 
 			state = state_tag::completed;
 			result = writer->get_result();
 			writer.reset();
+
 			lock_guard.unlock();
 			next(buffered_writer_errc::success);
+			lock_guard.lock();
 			break;
 		}
 
-		write_chunk(std::move(next));
+		write_chunk(lock_guard, std::move(next));
 		break;
 	case state_tag::interrupting:
 		state = state_tag::interrupted;
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+
 		lock_guard.unlock();
 		next(buffered_writer_errc::interrupted);
+		lock_guard.lock();
 		break;
 	case state_tag::appending:
 	case state_tag::completed:
