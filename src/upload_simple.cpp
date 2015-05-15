@@ -318,35 +318,33 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 	ns_state.weights().set_feedback(couple_info.id
 			, mastermind::namespace_state_t::weights_t::feedback_tag::temporary_unavailable);
 
-	if (can_retry_couple) {
-		writer.reset();
+	writer.reset();
 
-		auto self = shared_from_this();
-		auto next = [this, self] (util::expected<remove_result_t> result) {
-			// The remove result does not affect handler's flow
-			(void) result;
+	auto self = shared_from_this();
+	auto next = [this, self] (util::expected<remove_result_t> result) {
+		// The remove result does not affect handler's flow
+		(void) result;
 
-			auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
-				try {
-					process_couple_info(std::move(result.get()));
-					process_chunk(data_pointer);
-				} catch (const std::exception &ex) {
-					MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
-					send_error(internal_error_errc::general_error);
-				}
-			};
+		if (!can_retry_couple) {
+			MDS_LOG_ERROR("could not write file into storage");
+			send_error();
+			return;
+		}
 
-			get_next_couple_info(std::move(next));
+		auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
+			try {
+				process_couple_info(std::move(result.get()));
+				process_chunk(data_pointer);
+			} catch (const std::exception &ex) {
+				MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
+				send_error(internal_error_errc::general_error);
+			}
 		};
 
-		remove(std::move(next));
-		return;
-	}
+		get_next_couple_info(std::move(next));
+	};
 
-	MDS_LOG_ERROR("could not write file into storage: %s"
-			, error_code.message().c_str());
-
-	send_error();
+	remove(std::move(next));
 }
 
 void
