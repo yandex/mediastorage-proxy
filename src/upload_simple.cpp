@@ -195,28 +195,13 @@ upload_simple_t::data_is_sent(const boost::system::error_code &error_code) {
 void
 upload_simple_t::fallback() {
 	close(boost::system::error_code());
-	remove([] (util::expected<void>) {});
+	remove([] (util::expected<remove_result_t>) {});
 }
 
 void
-upload_simple_t::remove(const util::expected<void>::callback_t next) {
-	MDS_LOG_INFO("removing key %s", key.c_str());
-
+upload_simple_t::remove(const util::expected<remove_result_t>::callback_t next) {
 	if (auto session = server()->remove_session(request(), couple_info.groups)) {
-		auto future = session->remove(key);
-
-		auto self = shared_from_this();
-		auto next_ = [this, self, next] (const ioremap::elliptics::sync_remove_result &entries
-				, const ioremap::elliptics::error_info &error_info) {
-			if (error_info) {
-				next(util::expected_from_exception<std::runtime_error>(error_info.message()));
-			} else {
-				next(util::expected<void>());
-			}
-		};
-
-		future.connect(next_);
-
+		elliptics::remove(make_shared_logger(logger()), *session, key, std::move(next));
 		return;
 	}
 
@@ -337,13 +322,9 @@ elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &err
 		writer.reset();
 
 		auto self = shared_from_this();
-		auto next = [this, self] (util::expected<void> result) {
-			try {
-				result.get();
-				MDS_LOG_INFO("key was removed");
-			} catch (const std::exception &ex) {
-				MDS_LOG_ERROR("cannot remove key: %s", ex.what());
-			}
+		auto next = [this, self] (util::expected<remove_result_t> result) {
+			// The remove result does not affect handler's flow
+			(void) result;
 
 			auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
 				try {
