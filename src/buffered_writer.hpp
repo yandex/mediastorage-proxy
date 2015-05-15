@@ -53,8 +53,7 @@ public:
 	typedef std::function<void (const std::error_code &)> callback_t;
 	typedef std::shared_ptr<writer_t> writer_ptr_t;
 
-	buffered_writer_t(ioremap::swarm::logger bh_logger_, std::string key_, size_t chunk_size_
-			, callback_t on_finished_);
+	buffered_writer_t(ioremap::swarm::logger bh_logger_, std::string key_, size_t chunk_size_);
 
 	void
 	append(const char *data, size_t size);
@@ -62,7 +61,7 @@ public:
 	void
 	write(const ioremap::elliptics::session &session, size_t commit_coef
 			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
-			, double scale_retry_timeout);
+			, double scale_retry_timeout, callback_t next);
 
 	void
 	interrupt();
@@ -111,13 +110,13 @@ private:
 	void
 	write_impl(const ioremap::elliptics::session &session, size_t commit_coef
 			, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
-			, double scale_retry_timeout);
+			, double scale_retry_timeout, callback_t next);
 
 	void
-	write_chunk();
+	write_chunk(callback_t next);
 
 	void
-	on_chunk_wrote(const std::error_code &error_code);
+	on_chunk_wrote(const std::error_code &error_code, callback_t next);
 
 	state_tag state;
 	mutable mutex_t state_mutex;
@@ -126,8 +125,6 @@ private:
 
 	std::string key;
 	size_t chunk_size;
-
-	callback_t on_finished;
 
 	std::list<buffer_t> buffers;
 

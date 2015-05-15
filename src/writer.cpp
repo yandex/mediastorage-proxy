@@ -77,7 +77,7 @@ elliptics::writer_error::writer_error(writer_errc e, const std::string &message)
 elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, const ioremap::elliptics::session &session_, std::string key_
 		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-		, callback_t on_complete_, size_t limit_of_attempts_, double scale_retry_timeout_
+		, size_t limit_of_attempts_, double scale_retry_timeout_
 		)
 	: state(state_tag::waiting)
 	, errc_for_client(writer_errc::success)
@@ -88,7 +88,6 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 	, offset(offset_)
 	, commit_coef(commit_coef_)
 	, success_copies_num(success_copies_num_)
-	, on_complete(std::move(on_complete_))
 	, limit_of_attempts(limit_of_attempts_)
 	, scale_retry_timeout(scale_retry_timeout_)
 	, written_size(0)
@@ -120,13 +119,15 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 }
 
 void
-elliptics::writer_t::write(const char *data, size_t size) {
+elliptics::writer_t::write(const char *data, size_t size, callback_t next) {
 	write(ioremap::elliptics::data_pointer::from_raw(
-			reinterpret_cast<void *>(const_cast<char *>(data)), size));
+			reinterpret_cast<void *>(const_cast<char *>(data)), size)
+			, std::move(next));
 }
 
 void
-elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer) {
+elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
+		, callback_t next) {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -147,8 +148,9 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 			// But connect can call callback synchronously
 			state = state_tag::committing;
 
-			async_result.connect(std::bind(&writer_t::on_data_wrote
-						, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+			auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
+					, std::placeholders::_1, std::placeholders::_2, std::move(next));
+			async_result.connect(next_);
 			return;
 		}
 
@@ -156,8 +158,9 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 		written_size += data_pointer.size();
 		offset += data_pointer.size();
 
-		async_result.connect(std::bind(&writer_t::on_data_wrote
-					, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
+				, std::placeholders::_1, std::placeholders::_2, std::move(next));
+		async_result.connect(next_);
 		break;
 	}
 	case state_tag::writing:
@@ -381,7 +384,8 @@ elliptics::writer_t::choose_errc_for_client(const ioremap::elliptics::sync_write
 void
 elliptics::writer_t::on_data_wrote(
 		const ioremap::elliptics::sync_write_result &entries
-		, const ioremap::elliptics::error_info &error_info) {
+		, const ioremap::elliptics::error_info &error_info
+		, callback_t next) {
 #define LOG_RESULT(VERBOSITY, STATUS) \
 	do { \
 		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>( \
@@ -417,7 +421,7 @@ elliptics::writer_t::on_data_wrote(
 			}
 
 			lock_guard.unlock();
-			on_complete(make_error_code(writer_errc::success));
+			next(make_error_code(writer_errc::success));
 			return;
 		}
 
@@ -425,7 +429,7 @@ elliptics::writer_t::on_data_wrote(
 
 		state = state_tag::failed;
 		lock_guard.unlock();
-		on_complete(make_error_code(choose_errc_for_client(entries)));
+		next(make_error_code(choose_errc_for_client(entries)));
 		break;
 	}
 	case state_tag::waiting:

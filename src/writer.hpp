@@ -82,14 +82,14 @@ public:
 	writer_t(ioremap::swarm::logger bh_logger_
 			, const ioremap::elliptics::session &session_, std::string key_
 			, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-			, callback_t on_complete_, size_t limit_of_attempts_ = 1, double scale_retry_timeout_ = 1
+			, size_t limit_of_attempts_ = 1, double scale_retry_timeout_ = 1
 			);
 
 	void
-	write(const char *data, size_t size);
+	write(const char *data, size_t size, callback_t next);
 
 	void
-	write(const ioremap::elliptics::data_pointer &data_pointer);
+	write(const ioremap::elliptics::data_pointer &data_pointer, callback_t next);
 
 	result_t
 	get_result() const;
@@ -150,7 +150,8 @@ private:
 
 	void
 	on_data_wrote(const ioremap::elliptics::sync_write_result &entries
-			, const ioremap::elliptics::error_info &error_info);
+			, const ioremap::elliptics::error_info &error_info
+			, callback_t next);
 
 	state_tag state;
 	mutable mutex_t state_mutex;
@@ -165,8 +166,6 @@ private:
 	size_t offset;
 	size_t commit_coef;
 	size_t success_copies_num;
-
-	callback_t on_complete;
 
 	size_t limit_of_attempts;
 	double scale_retry_timeout;
