@@ -86,9 +86,6 @@ public:
 			);
 
 	void
-	write(const char *data, size_t size, callback_t next);
-
-	void
 	write(const ioremap::elliptics::data_pointer &data_pointer, callback_t next);
 
 	result_t

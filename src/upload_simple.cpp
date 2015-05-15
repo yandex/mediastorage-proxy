@@ -66,13 +66,10 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 
 	ioremap::elliptics::data_pointer chunk;
 
+	chunk = ioremap::elliptics::data_pointer::copy(buffer_data, buffer_size);
+
 	if (can_retry_couple) {
-		chunk = ioremap::elliptics::data_pointer::copy(
-			reinterpret_cast<const void *>(buffer_data), buffer_size);
 		data_pointer = chunk;
-	} else {
-		chunk = ioremap::elliptics::data_pointer::from_raw(
-			reinterpret_cast<void *>(const_cast<char *>(buffer_data)), buffer_size);
 	}
 
 	process_chunk(std::move(chunk));
