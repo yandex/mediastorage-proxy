@@ -19,8 +19,10 @@
 
 #include "proxy.hpp"
 
+#include "delete.hpp"
+
 namespace elliptics {
-void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+void req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		MDS_LOG_INFO("Delete: handle request: %s", req.url().path().c_str());
 		mastermind::namespace_state_t ns_state;
@@ -65,7 +67,7 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 		session->set_timeout(server()->timeout.lookup);
 		session->set_filter(ioremap::elliptics::filters::positive);
 		auto alr = session->quorum_lookup(key);
-		alr.connect(wrap(std::bind(&proxy::req_delete::on_lookup,
+		alr.connect(wrap(std::bind(&req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Delete request=\"%s\" error: %s"
@@ -78,7 +80,7 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 	}
 }
 
-void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
+void req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 
 	if (error) {
 		MDS_LOG_ERROR("Delete request=\"%s\" lookup error: %s"
@@ -99,7 +101,7 @@ void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &
 	session->remove(key).connect(wrap(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 }
 
-void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
+void req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
 	(void) error;
 
 	bool has_bad_response = false;
