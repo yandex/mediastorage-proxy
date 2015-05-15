@@ -77,7 +77,7 @@ elliptics::writer_error::writer_error(writer_errc e, const std::string &message)
 elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 		, const ioremap::elliptics::session &session_, std::string key_
 		, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-		, callback_t on_complete_, size_t limit_of_attempts_, double scale_retry_timeout_
+		, size_t limit_of_attempts_, double scale_retry_timeout_
 		)
 	: state(state_tag::waiting)
 	, errc_for_client(writer_errc::success)
@@ -88,7 +88,6 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 	, offset(offset_)
 	, commit_coef(commit_coef_)
 	, success_copies_num(success_copies_num_)
-	, on_complete(std::move(on_complete_))
 	, limit_of_attempts(limit_of_attempts_)
 	, scale_retry_timeout(scale_retry_timeout_)
 	, written_size(0)
@@ -120,13 +119,8 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 }
 
 void
-elliptics::writer_t::write(const char *data, size_t size) {
-	write(ioremap::elliptics::data_pointer::from_raw(
-			reinterpret_cast<void *>(const_cast<char *>(data)), size));
-}
-
-void
-elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer) {
+elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
+		, callback_t next) {
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
@@ -147,8 +141,12 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 			// But connect can call callback synchronously
 			state = state_tag::committing;
 
-			async_result.connect(std::bind(&writer_t::on_data_wrote
-						, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+			auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
+					, std::placeholders::_1, std::placeholders::_2, std::move(next));
+
+			lock_guard.unlock();
+			async_result.connect(next_);
+			lock_guard.lock();
 			return;
 		}
 
@@ -156,14 +154,16 @@ elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer)
 		written_size += data_pointer.size();
 		offset += data_pointer.size();
 
-		async_result.connect(std::bind(&writer_t::on_data_wrote
-					, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		auto next_ = std::bind(&writer_t::on_data_wrote, shared_from_this()
+				, std::placeholders::_1, std::placeholders::_2, std::move(next));
+
+		lock_guard.unlock();
+		async_result.connect(next_);
+		lock_guard.lock();
 		break;
 	}
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::need_remove:
-	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
@@ -194,8 +194,6 @@ elliptics::writer_t::get_entries_info() const {
 		return entries_info;
 	case state_tag::writing:
 	case state_tag::committing:
-	case state_tag::need_remove:
-	case state_tag::removing:
 	// Default is needed only for avoding compile warning:
 	// 'control reaches end of non-void function'
 	default:
@@ -385,7 +383,8 @@ elliptics::writer_t::choose_errc_for_client(const ioremap::elliptics::sync_write
 void
 elliptics::writer_t::on_data_wrote(
 		const ioremap::elliptics::sync_write_result &entries
-		, const ioremap::elliptics::error_info &error_info) {
+		, const ioremap::elliptics::error_info &error_info
+		, callback_t next) {
 #define LOG_RESULT(VERBOSITY, STATUS) \
 	do { \
 		auto spent_time = std::chrono::duration_cast<std::chrono::milliseconds>( \
@@ -421,71 +420,27 @@ elliptics::writer_t::on_data_wrote(
 			}
 
 			lock_guard.unlock();
-			on_complete(make_error_code(writer_errc::success));
+			next(make_error_code(writer_errc::success));
+			lock_guard.lock();
 			return;
 		}
 
 		LOG_RESULT(ERROR, "bad");
 
-		state = state_tag::removing;
-		errc_for_client = choose_errc_for_client(entries);
+		state = state_tag::failed;
 
-		{
-			auto groups = session.get_groups();
-			groups.insert(groups.end(), bad_groups.begin(), bad_groups.end());
-			session.set_groups(groups);
-		}
-
-		{
-			std::ostringstream oss;
-			oss
-				<< "remove start:"
-				<< " key=" << key.remote()
-				<< " groups=" << session.get_groups()
-				;
-			auto msg = oss.str();
-			MDS_LOG_INFO("%s", msg.c_str());
-		}
-
-		// TODO: need to set remove-timeout
-		auto async_result = session.remove(key);
-		async_result.connect(std::bind(&writer_t::on_data_removed
-					, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		lock_guard.unlock();
+		next(make_error_code(choose_errc_for_client(entries)));
+		lock_guard.lock();
 		break;
 	}
 	case state_tag::waiting:
-	case state_tag::need_remove:
-	case state_tag::removing:
 	case state_tag::committed:
 	case state_tag::failed:
 		throw writer_error(writer_errc::unexpected_event);
 	}
 
 #undef LOG_RESULT
-}
-
-void
-elliptics::writer_t::on_data_removed(
-		const ioremap::elliptics::sync_remove_result &entries
-		, const ioremap::elliptics::error_info &error_info) {
-	lock_guard_t lock_guard(state_mutex);
-
-	switch (state) {
-	case state_tag::removing: {
-		MDS_LOG_INFO("remove is finished");
-		state = state_tag::failed;
-		lock_guard.unlock();
-		on_complete(make_error_code(errc_for_client));
-		break;
-	}
-	case state_tag::waiting:
-	case state_tag::writing:
-	case state_tag::committing:
-	case state_tag::need_remove:
-	case state_tag::committed:
-	case state_tag::failed:
-		throw writer_error(writer_errc::unexpected_event);
-	}
 }
 
 #define logger() *shared_logger

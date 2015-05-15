@@ -253,14 +253,10 @@ upload_multipart_t::sm_headers() {
 	}
 
 	current_filename = name;
-	auto self = shared_from_this();
-	auto callback = [this, self, current_filename] (const std::error_code &error_code) {
-		on_writer_is_finished(current_filename, error_code);
-	};
 
 	buffered_writer = std::make_shared<buffered_writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, ns_state.name() + '.' + name, server()->m_write_chunk_size, std::move(callback));
+			, ns_state.name() + '.' + name, server()->m_write_chunk_size);
 
 	multipart_context.state = multipart_state_tag::body;
 }
@@ -353,13 +349,19 @@ upload_multipart_t::start_writing() {
 		buffered_writers.insert(std::make_pair(current_filename, buffered_writer));
 	}
 
+	auto self = shared_from_this();
+	auto next = [this, self, current_filename] (const std::error_code &error_code) {
+		on_writer_is_finished(current_filename, error_code);
+	};
+
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate
 			, proxy_settings(ns_state).success_copies_num
 			, server()->limit_of_middle_chunk_attempts
-			, server()->scale_retry_timeout);
+			, server()->scale_retry_timeout
+			, std::move(next));
 
 	buffered_writer.reset();
 }
@@ -561,14 +563,13 @@ upload_multipart_t::remove_files() {
 	if (auto session = server()->remove_session(http_request, couple)) {
 		MDS_LOG_INFO("removing uploaded files");
 
-		for (auto it = results.begin(), end = results.end(); it != end; ++it) {
-			auto key = it->second.key;
-			join_remove_tasks.defer();
+		auto shared_logger = make_shared_logger(logger());
+		auto next = std::bind(&upload_multipart_t::on_removed, shared_from_this()
+				, std::placeholders::_1);
 
-			MDS_LOG_INFO("remove %s", key.c_str());
-			auto future = session->clone().remove(key);
-			future.connect(std::bind(&upload_multipart_t::on_removed, shared_from_this()
-						, key, std::placeholders::_1, std::placeholders::_2));
+		for (auto it = results.begin(), end = results.end(); it != end; ++it) {
+			join_remove_tasks.defer();
+			elliptics::remove(shared_logger, *session, it->second.key, next);
 		}
 
 		join_remove_tasks();
@@ -578,14 +579,9 @@ upload_multipart_t::remove_files() {
 }
 
 void
-upload_multipart_t::on_removed(const std::string &key
-		, const ioremap::elliptics::sync_remove_result &result
-		, const ioremap::elliptics::error_info &error_info) {
-	if (error_info) {
-		MDS_LOG_ERROR("cannot remove file \"%s\"", key.c_str());
-	} else {
-		MDS_LOG_INFO("File \"%s\" was removed", key.c_str());
-	}
+upload_multipart_t::on_removed(util::expected<remove_result_t> result) {
+	// The remove result does not affect handler's flow
+	(void) result;
 
 	join_remove_tasks();
 }

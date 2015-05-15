@@ -29,8 +29,8 @@ upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
 	, key(ns_state.name() + '.' + filename)
 	, deferred_fallback([this] { fallback(); })
 	, can_retry_couple(true)
-	, has_internal_error(false)
 	, attempt_to_choose_a_couple(0)
+	, internal_error(internal_error_errc::none)
 {
 }
 
@@ -52,7 +52,7 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 			try_next_chunk();
 		} catch (const std::exception &ex) {
 			MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
-			send_reply(500);
+			send_error(internal_error_errc::general_error);
 		}
 	};
 
@@ -66,13 +66,10 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 
 	ioremap::elliptics::data_pointer chunk;
 
+	chunk = ioremap::elliptics::data_pointer::copy(buffer_data, buffer_size);
+
 	if (can_retry_couple) {
-		chunk = ioremap::elliptics::data_pointer::copy(
-			reinterpret_cast<const void *>(buffer_data), buffer_size);
 		data_pointer = chunk;
-	} else {
-		chunk = ioremap::elliptics::data_pointer::from_raw(
-			reinterpret_cast<void *>(const_cast<char *>(buffer_data)), buffer_size);
 	}
 
 	process_chunk(std::move(chunk));
@@ -195,28 +192,13 @@ upload_simple_t::data_is_sent(const boost::system::error_code &error_code) {
 void
 upload_simple_t::fallback() {
 	close(boost::system::error_code());
-	remove([] (util::expected<void>) {});
+	remove([] (util::expected<remove_result_t>) {});
 }
 
 void
-upload_simple_t::remove(const util::expected<void>::callback_t next) {
-	MDS_LOG_INFO("removing key %s", key.c_str());
-
+upload_simple_t::remove(const util::expected<remove_result_t>::callback_t next) {
 	if (auto session = server()->remove_session(request(), couple_info.groups)) {
-		auto future = session->remove(key);
-
-		auto self = shared_from_this();
-		auto next_ = [this, self, next] (const ioremap::elliptics::sync_remove_result &entries
-				, const ioremap::elliptics::error_info &error_info) {
-			if (error_info) {
-				next(util::expected_from_exception<std::runtime_error>(error_info.message()));
-			} else {
-				next(util::expected<void>());
-			}
-		};
-
-		future.connect(next_);
-
+		elliptics::remove(make_shared_logger(logger()), *session, key, std::move(next));
 		return;
 	}
 
@@ -277,17 +259,12 @@ elliptics::upload_simple_t::make_writer(const groups_t &groups) {
 	auto session = write_session->clone();
 	session.set_groups(groups);
 
-	auto self = shared_from_this();
-	auto on_complete = [this, self] (const std::error_code &error_code) {
-		on_write_is_done(error_code);
-	};
-
 	return std::make_shared<writer_t>(
 			copy_logger(logger())
 			, session, key
 			, *request().headers().content_length(), offset
 			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
-			, on_complete, server()->limit_of_middle_chunk_attempts
+			, server()->limit_of_middle_chunk_attempts
 			, server()->scale_retry_timeout
 			);
 }
@@ -319,56 +296,78 @@ elliptics::upload_simple_t::process_chunk(ioremap::elliptics::data_pointer chunk
 	// after each chunk writing is finished and is called in on_error.
 	deferred_fallback.defer();
 
-	writer->write(chunk);
+	auto self = shared_from_this();
+	auto next = [this, self] (const std::error_code &error_code) {
+		on_write_is_done(error_code);
+	};
+
+	writer->write(chunk, std::move(next));
 }
 
 void
 elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &error_code) {
-	if (error_code != make_error_code(writer_errc::insufficient_storage)) {
-		has_internal_error = true;
+	if (error_code == make_error_code(writer_errc::insufficient_storage)) {
+		update_internal_error(internal_error_errc::insufficient_storage);
+	} else {
+		update_internal_error(internal_error_errc::general_error);
 	}
 
 	ns_state.weights().set_feedback(couple_info.id
 			, mastermind::namespace_state_t::weights_t::feedback_tag::temporary_unavailable);
 
-	if (can_retry_couple) {
-		writer.reset();
+	writer.reset();
 
-		auto self = shared_from_this();
-		auto next = [this, self] (util::expected<void> result) {
+	auto self = shared_from_this();
+	auto next = [this, self] (util::expected<remove_result_t> result) {
+		// The remove result does not affect handler's flow
+		(void) result;
+
+		if (!can_retry_couple) {
+			MDS_LOG_ERROR("could not write file into storage");
+			send_error();
+			return;
+		}
+
+		auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
 			try {
-				result.get();
-				MDS_LOG_INFO("key was removed");
+				process_couple_info(std::move(result.get()));
+				process_chunk(data_pointer);
 			} catch (const std::exception &ex) {
-				MDS_LOG_ERROR("cannot remove key: %s", ex.what());
+				MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
+				send_error(internal_error_errc::general_error);
 			}
-
-			auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
-				try {
-					process_couple_info(std::move(result.get()));
-					process_chunk(data_pointer);
-				} catch (const std::exception &ex) {
-					MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
-					send_reply(500);
-				}
-			};
-
-			get_next_couple_info(std::move(next));
 		};
 
-		remove(std::move(next));
-		return;
+		get_next_couple_info(std::move(next));
+	};
+
+	remove(std::move(next));
+}
+
+void
+elliptics::upload_simple_t::update_internal_error(internal_error_errc errc) {
+	if (static_cast<size_t>(internal_error) < static_cast<size_t>(errc)) {
+		internal_error = errc;
 	}
+}
 
-	MDS_LOG_ERROR("could not write file into storage: %s"
-			, error_code.message().c_str());
-
-	if (has_internal_error) {
+void
+elliptics::upload_simple_t::send_error() {
+	switch(internal_error) {
+	case internal_error_errc::none:
+		throw std::runtime_error("cannot send 5xx error code because there is no error");
+	case internal_error_errc::general_error:
 		send_reply(500);
-		return;
+		break;
+	case internal_error_errc::insufficient_storage:
+		send_reply(507);
+		break;
 	}
+}
 
-	// Means insufficient_storage error
-	send_reply(507);
+void
+elliptics::upload_simple_t::send_error(internal_error_errc errc) {
+	update_internal_error(errc);
+	send_error();
 }
 

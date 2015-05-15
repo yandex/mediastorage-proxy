@@ -26,6 +26,7 @@
 #include "expected.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
+#include "remove.hpp"
 
 #include <libmastermind/mastermind.hpp>
 
@@ -156,8 +157,7 @@ private:
 	remove_files();
 
 	void
-	on_removed(const std::string &key, const ioremap::elliptics::sync_remove_result &result
-			, const ioremap::elliptics::error_info &error_info);
+	on_removed(util::expected<remove_result_t> result);
 
 	void
 	send_error();

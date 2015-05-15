@@ -69,6 +69,9 @@ operator << (std::ostream &stream, const std::vector<T> &vector) {
 	return stream;
 }
 
+std::ostream &
+operator << (std::ostream &stream, const ioremap::elliptics::error_info &error_info);
+
 template <typename T, typename Server, typename... Args>
 std::shared_ptr<ioremap::thevoid::base_request_stream>
 make_request_stream(Server *server

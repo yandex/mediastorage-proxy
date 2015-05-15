@@ -28,6 +28,7 @@
 #include "upload.hpp"
 #include "get.hpp"
 #include "download_info.hpp"
+#include "delete.hpp"
 
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>

@@ -26,6 +26,7 @@
 #include "expected.hpp"
 #include "buffered_writer.hpp"
 #include "deferred_function.hpp"
+#include "remove.hpp"
 
 #include <libmastermind/mastermind.hpp>
 
@@ -68,9 +69,15 @@ struct upload_simple_t
 	fallback();
 
 	void
-	remove(const util::expected<void>::callback_t next);
+	remove(const util::expected<remove_result_t>::callback_t next);
 
 private:
+	enum class internal_error_errc {
+		  none
+		, general_error
+		, insufficient_storage
+	};
+
 	void
 	get_next_couple_info(util::expected<mastermind::couple_info_t>::callback_t next);
 
@@ -85,6 +92,15 @@ private:
 
 	std::shared_ptr<writer_t>
 	make_writer(const groups_t &groups);
+
+	void
+	update_internal_error(internal_error_errc errc);
+
+	void
+	send_error();
+
+	void
+	send_error(internal_error_errc errc);
 
 	mastermind::namespace_state_t ns_state;
 	couple_iterator_t couple_iterator;
@@ -103,8 +119,9 @@ private:
 	mastermind::couple_info_t couple_info;
 	bool can_retry_couple;
 
-	bool has_internal_error;
 	size_t attempt_to_choose_a_couple;
+
+	internal_error_errc internal_error;
 };
 
 } // namespace elliptics

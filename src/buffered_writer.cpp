@@ -67,12 +67,11 @@ elliptics::buffered_writer_error::buffered_writer_error(buffered_writer_errc e
 }
 
 elliptics::buffered_writer_t::buffered_writer_t(ioremap::swarm::logger bh_logger_,
-		std::string key_, size_t chunk_size_ , callback_t on_finished_)
+		std::string key_, size_t chunk_size_)
 	: state(state_tag::appending)
 	, bh_logger(std::move(bh_logger_))
 	, key(std::move(key_))
 	, chunk_size(chunk_size_)
-	, on_finished(std::move(on_finished_))
 	, total_size(0)
 {
 }
@@ -98,21 +97,23 @@ elliptics::buffered_writer_t::append(const char *data, size_t size) {
 void
 elliptics::buffered_writer_t::write(const ioremap::elliptics::session &session, size_t commit_coef
 		, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
-		, double scale_retry_timeout) {
+		, double scale_retry_timeout, callback_t next) {
 	lock_guard_t lock_guard(state_mutex);
 
 	switch (state) {
 	case state_tag::appending:
 		state = state_tag::writing;
-		write_impl(session, commit_coef, success_copies_num, limit_of_middle_chunk_attempts
-				, scale_retry_timeout);
+		write_impl(lock_guard, session, commit_coef, success_copies_num
+				, limit_of_middle_chunk_attempts, scale_retry_timeout, std::move(next));
 		break;
 	case state_tag::interrupted:
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+
 		lock_guard.unlock();
-		on_finished(buffered_writer_errc::interrupted);
+		next(buffered_writer_errc::interrupted);
+		lock_guard.lock();
 		break;
 	case state_tag::writing:
 	case state_tag::interrupting:
@@ -223,31 +224,37 @@ elliptics::buffered_writer_t::append_impl(const char *data, size_t size) {
 }
 
 void
-elliptics::buffered_writer_t::write_impl(const ioremap::elliptics::session &session
+elliptics::buffered_writer_t::write_impl(lock_guard_t &lock_guard
+		, const ioremap::elliptics::session &session
 		, size_t commit_coef, size_t success_copies_num, size_t limit_of_middle_chunk_attempts
-		, double scale_retry_timeout) {
-	auto self = shared_from_this();
-	auto callback = [this, self] (const std::error_code &error_code) {
-		on_chunk_wrote(error_code);
-	};
-
+		, double scale_retry_timeout, callback_t next) {
 	writer = std::make_shared<writer_t>(
 			ioremap::swarm::logger(logger(), blackhole::log::attributes_t()), session, get_key()
-			, total_size, 0, commit_coef, success_copies_num, callback
+			, total_size, 0, commit_coef, success_copies_num
 			, limit_of_middle_chunk_attempts, scale_retry_timeout);
 
-	write_chunk();
+	write_chunk(lock_guard, std::move(next));
 }
 
 void
-elliptics::buffered_writer_t::write_chunk() {
+elliptics::buffered_writer_t::write_chunk(lock_guard_t &lock_guard, callback_t next) {
 	auto buffer = std::move(buffers.front());
 	buffers.pop_front();
-	writer->write(buffer.data(), buffer.size());
+
+	auto self = shared_from_this();
+	auto next_ = [this, self, next] (const std::error_code &error_code) {
+		on_chunk_wrote(error_code, std::move(next));
+	};
+
+	auto chunk = ioremap::elliptics::data_pointer::copy(buffer.data(), buffer.size());
+
+	lock_guard.unlock();
+	writer->write(std::move(chunk), std::move(next_));
+	lock_guard.lock();
 }
 
 void
-elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) {
+elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code, callback_t next) {
 	lock_guard_t lock_guard(state_mutex);
 
 	switch (state) {
@@ -256,8 +263,10 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 			state = state_tag::failed;
 			result = writer->get_result();
 			writer.reset();
+
 			lock_guard.unlock();
-			on_finished(error_code);
+			next(error_code);
+			lock_guard.lock();
 			break;
 		}
 
@@ -265,20 +274,24 @@ elliptics::buffered_writer_t::on_chunk_wrote(const std::error_code &error_code) 
 			state = state_tag::completed;
 			result = writer->get_result();
 			writer.reset();
+
 			lock_guard.unlock();
-			on_finished(buffered_writer_errc::success);
+			next(buffered_writer_errc::success);
+			lock_guard.lock();
 			break;
 		}
 
-		write_chunk();
+		write_chunk(lock_guard, std::move(next));
 		break;
 	case state_tag::interrupting:
 		state = state_tag::interrupted;
 		buffers.clear();
 		result = writer->get_result();
 		writer.reset();
+
 		lock_guard.unlock();
-		on_finished(buffered_writer_errc::interrupted);
+		next(buffered_writer_errc::interrupted);
+		lock_guard.lock();
 		break;
 	case state_tag::appending:
 	case state_tag::completed:
