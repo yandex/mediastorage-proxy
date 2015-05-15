@@ -256,7 +256,7 @@ elliptics::req_get::read_chunk(size_t offset, size_t size
 
 	auto callback = std::bind(&req_get::read_chunk_is_finished, shared_from_this()
 			, std::placeholders::_1, std::placeholders::_2
-			, utils::ms_timestamp_t{}
+			, util::timer_t{}
 			, offset, size
 			, std::move(on_result), std::move(on_error));
 
@@ -267,12 +267,12 @@ void
 elliptics::req_get::read_chunk_is_finished(
 		const ie::sync_read_result &entries
 		, const ie::error_info &error_info
-		, utils::ms_timestamp_t ms_timestamp
+		, util::timer_t timer
 		, size_t offset, size_t size
 		, std::function<void (const ie::read_result_entry &)> on_result
 		, std::function<void ()> on_error) {
 	std::ostringstream oss;
-	oss << "chunk reading was finished: spent-time=" << ms_timestamp.str() << "; status=\""
+	oss << "chunk reading was finished: spent-time=" << timer.str_ms() << "; status=\""
 		<< (error_info ? "bad" : "ok") << "\"; description=\"";
 
 	if (error_info) {
@@ -302,19 +302,19 @@ elliptics::req_get::send_chunk(ie::data_pointer data_pointer
 	MDS_LOG_INFO("send chunk");
 	auto callback = std::bind(&req_get::send_chunk_is_finished, shared_from_this()
 			, std::placeholders::_1
-			, utils::ms_timestamp_t{}
+			, util::timer_t{}
 			, std::move(on_result), std::move(on_error));
 	send_data(std::move(data_pointer), std::move(callback));
 }
 
 void
 elliptics::req_get::send_chunk_is_finished(const boost::system::error_code &error_code
-		, utils::ms_timestamp_t ms_timestamp
+		, util::timer_t timer
 		, std::function<void ()> on_result
 		, std::function<void ()> on_error) {
 	some_data_were_sent = true;
 	std::ostringstream oss;
-	oss << "chink was sent: spent-time=" << ms_timestamp.str() << "; status=\""
+	oss << "chink was sent: spent-time=" << timer.str_ms() << "; status=\""
 		<< (error_code ? "bad" : "ok") << "\"; description=\"";
 
 	if (error_code) {
@@ -445,7 +445,7 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 	const auto &data_pointer = entry.file();
 
 	{
-		utils::ms_timestamp_t ms_timestamp;
+		util::timer_t timer;
 		if (NULL == server()->m_magic.get()) {
 			server()->m_magic.reset(new magic_provider());
 		}
@@ -459,7 +459,7 @@ elliptics::req_get::detect_content_type(const ie::read_result_entry &entry) {
 
 		std::ostringstream oss;
 		oss << "content-type was detected: type=\"" << content_type
-			<<  "\"; spent-time=" << ms_timestamp.str();
+			<<  "\"; spent-time=" << timer.str_ms();
 		auto msg = oss.str();
 		MDS_LOG_INFO("%s", msg.c_str());
 	}
