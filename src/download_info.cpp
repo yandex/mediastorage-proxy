@@ -52,6 +52,10 @@ elliptics::download_info_t::on_request(const ioremap::thevoid::http_request &req
 		// in this moment. Hence session can be safely used without any check.
 		std::tie(session, key) = prepare_session(req.url().path(), ns_state);
 
+		if (proxy_settings(ns_state).check_for_update) {
+			session->set_cflags(session->get_cflags() | DNET_FLAGS_NOLOCK);
+		}
+
 		{
 			const auto &headers = req.headers();
 			if (const auto &xrh = headers.get("X-Regional-Host")) {

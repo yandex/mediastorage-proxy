@@ -66,6 +66,11 @@ void req_delete::on_request(const ioremap::thevoid::http_request &req, const boo
 
 		session->set_timeout(server()->timeout.lookup);
 		session->set_filter(ioremap::elliptics::filters::positive);
+
+		if (proxy_settings(ns_state).check_for_update) {
+			session->set_cflags(session->get_cflags() | DNET_FLAGS_NOLOCK);
+		}
+
 		auto alr = session->quorum_lookup(key);
 		alr.connect(wrap(std::bind(&req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
@@ -88,6 +93,8 @@ void req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, co
 		send_reply(error.code() == -ENOENT ? 404 : 500);
 		return;
 	}
+
+	session->set_cflags(session->get_cflags() & ~DNET_FLAGS_NOLOCK);
 
 	const auto &entry = slr.front();
 	total_size = entry.file_info()->size;

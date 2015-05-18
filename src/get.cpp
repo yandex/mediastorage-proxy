@@ -531,6 +531,11 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		m_session->set_trace_bit(http_request.trace_bit());
 		m_session->set_trace_id(http_request.request_id());
 		m_session->set_timeout(server()->timeout.read);
+
+		if (proxy_settings(ns_state).check_for_update) {
+			m_session->set_cflags(m_session->get_cflags() | DNET_FLAGS_NOLOCK);
+		}
+
 		key = std::get<1>(prep_session).remote();
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Get: \"%s\"", ex.what());
