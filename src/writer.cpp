@@ -500,6 +500,7 @@ elliptics::can_be_written(shared_logger_t shared_logger
 	}
 
 	session = session.clone();
+	session.set_cflags(session.get_cflags() | DNET_FLAGS_NOLOCK);
 	session.set_filter(ioremap::elliptics::filters::all);
 
 	auto future = session.parallel_lookup(key);

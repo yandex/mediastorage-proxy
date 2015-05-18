@@ -141,6 +141,8 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 		const auto &ell_threads = config["elliptics-threads"];
 		if (ell_threads.HasMember("io-thread-num"))
 			dnet_conf.io_thread_num = ell_threads["io-thread-num"].GetInt();
+		if (ell_threads.HasMember("nonblocking-io-thread-num"))
+			dnet_conf.nonblocking_io_thread_num = ell_threads["nonblocking-io-thread-num"].GetInt();
 		if (ell_threads.HasMember("net-thread-num"))
 			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
 	}
