@@ -1,3 +1,11 @@
+mediastorage-proxy (0.89.1) lucid; urgency=low
+
+  * MDS-1031: Read and lookup are processed with NOLOCK
+    If namespace's option check_for_update is true then proxy will lookup
+    and read data having set elliptics's cflag DNET_FLAGS_NOLOCK.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 18 May 2015 18:24:46 +0300
+
 mediastorage-proxy (0.88.1) lucid; urgency=low
 
   * MDS-958: Response will be 507 if -ENOSPC was occured
