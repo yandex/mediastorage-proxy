@@ -28,6 +28,7 @@
 #include "upload.hpp"
 #include "get.hpp"
 #include "download_info.hpp"
+#include "delete.hpp"
 
 #include <swarm/url.hpp>
 #include <swarm/logger.hpp>
@@ -1085,6 +1086,8 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 		settings->custom_expiration_time
 			= features_config.at<bool>("custom-expiration-time", false);
 	}
+
+	settings->check_for_update = config.at<bool>("check-for-update", true);
 
 	return mastermind::namespace_state_t::user_settings_ptr_t(std::move(settings));
 }

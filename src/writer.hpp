@@ -20,9 +20,14 @@
 #ifndef MDS_PROXY__SRC__UPLOADER__HPP
 #define MDS_PROXY__SRC__UPLOADER__HPP
 
+#include "loggers.hpp"
+#include "expected.hpp"
+
 #include <elliptics/session.hpp>
 
 #include <swarm/logger.hpp>
+
+#include <libmastermind/mastermind.hpp>
 
 #include <memory>
 #include <functional>
@@ -77,14 +82,11 @@ public:
 	writer_t(ioremap::swarm::logger bh_logger_
 			, const ioremap::elliptics::session &session_, std::string key_
 			, size_t total_size_, size_t offset_, size_t commit_coef_, size_t success_copies_num_
-			, callback_t on_complete_, size_t limit_of_attempts_ = 1, double scale_retry_timeout_ = 1
+			, size_t limit_of_attempts_ = 1, double scale_retry_timeout_ = 1
 			);
 
 	void
-	write(const char *data, size_t size);
-
-	void
-	write(const ioremap::elliptics::data_pointer &data_pointer);
+	write(const ioremap::elliptics::data_pointer &data_pointer, callback_t next);
 
 	result_t
 	get_result() const;
@@ -115,13 +117,11 @@ private:
 		  waiting
 		, writing
 		, committing
-		, need_remove
-		, removing
 		, committed
 		, failed
 	};
 
-	typedef std::recursive_mutex mutex_t;
+	typedef std::mutex mutex_t;
 	typedef std::unique_lock<mutex_t> lock_guard_t;
 
 	ioremap::swarm::logger &
@@ -147,11 +147,8 @@ private:
 
 	void
 	on_data_wrote(const ioremap::elliptics::sync_write_result &entries
-			, const ioremap::elliptics::error_info &error_info);
-
-	void
-	on_data_removed(const ioremap::elliptics::sync_remove_result &entries
-			, const ioremap::elliptics::error_info &error_info);
+			, const ioremap::elliptics::error_info &error_info
+			, callback_t next);
 
 	state_tag state;
 	mutable mutex_t state_mutex;
@@ -167,8 +164,6 @@ private:
 	size_t commit_coef;
 	size_t success_copies_num;
 
-	callback_t on_complete;
-
 	size_t limit_of_attempts;
 	double scale_retry_timeout;
 
@@ -180,6 +175,12 @@ private:
 	entries_info_t entries_info;
 };
 
+void
+can_be_written(shared_logger_t shared_logger
+		, ioremap::elliptics::session session
+		, std::string key
+		, mastermind::namespace_state_t ns_state
+		, util::expected<bool>::callback_t next);
 
 } // namespace elliptics
 

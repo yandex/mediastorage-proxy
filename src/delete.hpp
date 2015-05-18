@@ -17,47 +17,30 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef MDS_PROXY__SRC__UPLOAD__HPP
-#define MDS_PROXY__SRC__UPLOAD__HPP
+#ifndef MDS_PROXY__SRC__DELETE__HPP
+#define MDS_PROXY__SRC__DELETE__HPP
 
-#include "utils.hpp"
 #include "proxy.hpp"
-#include "loggers.hpp"
-#include "couple_iterator.hpp"
-
-#include <thevoid/stream.hpp>
-
-#include <boost/optional.hpp>
-
-#include <map>
-#include <vector>
-#include <mutex>
+#include "remove.hpp"
 
 namespace elliptics {
 
-class upload_t
-	: public ioremap::thevoid::request_stream<proxy>
-	, public std::enable_shared_from_this<upload_t>
+struct req_delete
+	: public ioremap::thevoid::simple_request_stream<proxy>
+	, public std::enable_shared_from_this<req_delete>
 {
-public:
-	void
-	on_headers(ioremap::thevoid::http_request &&http_request);
-
-	size_t
-	on_data(const boost::asio::const_buffer &buffer);
-
-	void
-	on_close(const boost::system::error_code &error);
+	void on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer);
+	void on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error);
+	void on_finished(util::expected<remove_result_t> result);
 
 private:
-	boost::optional<couple_iterator_t>
-	create_couple_iterator(const ioremap::thevoid::http_request &http_request
-			, const mastermind::namespace_state_t &ns_state, size_t total_size);
-
-	std::shared_ptr<base_request_stream> request_stream;
+	std::string url_str;
+	ioremap::elliptics::key key;
+	boost::optional<ioremap::elliptics::session> session;
+	size_t total_size;
 };
 
 } // namespace elliptics
 
-#endif /* MDS_PROXY__SRC__UPLOAD__HPP */
+#endif /* MDS_PROXY__SRC__DELETE__HPP */
 

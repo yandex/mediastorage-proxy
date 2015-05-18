@@ -1,3 +1,47 @@
+mediastorage-proxy (0.88.1) lucid; urgency=low
+
+  * MDS-958: Response will be 507 if -ENOSPC was occured
+  * Remove operation was refactored
+  * MDS-1042: Double remove was fixed
+  * MDS-932: Writer and buffered writer takes callbacks in action methods
+  * MDS-1045: Data is copied into data_pointer before be passed into writer
+  * MDS-1046: Proxy does not use recursive mutex anymore
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Sat, 16 May 2015 00:29:22 +0400
+
+mediastorage-proxy (0.87.2) lucid; urgency=low
+
+  * MDS-993: Couple retry was fixed
+    First chunk is copied to be possible used for couple retries.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 30 Apr 2015 23:08:09 +0400
+
+mediastorage-proxy (0.87.1) lucid; urgency=low
+
+  * Key is checked for existence before be written according to MDS-638.
+  * Couple retries mechanism was implemented for simple upload according to
+    MDS-670.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 16 Apr 2015 14:12:25 +0400
+
+mediastorage-proxy (0.86.3) lucid; urgency=low
+
+  * Buffered writer clears buffers before async call
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 10 Apr 2015 00:32:44 +0400
+
+mediastorage-proxy (0.86.2) lucid; urgency=low
+
+  * Deps: Let shlibs detect dependency on elliptics
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 09 Apr 2015 22:18:46 +0400
+
+mediastorage-proxy (0.86.1) lucid; urgency=low
+
+  * Deps: thevoid/swarm version 3
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 09 Apr 2015 15:06:56 +0400
+
 mediastorage-proxy (0.85.11) lucid; urgency=low
 
   * MDS-888: The marker will be logged if headers are sent and request is

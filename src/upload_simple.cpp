@@ -17,47 +17,46 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "upload_p.hpp"
+#include "upload_simple.hpp"
 
 namespace elliptics {
 
-upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_, couple_t couple_, std::string filename_)
+upload_simple_t::upload_simple_t(mastermind::namespace_state_t ns_state_
+		, couple_iterator_t couple_iterator_, std::string filename_)
 	: ns_state(std::move(ns_state_))
-	, couple(std::move(couple_))
-	, couple_id(*std::min_element(couple.begin(), couple.end()))
+	, couple_iterator(std::move(couple_iterator_))
 	, filename(std::move(filename_))
 	, key(ns_state.name() + '.' + filename)
-	, m_single_chunk(false)
 	, deferred_fallback([this] { fallback(); })
+	, can_retry_couple(true)
+	, attempt_to_choose_a_couple(0)
+	, internal_error(internal_error_errc::none)
 {
 }
 
 void
 upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) {
-
 	set_chunk_size(server()->m_write_chunk_size);
-
-	auto query_list = http_request.url().query();
-	auto offset = get_arg<uint64_t>(query_list, "offset", 0);
-
-	auto self = shared_from_this();
-	auto on_complete = [this, self] (const std::error_code &error_code) {
-		on_write_is_done(error_code);
-	};
 
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence write_session can be safely used without any check
-	writer = std::make_shared<writer_t>(
-			ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-			, *server()->write_session(http_request, couple), key
-			, *http_request.headers().content_length(), offset
-			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
-			, on_complete, server()->limit_of_middle_chunk_attempts
-			, server()->scale_retry_timeout
-			);
+	lookup_session = *server()->lookup_session(http_request, {});
+	write_session = *server()->write_session(http_request, {});
 
-	// It's required to call try_next_chunk() method to receive first chunk of data
-	try_next_chunk();
+	offset = get_arg<uint64_t>(http_request.url().query(), "offset", 0);
+
+	auto self = shared_from_this();
+	auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
+		try {
+			process_couple_info(std::move(result.get()));
+			try_next_chunk();
+		} catch (const std::exception &ex) {
+			MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
+			send_error(internal_error_errc::general_error);
+		}
+	};
+
+	get_next_couple_info(std::move(next));
 }
 
 void
@@ -65,36 +64,15 @@ upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int 
 	const char *buffer_data = boost::asio::buffer_cast<const char *>(buffer);
 	const size_t buffer_size = boost::asio::buffer_size(buffer);
 
-	// Fix flags to single_chunk if first chunk == data size 
-	if ((flags & last_chunk) && m_single_chunk && (buffer_size == 0)) {
-		MDS_LOG_INFO("on_chunk: skipping empty commit");
-		return;
+	ioremap::elliptics::data_pointer chunk;
+
+	chunk = ioremap::elliptics::data_pointer::copy(buffer_data, buffer_size);
+
+	if (can_retry_couple) {
+		data_pointer = chunk;
 	}
 
-	if ((flags == first_chunk) && (buffer_size == writer->get_total_size())) {
-		MDS_LOG_INFO("on_chunk: fixing flags to single_chunk");
-		flags = single_chunk;
-	}
-
-	if (flags == single_chunk) {
-		m_single_chunk = true;
-	}
-
-	// There are two parallel activities:
-	// 1. Reading client request
-	// 2. Writing data into elliptics
-	// Errors which could happen in second part are handled by writer object (involving removing of
-	// needless file). But errors which could happen during reading request should be handled by
-	// this object.
-	// When such error is ocurred the on_error method will be called. But chunk writing can process
-	// in this moment, so we cannot remove file and need to wait until writing is finished.
-	// Otherwise if chunk writing does not process we have to initiate file removing in on_error
-	// method.
-	// To solve this problem deferred call of fallback method is used. The method will be executed
-	// only on second call. The method is deferred by one call before each chunk writing, is called
-	// after each chunk writing is finished and is called in on_error.
-	deferred_fallback.defer();
-	writer->write(buffer_data, buffer_size);
+	process_chunk(std::move(chunk));
 }
 
 // The on_error call means an error occurred during working with socket (either read or write).
@@ -110,17 +88,12 @@ upload_simple_t::on_error(const boost::system::error_code &error_code) {
 void
 upload_simple_t::on_write_is_done(const std::error_code &error_code) {
 	if (error_code) {
-		MDS_LOG_ERROR("could not write file into storage: %s"
-				, error_code.message().c_str());
-
-		if (error_code == make_error_code(writer_errc::insufficient_storage)) {
-			send_reply(507);
-		} else {
-			send_reply(500);
-		}
-
+		process_chunk_write_error(error_code);
 		return;
 	}
+
+	can_retry_couple = false;
+	data_pointer = ioremap::elliptics::data_pointer();
 
 	// Fallback will be executed if it is called twice: here and in on_error.
 	if (deferred_fallback()) {
@@ -152,7 +125,7 @@ upload_simple_t::send_result() {
 		<< "\" key=\"";
 
 	if (proxy_settings(ns_state).static_couple.empty()) {
-		oss << couple_id << '/';
+		oss << couple_info.id << '/';
 	}
 
 	oss << encode_for_xml(filename) << "\">\n";
@@ -219,30 +192,182 @@ upload_simple_t::data_is_sent(const boost::system::error_code &error_code) {
 void
 upload_simple_t::fallback() {
 	close(boost::system::error_code());
-	remove();
+	remove([] (util::expected<remove_result_t>) {});
 }
 
 void
-upload_simple_t::remove() {
-	MDS_LOG_INFO("removing key %s", key.c_str());
-	if (auto session = server()->remove_session(request(), couple)) {
-		auto future = session->remove(key);
-		future.connect(std::bind(&upload_simple_t::on_removed, shared_from_this()
-					, std::placeholders::_1, std::placeholders::_2));
-	} else {
-		MDS_LOG_ERROR("cannot remove files of failed request: remove-session is uninitialized");
+upload_simple_t::remove(const util::expected<remove_result_t>::callback_t next) {
+	if (auto session = server()->remove_session(request(), couple_info.groups)) {
+		elliptics::remove(make_shared_logger(logger()), *session, key, std::move(next));
+		return;
 	}
-}
 
-void
-upload_simple_t::on_removed(const ioremap::elliptics::sync_remove_result &result
-		, const ioremap::elliptics::error_info &error_info) {
-	if (error_info) {
-		MDS_LOG_ERROR("cannot remove key %s: %s", key.c_str(), error_info.message().c_str());
-	} else {
-		MDS_LOG_INFO("key %s was removed", key.c_str());
-	}
+	next(util::expected_from_exception<std::runtime_error>("remove-session is uninitialized"));
 }
 
 } // namespace elliptics
+
+void
+elliptics::upload_simple_t::get_next_couple_info(
+		util::expected<mastermind::couple_info_t>::callback_t next) {
+	if (!couple_iterator.has_next()) {
+		next(util::expected_from_exception<std::runtime_error>(
+					"there is no couple to process upload"));
+		return;
+	}
+
+	auto self = shared_from_this();
+	auto couple_info = couple_iterator.next();
+
+	++attempt_to_choose_a_couple;
+	{
+		std::ostringstream oss;
+		oss << "process request with couple=" << couple_info.groups
+			<< "; attempt=" << attempt_to_choose_a_couple;
+		auto msg = oss.str();
+		MDS_LOG_INFO("%s", msg.c_str());
+	}
+
+	auto next_ = [this, self, couple_info, next] (util::expected<bool> result) {
+		try {
+			if (result.get()) {
+				MDS_LOG_INFO("key can be written");
+				next(couple_info);
+				return;
+			}
+
+			MDS_LOG_INFO("key cannot be written");
+			send_reply(403);
+			return;
+		} catch (const std::exception &ex) {
+			MDS_LOG_ERROR("cannot check key for update: %s", ex.what());
+			get_next_couple_info(std::move(next));
+		}
+	};
+
+	auto session = lookup_session->clone();
+	session.set_groups(couple_info.groups);
+
+	can_be_written(
+			make_shared_logger(logger())
+			, std::move(session), key, ns_state
+			, std::move(next_));
+}
+
+std::shared_ptr<elliptics::writer_t>
+elliptics::upload_simple_t::make_writer(const groups_t &groups) {
+	auto session = write_session->clone();
+	session.set_groups(groups);
+
+	return std::make_shared<writer_t>(
+			copy_logger(logger())
+			, session, key
+			, *request().headers().content_length(), offset
+			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
+			, server()->limit_of_middle_chunk_attempts
+			, server()->scale_retry_timeout
+			);
+}
+
+void
+elliptics::upload_simple_t::process_couple_info(mastermind::couple_info_t couple_info_) {
+	couple_info = std::move(couple_info_);
+
+	lookup_session->set_groups(couple_info.groups);
+	write_session->set_groups(couple_info.groups);
+
+	writer = make_writer(couple_info.groups);
+}
+
+void
+elliptics::upload_simple_t::process_chunk(ioremap::elliptics::data_pointer chunk) {
+	// There are two parallel activities:
+	// 1. Reading client request
+	// 2. Writing data into elliptics
+	// Errors which could happen in second part are handled by writer object (involving removing of
+	// needless file). But errors which could happen during reading request should be handled by
+	// this object.
+	// When such error is ocurred the on_error method will be called. But chunk writing can process
+	// in this moment, so we cannot remove file and need to wait until writing is finished.
+	// Otherwise if chunk writing does not process we have to initiate file removing in on_error
+	// method.
+	// To solve this problem deferred call of fallback method is used. The method will be executed
+	// only on second call. The method is deferred by one call before each chunk writing, is called
+	// after each chunk writing is finished and is called in on_error.
+	deferred_fallback.defer();
+
+	auto self = shared_from_this();
+	auto next = [this, self] (const std::error_code &error_code) {
+		on_write_is_done(error_code);
+	};
+
+	writer->write(chunk, std::move(next));
+}
+
+void
+elliptics::upload_simple_t::process_chunk_write_error(const std::error_code &error_code) {
+	if (error_code == make_error_code(writer_errc::insufficient_storage)) {
+		update_internal_error(internal_error_errc::insufficient_storage);
+	} else {
+		update_internal_error(internal_error_errc::general_error);
+	}
+
+	ns_state.weights().set_feedback(couple_info.id
+			, mastermind::namespace_state_t::weights_t::feedback_tag::temporary_unavailable);
+
+	writer.reset();
+
+	auto self = shared_from_this();
+	auto next = [this, self] (util::expected<remove_result_t> result) {
+		// The remove result does not affect handler's flow
+		(void) result;
+
+		if (!can_retry_couple) {
+			MDS_LOG_ERROR("could not write file into storage");
+			send_error();
+			return;
+		}
+
+		auto next = [this, self] (util::expected<mastermind::couple_info_t> result) {
+			try {
+				process_couple_info(std::move(result.get()));
+				process_chunk(data_pointer);
+			} catch (const std::exception &ex) {
+				MDS_LOG_INFO("cannot obtain couple: %s", ex.what());
+				send_error(internal_error_errc::general_error);
+			}
+		};
+
+		get_next_couple_info(std::move(next));
+	};
+
+	remove(std::move(next));
+}
+
+void
+elliptics::upload_simple_t::update_internal_error(internal_error_errc errc) {
+	if (static_cast<size_t>(internal_error) < static_cast<size_t>(errc)) {
+		internal_error = errc;
+	}
+}
+
+void
+elliptics::upload_simple_t::send_error() {
+	switch(internal_error) {
+	case internal_error_errc::none:
+		throw std::runtime_error("cannot send 5xx error code because there is no error");
+	case internal_error_errc::general_error:
+		send_reply(500);
+		break;
+	case internal_error_errc::insufficient_storage:
+		send_reply(507);
+		break;
+	}
+}
+
+void
+elliptics::upload_simple_t::send_error(internal_error_errc errc) {
+	update_internal_error(errc);
+	send_error();
+}
 

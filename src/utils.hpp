@@ -39,6 +39,9 @@
 
 namespace elliptics {
 
+typedef int group_t;
+typedef std::vector<group_t> groups_t;
+
 typedef std::vector<int> couple_t;
 
 template <typename T>
@@ -65,6 +68,9 @@ operator << (std::ostream &stream, const std::vector<T> &vector) {
 
 	return stream;
 }
+
+std::ostream &
+operator << (std::ostream &stream, const ioremap::elliptics::error_info &error_info);
 
 template <typename T, typename Server, typename... Args>
 std::shared_ptr<ioremap::thevoid::base_request_stream>

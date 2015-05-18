@@ -19,8 +19,10 @@
 
 #include "proxy.hpp"
 
+#include "delete.hpp"
+
 namespace elliptics {
-void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+void req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
 		MDS_LOG_INFO("Delete: handle request: %s", req.url().path().c_str());
 		mastermind::namespace_state_t ns_state;
@@ -65,7 +67,7 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 		session->set_timeout(server()->timeout.lookup);
 		session->set_filter(ioremap::elliptics::filters::positive);
 		auto alr = session->quorum_lookup(key);
-		alr.connect(wrap(std::bind(&proxy::req_delete::on_lookup,
+		alr.connect(wrap(std::bind(&req_delete::on_lookup,
 					shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("Delete request=\"%s\" error: %s"
@@ -78,7 +80,7 @@ void proxy::req_delete::on_request(const ioremap::thevoid::http_request &req, co
 	}
 }
 
-void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
+void req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &slr, const ioremap::elliptics::error_info &error) {
 
 	if (error) {
 		MDS_LOG_ERROR("Delete request=\"%s\" lookup error: %s"
@@ -90,63 +92,35 @@ void proxy::req_delete::on_lookup(const ioremap::elliptics::sync_lookup_result &
 	const auto &entry = slr.front();
 	total_size = entry.file_info()->size;
 
-	// all_with_ack because all doesn't mean all in some cases e.g. remove act
-	session->set_filter(ioremap::elliptics::filters::all_with_ack);
 	session->set_timeout(server()->timeout.remove);
 
 	MDS_LOG_DEBUG("Delete %s: data size %d"
 			, url_str.c_str(), static_cast<int>(total_size));
-	session->remove(key).connect(wrap(std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
+
+	auto next = std::bind(&req_delete::on_finished, shared_from_this(), std::placeholders::_1);
+	elliptics::remove(make_shared_logger(logger()), *session, key.remote(), std::move(next));
 }
 
-void proxy::req_delete::on_finished(const ioremap::elliptics::sync_remove_result &srr, const ioremap::elliptics::error_info &error) {
-	(void) error;
+void req_delete::on_finished(util::expected<remove_result_t> result) {
+	try {
+		auto remove_result = result.get();
 
-	bool has_bad_response = false;
-	size_t enoent_count = 0;
-
-	for (auto it = srr.begin(), end = srr.end(); it != end; ++it) {
-		int status = it->status();
-		int group = it->command()->id.group_id;
-		const auto &err = it->error();
-		if (status != 0) {
-			MDS_LOG_INFO("Delete request=\"%s\" group=%d status=%d error=\"%s\""
-					, url_str.c_str(), group, status, err.message().c_str());
-			if (status != -ENOENT) {
-				has_bad_response = true;
-			} else {
-				enoent_count += 1;
-			}
-		} else {
-			MDS_LOG_INFO("Delete request=\"%s\" group=%d status=0", url_str.c_str(), group);
+		if (remove_result.is_failed()) {
+			send_reply(500);
+			return;
 		}
-	}
 
-	// The reason for this check: ELL-250
-	if (srr.size() != session->get_groups().size()) {
-		MDS_LOG_ERROR("Delete request=\"%s\" unknown client errors"
-				, url_str.c_str());
-		has_bad_response = true;
-	}
+		if (remove_result.key_was_not_found()) {
+			send_reply(404);
+			return;
+		}
 
-	if (has_bad_response) {
-		MDS_LOG_ERROR("Delete request=\"%s\" remove is failed"
-				, url_str.c_str());
+		send_reply(200);
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("remove error: %s", ex.what());
 		send_reply(500);
-		return;
 	}
-
-	if (enoent_count == srr.size()) {
-		MDS_LOG_ERROR("Delete request=\"%s\" key not found"
-				, url_str.c_str());
-		send_reply(404);
-		return;
-	}
-
-	MDS_LOG_INFO("Delete request=\"%s\" remove is done"
-			, url_str.c_str());
-	send_reply(200);
-	return;
 }
+
 } // namespace elliptics
 

@@ -17,47 +17,44 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef MDS_PROXY__SRC__UPLOAD__HPP
-#define MDS_PROXY__SRC__UPLOAD__HPP
+#ifndef MDS_PROXY__SRC__REMOVE__HPP
+#define MDS_PROXY__SRC__REMOVE__HPP
 
-#include "utils.hpp"
-#include "proxy.hpp"
 #include "loggers.hpp"
-#include "couple_iterator.hpp"
+#include "expected.hpp"
 
-#include <thevoid/stream.hpp>
+#include <elliptics/session.hpp>
 
-#include <boost/optional.hpp>
-
-#include <map>
-#include <vector>
-#include <mutex>
+#include <string>
 
 namespace elliptics {
 
-class upload_t
-	: public ioremap::thevoid::request_stream<proxy>
-	, public std::enable_shared_from_this<upload_t>
-{
+class remove_result_t {
 public:
-	void
-	on_headers(ioremap::thevoid::http_request &&http_request);
+	remove_result_t(bool has_bad_response_, bool not_found_);
 
-	size_t
-	on_data(const boost::asio::const_buffer &buffer);
+	bool
+	is_failed() const;
 
-	void
-	on_close(const boost::system::error_code &error);
+	bool
+	is_successful() const;
+
+	bool
+	key_was_not_found() const;
 
 private:
-	boost::optional<couple_iterator_t>
-	create_couple_iterator(const ioremap::thevoid::http_request &http_request
-			, const mastermind::namespace_state_t &ns_state, size_t total_size);
+	bool has_bad_response;
+	bool not_found;
 
-	std::shared_ptr<base_request_stream> request_stream;
 };
+
+void
+remove(shared_logger_t shared_logger
+		, ioremap::elliptics::session session
+		, std::string key
+		, util::expected<remove_result_t>::callback_t next);
 
 } // namespace elliptics
 
-#endif /* MDS_PROXY__SRC__UPLOAD__HPP */
+#endif /* MDS_PROXY__SRC__REMOVE__HPP */
 

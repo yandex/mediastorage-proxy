@@ -36,7 +36,7 @@ buffer(const ioremap::elliptics::data_pointer &data_pointer);
 
 #include "ranges.hpp"
 #include "lookuper.hpp"
-#include "timestamp.hpp"
+#include "timer.hpp"
 
 #include <elliptics/session.hpp>
 
@@ -100,7 +100,7 @@ private:
 	read_chunk_is_finished(
 			const ie::sync_read_result &entries
 			, const ie::error_info &error_info
-			, utils::ms_timestamp_t ms_timestamp
+			, util::timer_t timer
 			, size_t offset, size_t size
 			, std::function<void (const ie::read_result_entry &)> on_result
 			, std::function<void ()> on_error);
@@ -112,7 +112,7 @@ private:
 
 	void
 	send_chunk_is_finished(const boost::system::error_code &error_code
-			, utils::ms_timestamp_t ms_timestamp
+			, util::timer_t timer
 			, std::function<void ()> on_result
 			, std::function<void ()> on_error);
 

@@ -30,6 +30,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/writer.cpp
 	${PROJECT_SOURCE_DIR}/src/write_retrier.cpp
 	${PROJECT_SOURCE_DIR}/src/buffered_writer.cpp
+	${PROJECT_SOURCE_DIR}/src/remove.cpp
 	${PROJECT_SOURCE_DIR}/src/upload.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_simple.cpp
 	${PROJECT_SOURCE_DIR}/src/upload_multipart.cpp
@@ -42,6 +43,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/ranges.cpp
 	${PROJECT_SOURCE_DIR}/src/cdn_cache.cpp
 	${PROJECT_SOURCE_DIR}/src/utils.cpp
+	${PROJECT_SOURCE_DIR}/src/loggers.cpp
 	)
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
