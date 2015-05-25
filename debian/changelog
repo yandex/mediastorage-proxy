@@ -1,3 +1,10 @@
+mediastorage-proxy (0.90.1) lucid; urgency=low
+
+  * MDS-490: Ping handler checks libmastermind's state
+    Method is_valid is used to check availableness of namespaces' caches
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 25 May 2015 16:51:19 +0300
+
 mediastorage-proxy (0.89.1) lucid; urgency=low
 
   * MDS-1031: Read and lookup are processed with NOLOCK
