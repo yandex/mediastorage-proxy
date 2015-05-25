@@ -237,7 +237,27 @@ elliptics::upload_simple_t::get_next_couple_info(
 			}
 
 			MDS_LOG_INFO("key cannot be written");
-			send_reply(403);
+			std::ostringstream oss;
+			oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<post>\n";
+
+			oss << "<key>";
+			if (proxy_settings(ns_state).static_couple.empty()) {
+				oss << couple_info.id << '/';
+			}
+			oss << encode_for_xml(filename);
+
+			oss << "</key>\n</post>";
+			auto body = oss.str();
+
+			ioremap::thevoid::http_response reply;
+			ioremap::swarm::http_headers headers;
+
+			reply.set_code(403);
+			headers.set_content_length(body.size());
+			headers.set_content_type("text/xml");
+			reply.set_headers(headers);
+
+			send_reply(std::move(reply), std::move(body));
 			return;
 		} catch (const std::exception &ex) {
 			MDS_LOG_ERROR("cannot check key for update: %s", ex.what());
