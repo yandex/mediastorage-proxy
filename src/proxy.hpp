@@ -207,7 +207,7 @@ public:
 	void
 	update_elliptics_remotes();
 
-	void cache_update_callback(bool cache_is_expired_);
+	void cache_update_callback();
 
 	mastermind::namespace_state_t::user_settings_ptr_t
 	settings_factory(const std::string &name, const kora::config_t &config);
@@ -230,7 +230,6 @@ public:
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
-	std::atomic<bool> cache_is_expired;
 
 	// write retries
 	size_t limit_of_middle_chunk_attempts;
