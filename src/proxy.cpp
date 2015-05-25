@@ -448,8 +448,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		if (server()->cache_is_expired) {
-			MDS_LOG_ERROR("Ping: libmastermind cache is expired");
+		if (!server()->mastermind()->is_valid()) {
+			MDS_LOG_ERROR("libmastermind has invalid state");
 			send_reply(500);
 			return;
 		}
