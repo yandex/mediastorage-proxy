@@ -1,3 +1,12 @@
+mediastorage-proxy (0.91.1) lucid; urgency=low
+
+  * MDS-775: Proxy checks whether namespace is full
+    Proxy check ns_state::statistics::ns_is_full.
+    If namesapce is full Proxy will reply 507 and will not try to write data
+    into elliptics.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 04 Jun 2015 17:48:22 +0300
+
 mediastorage-proxy (0.90.2) lucid; urgency=low
 
   * MDS-1063: File's key will be responsed if file is alredy uploaded
