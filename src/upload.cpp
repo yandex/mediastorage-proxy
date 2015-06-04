@@ -91,6 +91,12 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		return;
 	}
 
+	if (ns_state.statistics().ns_is_full()) {
+		MDS_LOG_INFO("namespace is marked as full");
+		send_reply(507);
+		return;
+	}
+
 	{
 		if (!server()->check_basic_auth(ns_state.name()
 					, proxy_settings(ns_state).auth_key_for_write
