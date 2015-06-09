@@ -185,8 +185,14 @@ elliptics::req_get::check_lookup_result_entry(const ie::lookup_result_entry &ent
 	switch (status) {
 	case -ENOENT:
 	case -EBADFD:
-	case -EILSEQ:
-		bad_groups.push_back(entry.command()->id.group_id);
+	case -EILSEQ: {
+			auto group = entry.command()->id.group_id;
+
+			if (std::find(cached_groups.begin(), cached_groups.end(), group)
+					== cached_groups.end()) {
+				bad_groups.push_back(group);
+			}
+		}
 	}
 
 	if (status != -ENOENT) {
@@ -544,6 +550,19 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
+	try {
+		cached_groups = get_cached_groups();
+
+		if (!cached_groups.empty()) {
+			std::ostringstream oss;
+			oss << "use cached groups for request: " << cached_groups;
+			auto msg = oss.str();
+			MDS_LOG_INFO("%s", msg.c_str());
+		}
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("cannot get cached groups: %s", ex.what());
+	}
+
 	if (request().url().query().has_item("expiration-time")) {
 		if (!proxy_settings(ns_state).custom_expiration_time) {
 			MDS_LOG_ERROR("using of expiration-time is prohibited");
@@ -595,12 +614,6 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 	some_data_were_sent = false;
 	has_internal_storage_error = false;
 
-	{
-		std::ostringstream oss;
-		oss << "Get: lookup from groups " << m_session->get_groups();
-		auto msg = oss.str();
-		MDS_LOG_INFO("%s", msg.c_str());
-	}
 
 
 	{
@@ -608,10 +621,21 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
 		m_session->set_filter(ie::filters::all);
+		auto session = m_session->clone();
+		auto groups = session.get_groups();
+		groups.insert(groups.end(), cached_groups.begin(), cached_groups.end());
+		session.set_groups(groups);
+
+		{
+			std::ostringstream oss;
+			oss << "lookup groups: " << groups;
+			auto msg = oss.str();
+			MDS_LOG_INFO("%s", msg.c_str());
+		}
 
 		parallel_lookuper_ptr = make_parallel_lookuper(
 				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-				, *m_session, key);
+				, session, key);
 
 		m_session->set_ioflags(ioflags);
 		m_session->set_filter(ie::filters::positive);
@@ -622,6 +646,18 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 
 		find_first_group(std::move(next_callback), std::move(error_callback));
 	}
+}
+
+groups_t
+req_get::get_cached_groups() {
+	auto ell_key = ioremap::elliptics::key{key};
+	m_session->transform(ell_key);
+	auto str_ell_id = std::string{dnet_dump_id_str_full(ell_key.id().id)};
+
+	auto groups = m_session->get_groups();
+	auto couple_id = *std::min_element(groups.begin(), groups.end());
+
+	return server()->mastermind()->get_cached_groups(str_ell_id, couple_id);
 }
 
 std::string generate_etag(uint64_t timestamp, uint64_t size) {

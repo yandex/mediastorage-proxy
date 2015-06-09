@@ -814,8 +814,6 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 				}
 
 				groups = ns_state.couples().get_groups(group);
-				auto cached_groups = mastermind()->get_cache_groups(filename);
-				groups.insert(groups.begin(), cached_groups.begin(), cached_groups.end());
 			} catch (...) {
 				throw std::runtime_error("Cannot to determine groups");
 			}
