@@ -408,10 +408,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		if (config.HasMember("handystats")) {
 			HANDY_CONFIG_JSON(config["handystats"]);
 
-			if (config["handystats"].HasMember("core") &&
-					config["handystats"]["core"].HasMember("enable") &&
-					config["handystats"]["core"]["enable"].IsBool() &&
-					config["handystats"]["core"]["enable"].GetBool()
+			if (config["handystats"].HasMember("enable") &&
+					config["handystats"]["enable"].IsBool() &&
+					config["handystats"]["enable"].GetBool()
 				)
 			{
 				HANDY_INIT();
@@ -814,8 +813,6 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 				}
 
 				groups = ns_state.couples().get_groups(group);
-				auto cached_groups = mastermind()->get_cache_groups(filename);
-				groups.insert(groups.begin(), cached_groups.begin(), cached_groups.end());
 			} catch (...) {
 				throw std::runtime_error("Cannot to determine groups");
 			}

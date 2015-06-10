@@ -350,7 +350,7 @@ upload_multipart_t::start_writing() {
 	}
 
 	auto self = shared_from_this();
-	auto next = [this, self, current_filename] (const std::error_code &error_code) {
+	auto next = [this, self] (const std::error_code &error_code) {
 		on_writer_is_finished(current_filename, error_code);
 	};
 
