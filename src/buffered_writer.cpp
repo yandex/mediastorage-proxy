@@ -25,7 +25,7 @@ class error_category_t
 {
 public:
 	const char *
-	name() const {
+	name() const noexcept {
 		return "buffered writer error category";
 	}
 
