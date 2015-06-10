@@ -1,3 +1,11 @@
+mediastorage-proxy (0.92.1) lucid; urgency=low
+
+  * MDS-1143: Get handler uses cached group
+  * Support gcc 4.8
+  * Handystats: use printf-like syntax for metrics' names.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 10 Jun 2015 18:00:58 +0300
+
 mediastorage-proxy (0.91.1) lucid; urgency=low
 
   * MDS-775: Proxy checks whether namespace is full
