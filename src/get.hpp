@@ -58,6 +58,9 @@ struct req_get
 			, const boost::asio::const_buffer &const_buffer);
 
 private:
+	groups_t
+	get_cached_groups();
+
 	void
 	find_first_group(std::function<void (const ie::lookup_result_entry &)> on_result
 			, std::function<void ()> on_error);
@@ -172,6 +175,7 @@ private:
 	bool some_data_were_sent;
 	bool has_internal_storage_error;
 
+	groups_t cached_groups;
 	std::vector<int> bad_groups;
 
 	boost::optional<std::chrono::seconds> expiration_time;
