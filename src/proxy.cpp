@@ -408,10 +408,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		if (config.HasMember("handystats")) {
 			HANDY_CONFIG_JSON(config["handystats"]);
 
-			if (config["handystats"].HasMember("core") &&
-					config["handystats"]["core"].HasMember("enable") &&
-					config["handystats"]["core"]["enable"].IsBool() &&
-					config["handystats"]["core"]["enable"].GetBool()
+			if (config["handystats"].HasMember("enable") &&
+					config["handystats"]["enable"].IsBool() &&
+					config["handystats"]["enable"].GetBool()
 				)
 			{
 				HANDY_INIT();
