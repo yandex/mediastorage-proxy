@@ -141,6 +141,8 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 		const auto &ell_threads = config["elliptics-threads"];
 		if (ell_threads.HasMember("io-thread-num"))
 			dnet_conf.io_thread_num = ell_threads["io-thread-num"].GetInt();
+		if (ell_threads.HasMember("nonblocking-io-thread-num"))
+			dnet_conf.nonblocking_io_thread_num = ell_threads["nonblocking-io-thread-num"].GetInt();
 		if (ell_threads.HasMember("net-thread-num"))
 			dnet_conf.net_thread_num = ell_threads["net-thread-num"].GetInt();;
 	}
@@ -289,8 +291,6 @@ bool proxy::initialize(const rapidjson::Value &config) {
 	try {
 		MDS_LOG_INFO("Mediastorage-proxy starts");
 
-		cache_is_expired = false;
-
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize libmastermind");
 		m_mastermind = generate_mastermind(config);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
@@ -386,8 +386,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		}
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize cache updater");
-		mastermind()->set_update_cache_ext1_callback(std::bind(&proxy::cache_update_callback, this,
-					std::placeholders::_1));
+		mastermind()->set_update_cache_callback(std::bind(&proxy::cache_update_callback, this));
 		mastermind()->start();
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
@@ -446,8 +445,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
 	try {
-		if (server()->cache_is_expired) {
-			MDS_LOG_ERROR("Ping: libmastermind cache is expired");
+		if (!server()->mastermind()->is_valid()) {
+			MDS_LOG_ERROR("libmastermind has invalid state");
 			send_reply(500);
 			return;
 		}
@@ -998,10 +997,8 @@ proxy::update_elliptics_remotes() {
 	MDS_LOG_INFO("update elliptics remotes is done");
 }
 
-void proxy::cache_update_callback(bool cache_is_expired_) {
+void proxy::cache_update_callback() {
 	auto &&m = mastermind();
-
-	cache_is_expired = cache_is_expired_;
 
 	if (m) {
 		MDS_LOG_INFO("cache updater: starts");

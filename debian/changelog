@@ -1,3 +1,26 @@
+mediastorage-proxy (0.90.2) lucid; urgency=low
+
+  * MDS-1063: File's key will be responsed if file is alredy uploaded
+    If update is forbidden for namespace and file is already uploaded then
+    proxy will response with key, that client can use to get file.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 26 May 2015 10:27:51 +0300
+
+mediastorage-proxy (0.90.1) lucid; urgency=low
+
+  * MDS-490: Ping handler checks libmastermind's state
+    Method is_valid is used to check availableness of namespaces' caches
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 25 May 2015 16:51:19 +0300
+
+mediastorage-proxy (0.89.1) lucid; urgency=low
+
+  * MDS-1031: Read and lookup are processed with NOLOCK
+    If namespace's option check_for_update is true then proxy will lookup
+    and read data having set elliptics's cflag DNET_FLAGS_NOLOCK.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 18 May 2015 18:24:46 +0300
+
 mediastorage-proxy (0.88.1) lucid; urgency=low
 
   * MDS-958: Response will be 507 if -ENOSPC was occured
