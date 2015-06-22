@@ -1,3 +1,9 @@
+mediastorage-proxy (0.93.1) lucid; urgency=low
+
+  * MDS-1187: Catch exceptions from ioremap::elliptics::address
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 22 Jun 2015 16:40:17 +0300
+
 mediastorage-proxy (0.92.1) lucid; urgency=low
 
   * MDS-1143: Get handler uses cached group
