@@ -24,6 +24,7 @@
 #include "ranges.hpp"
 #include "data_container.hpp"
 #include "utils.hpp"
+#include "error.hpp"
 
 #include <swarm/url.hpp>
 
@@ -225,23 +226,28 @@ elliptics::req_get::lookup_result_entries_are_equal(const ie::lookup_result_entr
 
 void
 elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
-	lookup_result_entry_opt.reset(entry);
+	try {
+		lookup_result_entry_opt.reset(entry);
 
-	m_session->set_groups({entry.command()->id.group_id});
-	uint64_t tsec = entry.file_info()->mtime.tsec;
+		m_session->set_groups({entry.command()->id.group_id});
+		uint64_t tsec = entry.file_info()->mtime.tsec;
 
-	auto res = process_precondition_headers(tsec, total_size());
+		auto res = process_precondition_headers(tsec, total_size());
 
-	if (std::get<0>(res)) {
-		return;
+		if (std::get<0>(res)) {
+			return;
+		}
+
+		// TODO: change declaration of try_to_redirect_request
+		if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
+			return;
+		}
+
+		start_reading(total_size(), std::get<1>(res));
+	} catch (const http_error &ex) {
+		MDS_LOG_INFO("http_error: status=\"%s\"; description=\"%s\"", ex.http_status(), ex.what());
+		send_reply(ex.http_status());
 	}
-
-	// TODO: change declaration of try_to_redirect_request
-	if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
-		return;
-	}
-
-	start_reading(total_size(), std::get<1>(res));
 }
 
 void
@@ -812,8 +818,27 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	return std::make_tuple(false, send_whole_file);
 }
 
+req_get::redirect_arg_tag
+req_get::get_redirect_arg() {
+	auto arg = request().url().query().item_value("redirect");
+
+	if (!arg) {
+		return redirect_arg_tag::none;
+	}
+
+	auto str = *arg;
+
+	if (str == "yes") {
+		return redirect_arg_tag::client_want_redirect;
+	}
+
+	return redirect_arg_tag::none;
+}
+
 bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 		, const size_t size, bool send_whole_file) {
+
+	auto redirect_arg = get_redirect_arg();
 
 	{
 		const auto &headers = request().headers();
@@ -821,11 +846,16 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 
 		if (!send_whole_file && range_header) {
 			MDS_LOG_INFO("cannot redirect: ranges should be processed");
+
+			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
+				throw http_error(403, "redirect=yes is not allowed with ranges");
+			}
+
 			return false;
 		}
 	}
 
-	{
+	if (redirect_arg != redirect_arg_tag::client_want_redirect) {
 		auto redirect_size = proxy_settings(ns_state).redirect_content_length_threshold;
 		if (redirect_size == -1) {
 			MDS_LOG_INFO("cannot redirect: redirect-content-length-threshold is infinity");
@@ -848,6 +878,11 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 	try {
 		if (proxy_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot redirect without signature-token");
+
+			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
+				throw http_error(403, "redirect=yes is not allowed for this namespace");
+			}
+
 			return false;
 		}
 
