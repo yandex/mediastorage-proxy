@@ -1,3 +1,13 @@
+mediastorage-proxy (0.93.2) lucid; urgency=low
+
+  * MDS-850: Get handler's redirect arg was added
+    Using argument redirect=yes client can require the proxy to respond
+    with redirect to the storage. The proxy will respond 403 instead of
+    302 if redirection is not allowed for this request that means it is
+    range-request or redirection is not set for the namespace.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 26 Jun 2015 16:09:48 +0300
+
 mediastorage-proxy (0.93.1) lucid; urgency=low
 
   * MDS-1187: Catch exceptions from ioremap::elliptics::address
