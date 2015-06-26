@@ -58,6 +58,11 @@ struct req_get
 			, const boost::asio::const_buffer &const_buffer);
 
 private:
+	enum class redirect_arg_tag {
+		  none
+		, client_want_redirect
+	};
+
 	groups_t
 	get_cached_groups();
 
@@ -146,6 +151,10 @@ private:
 	detect_content_type(const ie::read_result_entry &entry);
 
 	std::tuple<bool, bool> process_precondition_headers(const time_t timestamp, const size_t size);
+
+	redirect_arg_tag
+	get_redirect_arg();
+
 	bool try_to_redirect_request(const ie::sync_lookup_result &slr
 			, const size_t size, bool send_whole_file);
 	void start_reading(const size_t size, bool send_whole_file);
