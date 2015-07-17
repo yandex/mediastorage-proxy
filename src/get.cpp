@@ -161,6 +161,8 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 
 	m_first_chunk = true;
 	m_session->set_groups({entry.command()->id.group_id});
+	set_csum_type(entry);
+
 	on_result();
 }
 
@@ -230,6 +232,8 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 		lookup_result_entry_opt.reset(entry);
 
 		m_session->set_groups({entry.command()->id.group_id});
+		set_csum_type(entry);
+
 		uint64_t tsec = entry.file_info()->mtime.tsec;
 
 		auto res = process_precondition_headers(tsec, total_size());
@@ -247,6 +251,17 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 	} catch (const http_error &ex) {
 		MDS_LOG_INFO("http_error: status=\"%s\"; description=\"%s\"", ex.http_status(), ex.what());
 		send_reply(ex.http_status());
+	}
+}
+
+void
+elliptics::req_get::set_csum_type(const ie::lookup_result_entry &entry) {
+	with_chunked_csum = entry.file_info()->record_flags & DNET_RECORD_FLAGS_CHUNKED_CSUM;
+
+	if (with_chunked_csum) {
+		MDS_LOG_INFO("record has chuncked csum, proxy will check csums for every chunk");
+	} else {
+		MDS_LOG_INFO("record does not have chuncked csum, proxy will check csum only for first chunk");
 	}
 }
 
@@ -616,6 +631,7 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	m_first_chunk = true;
+	with_chunked_csum = false;
 	headers_were_sent = false;
 	some_data_were_sent = false;
 	has_internal_storage_error = false;
@@ -1032,17 +1048,19 @@ req_get::get_session() {
 
 	session.set_timeout(server()->timeout.read);
 
-	if (m_first_chunk) {
-		m_first_chunk = false;
+	if (!with_chunked_csum) {
+		if (m_first_chunk) {
+			m_first_chunk = false;
 
-		session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
-		if (server()->timeout_coef.data_flow_rate) {
-			session.set_timeout(
-					session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
+			session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
+			if (server()->timeout_coef.data_flow_rate) {
+				session.set_timeout(
+						session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
+			}
+
+		} else {
+			session.set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 		}
-
-	} else {
-		session.set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	}
 
 	return session;
