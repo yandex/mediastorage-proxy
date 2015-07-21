@@ -100,6 +100,9 @@ private:
 	process_group_info(const ie::lookup_result_entry &entry);
 
 	void
+	set_csum_type(const ie::lookup_result_entry &entry);
+
+	void
 	read_chunk(size_t offset, size_t size
 			, std::function<void (const ie::read_result_entry &)> on_result
 			, std::function<void ()> on_error);
@@ -180,6 +183,7 @@ private:
 	boost::optional<ie::lookup_result_entry> lookup_result_entry_opt;
 
 	bool m_first_chunk;
+	bool with_chunked_csum;
 	bool headers_were_sent;
 	bool some_data_were_sent;
 	bool has_internal_storage_error;
