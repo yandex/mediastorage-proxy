@@ -1,3 +1,11 @@
+mediastorage-proxy (0.94.1) trusty; urgency=medium
+
+  * MDS-1304: Proxy supports records with chunked csums
+    If record was written into eblob that uses chunked csums the proxy will
+    read every chunk with the csum check.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 21 Jul 2015 16:06:54 +0300
+
 mediastorage-proxy (0.93.2) lucid; urgency=low
 
   * MDS-850: Get handler's redirect arg was added
