@@ -1,3 +1,11 @@
+mediastorage-proxy (0.94.2) trusty; urgency=medium
+
+  * MDS-545: Proxy can ask to close connection
+    If an error occurs during upload handler's processing the proxy will ask
+    thevoid to close connection.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 23 Jul 2015 16:50:39 +0300
+
 mediastorage-proxy (0.94.1) trusty; urgency=medium
 
   * MDS-1304: Proxy supports records with chunked csums
