@@ -255,6 +255,7 @@ elliptics::upload_simple_t::get_next_couple_info(
 			reply.set_code(403);
 			headers.set_content_length(body.size());
 			headers.set_content_type("text/xml");
+			headers.set_keep_alive(false);
 			reply.set_headers(headers);
 
 			send_reply(std::move(reply), std::move(body));
@@ -377,10 +378,10 @@ elliptics::upload_simple_t::send_error() {
 	case internal_error_errc::none:
 		throw std::runtime_error("cannot send 5xx error code because there is no error");
 	case internal_error_errc::general_error:
-		send_reply(500);
+		reply()->send_error(ioremap::swarm::http_response::internal_server_error);
 		break;
 	case internal_error_errc::insufficient_storage:
-		send_reply(507);
+		reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 		break;
 	}
 }
