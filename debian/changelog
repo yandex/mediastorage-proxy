@@ -1,3 +1,9 @@
+mediastorage-proxy (0.94.3) trusty; urgency=medium
+
+  * MDS-1337: Proxy will close connection in case of bad ranges
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 24 Jul 2015 18:48:44 +0300
+
 mediastorage-proxy (0.94.2) trusty; urgency=medium
 
   * MDS-545: Proxy can ask to close connection
