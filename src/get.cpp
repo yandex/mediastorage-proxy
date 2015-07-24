@@ -1005,8 +1005,7 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 			, "bytes */" + boost::lexical_cast<std::string>(size));
 
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-	send_headers(std::move(prospect_http_response)
-			, std::function<void (const boost::system::error_code &)>());
+	send_reply(std::move(prospect_http_response));
 }
 
 size_t
