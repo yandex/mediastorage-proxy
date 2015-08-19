@@ -164,10 +164,16 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 				std::vector<ioremap::elliptics::address> addresses;
 
 				for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
-					addresses.emplace_back(*it);
+					try {
+						addresses.emplace_back(*it);
+					} catch (const std::exception &ex) {
+						MDS_LOG_ERROR("cannot create elliptics address: %s", ex.what());
+					}
 				}
 
-				node.add_remote(addresses);
+				if (!addresses.empty()) {
+					node.add_remote(addresses);
+				}
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
 				oss << "Mediastorage-proxy starts: Can\'t connect to remote nodes: " << ex.what();
@@ -408,10 +414,9 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		if (config.HasMember("handystats")) {
 			HANDY_CONFIG_JSON(config["handystats"]);
 
-			if (config["handystats"].HasMember("core") &&
-					config["handystats"]["core"].HasMember("enable") &&
-					config["handystats"]["core"]["enable"].IsBool() &&
-					config["handystats"]["core"]["enable"].GetBool()
+			if (config["handystats"].HasMember("enable") &&
+					config["handystats"]["enable"].IsBool() &&
+					config["handystats"]["enable"].GetBool()
 				)
 			{
 				HANDY_INIT();
@@ -814,8 +819,6 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 				}
 
 				groups = ns_state.couples().get_groups(group);
-				auto cached_groups = mastermind()->get_cache_groups(filename);
-				groups.insert(groups.begin(), cached_groups.begin(), cached_groups.end());
 			} catch (...) {
 				throw std::runtime_error("Cannot to determine groups");
 			}
@@ -980,13 +983,19 @@ proxy::update_elliptics_remotes() {
 		std::vector<ioremap::elliptics::address> addresses;
 
 		for (auto it = remotes.begin(), end = remotes.end(); it != end; ++it) {
-			addresses.emplace_back(*it);
+			try {
+				addresses.emplace_back(*it);
+			} catch (const std::exception &ex) {
+				MDS_LOG_ERROR("cannot create elliptics address: %s", ex.what());
+			}
 		}
 
-		std::lock_guard<std::mutex> lock_guard(elliptics_node_mutex);
+		if (!addresses.empty()) {
+			std::lock_guard<std::mutex> lock_guard(elliptics_node_mutex);
 
-		if (m_elliptics_node) {
-			m_elliptics_node->add_remote(addresses);
+			if (m_elliptics_node) {
+				m_elliptics_node->add_remote(addresses);
+			}
 		}
 	} catch (const std::exception &ex) {
 		std::ostringstream oss;

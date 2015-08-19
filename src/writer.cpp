@@ -30,7 +30,7 @@ class error_category_t
 {
 public:
 	const char *
-	name() const {
+	name() const noexcept {
 		return "writer error category";
 	}
 
@@ -347,6 +347,8 @@ elliptics::writer_t::write_impl(
 			log_chunk("plain", data_pointer.size());
 			state = state_tag::writing;
 
+			auto key = this->key;
+			auto offset = this->offset;
 			auto command = [key, data_pointer, offset] (ioremap::elliptics::session session)
 			-> ioremap::elliptics::async_write_result {
 				return session.write_plain(key, data_pointer, offset);

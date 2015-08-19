@@ -58,6 +58,14 @@ struct req_get
 			, const boost::asio::const_buffer &const_buffer);
 
 private:
+	enum class redirect_arg_tag {
+		  none
+		, client_want_redirect
+	};
+
+	groups_t
+	get_cached_groups();
+
 	void
 	find_first_group(std::function<void (const ie::lookup_result_entry &)> on_result
 			, std::function<void ()> on_error);
@@ -90,6 +98,9 @@ private:
 
 	void
 	process_group_info(const ie::lookup_result_entry &entry);
+
+	void
+	set_csum_type(const ie::lookup_result_entry &entry);
 
 	void
 	read_chunk(size_t offset, size_t size
@@ -143,6 +154,10 @@ private:
 	detect_content_type(const ie::read_result_entry &entry);
 
 	std::tuple<bool, bool> process_precondition_headers(const time_t timestamp, const size_t size);
+
+	redirect_arg_tag
+	get_redirect_arg();
+
 	bool try_to_redirect_request(const ie::sync_lookup_result &slr
 			, const size_t size, bool send_whole_file);
 	void start_reading(const size_t size, bool send_whole_file);
@@ -168,10 +183,12 @@ private:
 	boost::optional<ie::lookup_result_entry> lookup_result_entry_opt;
 
 	bool m_first_chunk;
+	bool with_chunked_csum;
 	bool headers_were_sent;
 	bool some_data_were_sent;
 	bool has_internal_storage_error;
 
+	groups_t cached_groups;
 	std::vector<int> bad_groups;
 
 	boost::optional<std::chrono::seconds> expiration_time;

@@ -24,6 +24,7 @@
 #include "ranges.hpp"
 #include "data_container.hpp"
 #include "utils.hpp"
+#include "error.hpp"
 
 #include <swarm/url.hpp>
 
@@ -160,6 +161,8 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 
 	m_first_chunk = true;
 	m_session->set_groups({entry.command()->id.group_id});
+	set_csum_type(entry);
+
 	on_result();
 }
 
@@ -185,8 +188,14 @@ elliptics::req_get::check_lookup_result_entry(const ie::lookup_result_entry &ent
 	switch (status) {
 	case -ENOENT:
 	case -EBADFD:
-	case -EILSEQ:
-		bad_groups.push_back(entry.command()->id.group_id);
+	case -EILSEQ: {
+			auto group = entry.command()->id.group_id;
+
+			if (std::find(cached_groups.begin(), cached_groups.end(), group)
+					== cached_groups.end()) {
+				bad_groups.push_back(group);
+			}
+		}
 	}
 
 	if (status != -ENOENT) {
@@ -219,23 +228,41 @@ elliptics::req_get::lookup_result_entries_are_equal(const ie::lookup_result_entr
 
 void
 elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
-	lookup_result_entry_opt.reset(entry);
+	try {
+		lookup_result_entry_opt.reset(entry);
 
-	m_session->set_groups({entry.command()->id.group_id});
-	uint64_t tsec = entry.file_info()->mtime.tsec;
+		m_session->set_groups({entry.command()->id.group_id});
+		set_csum_type(entry);
 
-	auto res = process_precondition_headers(tsec, total_size());
+		uint64_t tsec = entry.file_info()->mtime.tsec;
 
-	if (std::get<0>(res)) {
-		return;
+		auto res = process_precondition_headers(tsec, total_size());
+
+		if (std::get<0>(res)) {
+			return;
+		}
+
+		// TODO: change declaration of try_to_redirect_request
+		if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
+			return;
+		}
+
+		start_reading(total_size(), std::get<1>(res));
+	} catch (const http_error &ex) {
+		MDS_LOG_INFO("http_error: status=\"%s\"; description=\"%s\"", ex.http_status(), ex.what());
+		send_reply(ex.http_status());
 	}
+}
 
-	// TODO: change declaration of try_to_redirect_request
-	if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
-		return;
+void
+elliptics::req_get::set_csum_type(const ie::lookup_result_entry &entry) {
+	with_chunked_csum = entry.file_info()->record_flags & DNET_RECORD_FLAGS_CHUNKED_CSUM;
+
+	if (with_chunked_csum) {
+		MDS_LOG_INFO("record has chuncked csum, proxy will check csums for every chunk");
+	} else {
+		MDS_LOG_INFO("record does not have chuncked csum, proxy will check csum only for first chunk");
 	}
-
-	start_reading(total_size(), std::get<1>(res));
 }
 
 void
@@ -544,6 +571,19 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
+	try {
+		cached_groups = get_cached_groups();
+
+		if (!cached_groups.empty()) {
+			std::ostringstream oss;
+			oss << "use cached groups for request: " << cached_groups;
+			auto msg = oss.str();
+			MDS_LOG_INFO("%s", msg.c_str());
+		}
+	} catch (const std::exception &ex) {
+		MDS_LOG_ERROR("cannot get cached groups: %s", ex.what());
+	}
+
 	if (request().url().query().has_item("expiration-time")) {
 		if (!proxy_settings(ns_state).custom_expiration_time) {
 			MDS_LOG_ERROR("using of expiration-time is prohibited");
@@ -591,16 +631,11 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	m_first_chunk = true;
+	with_chunked_csum = false;
 	headers_were_sent = false;
 	some_data_were_sent = false;
 	has_internal_storage_error = false;
 
-	{
-		std::ostringstream oss;
-		oss << "Get: lookup from groups " << m_session->get_groups();
-		auto msg = oss.str();
-		MDS_LOG_INFO("%s", msg.c_str());
-	}
 
 
 	{
@@ -608,10 +643,21 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		m_session->set_ioflags(ioflags | DNET_IO_FLAGS_NOCSUM);
 		m_session->set_timeout(server()->timeout.lookup);
 		m_session->set_filter(ie::filters::all);
+		auto session = m_session->clone();
+		auto groups = session.get_groups();
+		groups.insert(groups.end(), cached_groups.begin(), cached_groups.end());
+		session.set_groups(groups);
+
+		{
+			std::ostringstream oss;
+			oss << "lookup groups: " << groups;
+			auto msg = oss.str();
+			MDS_LOG_INFO("%s", msg.c_str());
+		}
 
 		parallel_lookuper_ptr = make_parallel_lookuper(
 				ioremap::swarm::logger(logger(), blackhole::log::attributes_t())
-				, *m_session, key);
+				, session, key);
 
 		m_session->set_ioflags(ioflags);
 		m_session->set_filter(ie::filters::positive);
@@ -622,6 +668,18 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 
 		find_first_group(std::move(next_callback), std::move(error_callback));
 	}
+}
+
+groups_t
+req_get::get_cached_groups() {
+	auto ell_key = ioremap::elliptics::key{key};
+	m_session->transform(ell_key);
+	auto str_ell_id = std::string{dnet_dump_id_str_full(ell_key.id().id)};
+
+	auto groups = m_session->get_groups();
+	auto couple_id = *std::min_element(groups.begin(), groups.end());
+
+	return server()->mastermind()->get_cached_groups(str_ell_id, couple_id);
 }
 
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
@@ -776,8 +834,27 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	return std::make_tuple(false, send_whole_file);
 }
 
+req_get::redirect_arg_tag
+req_get::get_redirect_arg() {
+	auto arg = request().url().query().item_value("redirect");
+
+	if (!arg) {
+		return redirect_arg_tag::none;
+	}
+
+	auto str = *arg;
+
+	if (str == "yes") {
+		return redirect_arg_tag::client_want_redirect;
+	}
+
+	return redirect_arg_tag::none;
+}
+
 bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 		, const size_t size, bool send_whole_file) {
+
+	auto redirect_arg = get_redirect_arg();
 
 	{
 		const auto &headers = request().headers();
@@ -785,11 +862,16 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 
 		if (!send_whole_file && range_header) {
 			MDS_LOG_INFO("cannot redirect: ranges should be processed");
+
+			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
+				throw http_error(403, "redirect=yes is not allowed with ranges");
+			}
+
 			return false;
 		}
 	}
 
-	{
+	if (redirect_arg != redirect_arg_tag::client_want_redirect) {
 		auto redirect_size = proxy_settings(ns_state).redirect_content_length_threshold;
 		if (redirect_size == -1) {
 			MDS_LOG_INFO("cannot redirect: redirect-content-length-threshold is infinity");
@@ -812,6 +894,11 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
 	try {
 		if (proxy_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot redirect without signature-token");
+
+			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
+				throw http_error(403, "redirect=yes is not allowed for this namespace");
+			}
+
 			return false;
 		}
 
@@ -918,8 +1005,7 @@ void req_get::start_reading(const size_t size, bool send_whole_file) {
 			, "bytes */" + boost::lexical_cast<std::string>(size));
 
 	MDS_REQUEST_REPLY("get", prospect_http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-	send_headers(std::move(prospect_http_response)
-			, std::function<void (const boost::system::error_code &)>());
+	send_reply(std::move(prospect_http_response));
 }
 
 size_t
@@ -961,17 +1047,19 @@ req_get::get_session() {
 
 	session.set_timeout(server()->timeout.read);
 
-	if (m_first_chunk) {
-		m_first_chunk = false;
+	if (!with_chunked_csum) {
+		if (m_first_chunk) {
+			m_first_chunk = false;
 
-		session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
-		if (server()->timeout_coef.data_flow_rate) {
-			session.set_timeout(
-					session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
+			session.set_ioflags(m_session->get_ioflags() & ~DNET_IO_FLAGS_NOCSUM);
+			if (server()->timeout_coef.data_flow_rate) {
+				session.set_timeout(
+						session.get_timeout() + total_size() / server()->timeout_coef.data_flow_rate);
+			}
+
+		} else {
+			session.set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 		}
-
-	} else {
-		session.set_ioflags(m_session->get_ioflags() | DNET_IO_FLAGS_NOCSUM);
 	}
 
 	return session;

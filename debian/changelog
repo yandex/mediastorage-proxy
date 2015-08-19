@@ -1,3 +1,58 @@
+mediastorage-proxy (0.94.3) trusty; urgency=medium
+
+  * MDS-1337: Proxy will close connection in case of bad ranges
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 24 Jul 2015 18:48:44 +0300
+
+mediastorage-proxy (0.94.2) trusty; urgency=medium
+
+  * MDS-545: Proxy can ask to close connection
+    If an error occurs during upload handler's processing the proxy will ask
+    thevoid to close connection.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 23 Jul 2015 16:50:39 +0300
+
+mediastorage-proxy (0.94.1) trusty; urgency=medium
+
+  * MDS-1304: Proxy supports records with chunked csums
+    If record was written into eblob that uses chunked csums the proxy will
+    read every chunk with the csum check.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 21 Jul 2015 16:06:54 +0300
+
+mediastorage-proxy (0.93.2) lucid; urgency=low
+
+  * MDS-850: Get handler's redirect arg was added
+    Using argument redirect=yes client can require the proxy to respond
+    with redirect to the storage. The proxy will respond 403 instead of
+    302 if redirection is not allowed for this request that means it is
+    range-request or redirection is not set for the namespace.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 26 Jun 2015 16:09:48 +0300
+
+mediastorage-proxy (0.93.1) lucid; urgency=low
+
+  * MDS-1187: Catch exceptions from ioremap::elliptics::address
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Mon, 22 Jun 2015 16:40:17 +0300
+
+mediastorage-proxy (0.92.1) lucid; urgency=low
+
+  * MDS-1143: Get handler uses cached group
+  * Support gcc 4.8
+  * Handystats: use printf-like syntax for metrics' names.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Wed, 10 Jun 2015 18:00:58 +0300
+
+mediastorage-proxy (0.91.1) lucid; urgency=low
+
+  * MDS-775: Proxy checks whether namespace is full
+    Proxy check ns_state::statistics::ns_is_full.
+    If namesapce is full Proxy will reply 507 and will not try to write data
+    into elliptics.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 04 Jun 2015 17:48:22 +0300
+
 mediastorage-proxy (0.90.2) lucid; urgency=low
 
   * MDS-1063: File's key will be responsed if file is alredy uploaded

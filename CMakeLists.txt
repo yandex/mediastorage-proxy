@@ -14,12 +14,13 @@ set(REQUIRED_LIBRARIES
 	elliptics_cpp
 	mastermind
 	boost_system
-	boost_thread-mt
+	boost_thread
 	swarm
 	msgpack
 	magic
 	${GLIB_LIBRARY}
 	crypto++
+	crypto
 	curl
 	handystats
 	kora-util

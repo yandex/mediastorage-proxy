@@ -103,14 +103,14 @@ upload_multipart_t::on_headers(ioremap::thevoid::http_request &&http_request_) {
 		auto pos = type.find("boundary=");
 		if (pos == std::string::npos) {
 			MDS_LOG_INFO("boundary is missing");
-			send_reply(400);
+			reply()->send_error(ioremap::swarm::http_response::bad_request);
 			return;
 		}
 		pos += sizeof("boundary=") - 1;
 		boundary = std::string("--") + type.substr(pos);
 	} else {
 		MDS_LOG_INFO("Cannot process request without content-type");
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
 		return;
 	}
 
@@ -350,7 +350,7 @@ upload_multipart_t::start_writing() {
 	}
 
 	auto self = shared_from_this();
-	auto next = [this, self, current_filename] (const std::error_code &error_code) {
+	auto next = [this, self] (const std::error_code &error_code) {
 		on_writer_is_finished(current_filename, error_code);
 	};
 
@@ -594,13 +594,13 @@ upload_multipart_t::send_error() {
 	case error_type_tag::none:
 		throw std::runtime_error("unexpected error type");
 	case error_type_tag::insufficient_storage:
-		send_reply(507);
+		reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 		break;
 	case error_type_tag::internal:
-		send_reply(500);
+		reply()->send_error(ioremap::swarm::http_response::internal_server_error);
 		break;
 	case error_type_tag::multipart:
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
 		break;
 	case error_type_tag::client:
 		close(boost::system::error_code());

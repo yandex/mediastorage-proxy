@@ -51,13 +51,13 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		total_size = *arg;
 	} else {
 		MDS_LOG_INFO("missing Content-Length");
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
 		return;
 	}
 
 	if (total_size == 0) {
 		MDS_LOG_INFO("Content-Length must be greater than zero");
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
 		return;
 	}
 
@@ -79,7 +79,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		file_info = server()->get_file_info(http_request);
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("cannot parse file info: %s", ex.what());
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
 		return;
 	}
 
@@ -87,7 +87,13 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	if (!ns_state) {
 		MDS_LOG_INFO("cannot determine a namespace");
-		send_reply(400);
+		reply()->send_error(ioremap::swarm::http_response::bad_request);
+		return;
+	}
+
+	if (ns_state.statistics().ns_is_full()) {
+		MDS_LOG_INFO("namespace is marked as full");
+		reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 		return;
 	}
 
@@ -104,6 +110,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 			reply.set_code(401);
 			headers.add("WWW-Authenticate", std::string("Basic realm=\"") + ns_state.name() + "\"");
 			headers.set_content_length(0);
+			headers.set_keep_alive(false);
 			reply.set_headers(headers);
 			send_reply(std::move(reply));
 			return;
@@ -128,7 +135,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 						"client tries to upload multipart with total_size=%d"
 						", but multipart_content_length_threshold=%d"
 						, static_cast<int>(total_size), static_cast<int>(size));
-				send_reply(403);
+				reply()->send_error(ioremap::swarm::http_response::forbidden);
 				return;
 			}
 
@@ -164,7 +171,7 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 	if (auto arg = http_request.url().query().item_value("couple_id")) {
 		if (!proxy_settings(ns_state).can_choose_couple_to_upload) {
 			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
-			send_reply(403);
+			reply()->send_error(ioremap::swarm::http_response::forbidden);
 			return boost::none;
 		}
 
@@ -174,7 +181,7 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 			couple_id = boost::lexical_cast<int>(*arg);
 		} catch (...) {
 			MDS_LOG_INFO("couple_id is malformed: \"%s\"", arg->c_str());
-			send_reply(400);
+			reply()->send_error(ioremap::swarm::http_response::bad_request);
 			return boost::none;
 		}
 
@@ -182,13 +189,13 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 
 		if (couple.empty()) {
 			MDS_LOG_INFO("cannot obtain couple by couple_id: %d", couple_id);
-			send_reply(400);
+			reply()->send_error(ioremap::swarm::http_response::bad_request);
 			return boost::none;
 		}
 
 		if (couple_id != *std::min_element(couple.begin(), couple.end())) {
 			MDS_LOG_INFO("client tried to use no minimum group as couple_id: %d", couple_id);
-			send_reply(400);
+			reply()->send_error(ioremap::swarm::http_response::bad_request);
 			return boost::none;
 		}
 
@@ -196,7 +203,7 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 
 		if (space < total_size) {
 			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
-			send_reply(507);
+			reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 			return boost::none;
 		}
 
@@ -219,13 +226,13 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
 				, static_cast<int>(ns_state.settings().groups_count())
 				, ns_state.name().c_str(), e.code().message().c_str());
-			send_reply(507);
+			reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 			return boost::none;
 		} catch (const std::system_error &e) {
 			MDS_LOG_ERROR("cannot obtain any couple size=%d namespace=%s : %s"
 				, static_cast<int>(ns_state.settings().groups_count())
 				, ns_state.name().c_str(), e.code().message().c_str());
-			send_reply(500);
+			reply()->send_error(ioremap::swarm::http_response::internal_server_error);
 			return boost::none;
 		}
 	}
