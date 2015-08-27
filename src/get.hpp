@@ -158,8 +158,7 @@ private:
 	redirect_arg_tag
 	get_redirect_arg();
 
-	bool try_to_redirect_request(const ie::sync_lookup_result &slr
-			, const size_t size, bool send_whole_file);
+	bool try_to_redirect_request(const ie::sync_lookup_result &slr, const size_t size);
 	void start_reading(const size_t size, bool send_whole_file);
 
 	size_t
