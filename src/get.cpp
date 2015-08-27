@@ -243,7 +243,7 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 		}
 
 		// TODO: change declaration of try_to_redirect_request
-		if (try_to_redirect_request({entry}, total_size(), std::get<1>(res))) {
+		if (try_to_redirect_request({entry}, total_size())) {
 			return;
 		}
 
@@ -851,25 +851,9 @@ req_get::get_redirect_arg() {
 	return redirect_arg_tag::none;
 }
 
-bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr
-		, const size_t size, bool send_whole_file) {
+bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const size_t size) {
 
 	auto redirect_arg = get_redirect_arg();
-
-	{
-		const auto &headers = request().headers();
-		auto range_header = headers.get("Range");
-
-		if (!send_whole_file && range_header) {
-			MDS_LOG_INFO("cannot redirect: ranges should be processed");
-
-			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
-				throw http_error(403, "redirect=yes is not allowed with ranges");
-			}
-
-			return false;
-		}
-	}
 
 	if (redirect_arg != redirect_arg_tag::client_want_redirect) {
 		auto redirect_size = proxy_settings(ns_state).redirect_content_length_threshold;
