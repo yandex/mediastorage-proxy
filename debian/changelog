@@ -1,3 +1,17 @@
+mediastorage-proxy (0.95.2) trusty; urgency=medium
+
+  * elliptics-dev (= 2.26.6.0-1)
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 28 Aug 2015 12:47:03 +0300
+
+mediastorage-proxy (0.95.1) trusty; urgency=medium
+
+  * MDS-1461: Range header is ignored in redirect mechanism
+    The proxy ignores a range header in request when checks whether request
+    should be redirected.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 27 Aug 2015 20:39:19 +0300
+
 mediastorage-proxy (0.94.3) trusty; urgency=medium
 
   * MDS-1337: Proxy will close connection in case of bad ranges
