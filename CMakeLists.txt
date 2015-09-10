@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 set(TARGET mediastorage-proxy)
 
-set(CMAKE_CXX_FLAGS "-Wall -pedantic -std=c++0x")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic -std=c++0x")
 
 find_package(PkgConfig)
 pkg_check_modules(glib-2.0 glib-2.0)
