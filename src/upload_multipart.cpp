@@ -88,6 +88,7 @@ upload_multipart_t::upload_multipart_t(mastermind::namespace_state_t ns_state_, 
 	: interrupt_writers_once([this] { interrupt_writers(); })
 	, join_upload_tasks([this] { on_writers_are_finished(); })
 	, join_remove_tasks([this] { send_error(); })
+	, error_type(error_type_tag::none)
 	, ns_state(std::move(ns_state_))
 	, couple(std::move(couple_))
 	, couple_id(*std::min_element(couple.begin(), couple.end()))
@@ -588,11 +589,13 @@ upload_multipart_t::on_removed(util::expected<remove_result_t> result) {
 
 void
 upload_multipart_t::send_error() {
-	MDS_LOG_INFO("send error");
+	auto err = get_error();
+
+	MDS_LOG_INFO("send error: %s", static_cast<int>(err));
 
 	switch (get_error()) {
 	case error_type_tag::none:
-		throw std::runtime_error("unexpected error type");
+		throw std::runtime_error("unexpected error type: none");
 	case error_type_tag::insufficient_storage:
 		reply()->send_error(ioremap::swarm::http_response::insufficient_storage);
 		break;
@@ -605,6 +608,9 @@ upload_multipart_t::send_error() {
 	case error_type_tag::client:
 		close(boost::system::error_code());
 		break;
+	default:
+		throw std::runtime_error("unexpected error type: "
+				+ boost::lexical_cast<std::string>(static_cast<int>(err)));
 	}
 }
 
