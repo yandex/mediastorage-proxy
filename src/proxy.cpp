@@ -1085,6 +1085,14 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 				redirect_config.at<int>("expire-time", 0));
 		settings->redirect_content_length_threshold
 			= redirect_config.at<int>("content-length-threshold", -1);
+
+		// redirect_content_length_threshold is allowed to be
+		// either -1 or 0 or any positive number
+		if (settings->redirect_content_length_threshold < -1) {
+			throw std::runtime_error{"bad value of redirect_content_length_threshold: "
+				+ boost::lexical_cast<std::string>(
+						settings->redirect_content_length_threshold)};
+		}
 	}
 
 	if (config.has("features")) {

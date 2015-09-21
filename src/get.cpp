@@ -865,7 +865,7 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 			return false;
 		}
 
-		if (redirect_size > size) {
+		if (static_cast<size_t>(redirect_size) > size) {
 			std::ostringstream oss;
 			oss << "cannot redirect: file is to small;"
 				<< " file-size=" << size << ";"
