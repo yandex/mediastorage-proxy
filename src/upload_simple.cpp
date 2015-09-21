@@ -61,6 +61,8 @@ upload_simple_t::on_request(const ioremap::thevoid::http_request &http_request) 
 
 void
 upload_simple_t::on_chunk(const boost::asio::const_buffer &buffer, unsigned int flags) {
+	(void) flags;
+
 	const char *buffer_data = boost::asio::buffer_cast<const char *>(buffer);
 	const size_t buffer_size = boost::asio::buffer_size(buffer);
 

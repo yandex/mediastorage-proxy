@@ -38,6 +38,8 @@ elliptics::download_info_t::download_info_t(const std::string &handler_name_)
 void
 elliptics::download_info_t::on_request(const ioremap::thevoid::http_request &req
 		, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	MDS_LOG_INFO("Download info: handle request: %s", req.url().path().c_str());
 
 	try {

@@ -537,6 +537,8 @@ namespace elliptics {
 void
 req_get::on_request(const ioremap::thevoid::http_request &http_request
 		, const boost::asio::const_buffer &const_buffer) {
+	(void) const_buffer;
+
 	MDS_REQUEST_START("get", reinterpret_cast<uint64_t>(this->reply().get()));
 
 	MDS_LOG_INFO("Get: handle request");
