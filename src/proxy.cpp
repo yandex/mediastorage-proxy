@@ -449,6 +449,8 @@ bool proxy::initialize(const rapidjson::Value &config) {
 }
 
 void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	try {
 		if (!server()->mastermind()->is_valid()) {
 			MDS_LOG_ERROR("libmastermind has invalid state");
@@ -545,6 +547,8 @@ void proxy::req_ping::on_request(const ioremap::thevoid::http_request &req, cons
 }
 
 void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	try {
 		MDS_LOG_INFO("Cache: handle request: %s", req.url().path().c_str());
 		auto query_list = req.url().query();
@@ -603,6 +607,8 @@ void proxy::req_cache::on_request(const ioremap::thevoid::http_request &req, con
 }
 
 void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	try {
 		auto query_list = req.url().query();
 		auto cache = req.url().path().substr(sizeof("/cache-update") - 1);
@@ -633,6 +639,8 @@ void proxy::req_cache_update::on_request(const ioremap::thevoid::http_request &r
 }
 
 void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	try {
 		mastermind::namespace_state_t ns_state;
 		try {
@@ -664,6 +672,9 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 }
 
 void proxy::req_stats::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) req;
+	(void) buffer;
+
 	std::string json = HANDY_JSON_DUMP();
 
 	ioremap::thevoid::http_response reply;
@@ -1074,6 +1085,14 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 				redirect_config.at<int>("expire-time", 0));
 		settings->redirect_content_length_threshold
 			= redirect_config.at<int>("content-length-threshold", -1);
+
+		// redirect_content_length_threshold is allowed to be
+		// either -1 or 0 or any positive number
+		if (settings->redirect_content_length_threshold < -1) {
+			throw std::runtime_error{"bad value of redirect_content_length_threshold: "
+				+ boost::lexical_cast<std::string>(
+						settings->redirect_content_length_threshold)};
+		}
 	}
 
 	if (config.has("features")) {
@@ -1087,6 +1106,14 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 
 			settings->multipart_content_length_threshold
 				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
+
+			// multipart_content_length_threshold is allowed to be
+			// either -1 or 0 or any positive number
+			if (settings->multipart_content_length_threshold < -1) {
+				throw std::runtime_error{"bad value of multipart_content_length_threshold: "
+					+ boost::lexical_cast<std::string>(
+							settings->multipart_content_length_threshold)};
+			}
 		}
 
 		settings->custom_expiration_time

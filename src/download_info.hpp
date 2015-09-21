@@ -55,7 +55,7 @@ private:
 	check_query_args();
 
 	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
+	prepare_session(const mastermind::namespace_state_t &ns_state);
 
 	void
 	process_get(ioremap::elliptics::session session, const ioremap::elliptics::key key);
