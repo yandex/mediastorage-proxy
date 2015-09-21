@@ -160,7 +160,7 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 	MDS_LOG_INFO("%s", msg.c_str());
 
 	m_first_chunk = true;
-	m_session->set_groups({entry.command()->id.group_id});
+	m_session->set_groups({static_cast<int>(entry.command()->id.group_id)});
 	set_csum_type(entry);
 
 	on_result();
@@ -231,7 +231,7 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 	try {
 		lookup_result_entry_opt.reset(entry);
 
-		m_session->set_groups({entry.command()->id.group_id});
+		m_session->set_groups({static_cast<int>(entry.command()->id.group_id)});
 		set_csum_type(entry);
 
 		uint64_t tsec = entry.file_info()->mtime.tsec;
