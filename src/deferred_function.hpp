@@ -38,7 +38,7 @@ public:
 
 	void
 	defer(int count = 1) {
-		counter += 1;
+		counter += count;
 	}
 
 	bool

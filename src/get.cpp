@@ -28,6 +28,7 @@
 
 #include <swarm/url.hpp>
 
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <crypto++/md5.h>
 
 #include <boost/asio/buffer.hpp>
@@ -160,7 +161,7 @@ elliptics::req_get::next_other_group_is_found(const ie::sync_lookup_result &entr
 	MDS_LOG_INFO("%s", msg.c_str());
 
 	m_first_chunk = true;
-	m_session->set_groups({entry.command()->id.group_id});
+	m_session->set_groups({static_cast<int>(entry.command()->id.group_id)});
 	set_csum_type(entry);
 
 	on_result();
@@ -231,7 +232,7 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 	try {
 		lookup_result_entry_opt.reset(entry);
 
-		m_session->set_groups({entry.command()->id.group_id});
+		m_session->set_groups({static_cast<int>(entry.command()->id.group_id)});
 		set_csum_type(entry);
 
 		uint64_t tsec = entry.file_info()->mtime.tsec;
@@ -537,6 +538,8 @@ namespace elliptics {
 void
 req_get::on_request(const ioremap::thevoid::http_request &http_request
 		, const boost::asio::const_buffer &const_buffer) {
+	(void) const_buffer;
+
 	MDS_REQUEST_START("get", reinterpret_cast<uint64_t>(this->reply().get()));
 
 	MDS_LOG_INFO("Get: handle request");
@@ -685,7 +688,7 @@ req_get::get_cached_groups() {
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
 	using namespace CryptoPP;
 
-	MD5 hash;
+	Weak::MD5 hash;
 
 	hash.Update((const byte *)&timestamp, sizeof(uint64_t));
 	hash.Update((const byte *)&size, sizeof(uint64_t));
@@ -862,7 +865,7 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 			return false;
 		}
 
-		if (redirect_size > size) {
+		if (static_cast<size_t>(redirect_size) > size) {
 			std::ostringstream oss;
 			oss << "cannot redirect: file is to small;"
 				<< " file-size=" << size << ";"

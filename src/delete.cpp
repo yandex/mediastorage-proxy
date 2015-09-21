@@ -23,6 +23,8 @@
 
 namespace elliptics {
 void req_delete::on_request(const ioremap::thevoid::http_request &req, const boost::asio::const_buffer &buffer) {
+	(void) buffer;
+
 	try {
 		MDS_LOG_INFO("Delete: handle request: %s", req.url().path().c_str());
 		mastermind::namespace_state_t ns_state;

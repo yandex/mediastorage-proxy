@@ -352,7 +352,7 @@ upload_multipart_t::start_writing() {
 
 	auto self = shared_from_this();
 	auto next = [this, self] (const std::error_code &error_code) {
-		on_writer_is_finished(current_filename, error_code);
+		on_writer_is_finished(error_code);
 	};
 
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
@@ -368,8 +368,7 @@ upload_multipart_t::start_writing() {
 }
 
 void
-upload_multipart_t::on_writer_is_finished(const std::string &current_filename
-		, const std::error_code &error_code) {
+upload_multipart_t::on_writer_is_finished(const std::error_code &error_code) {
 	if (error_code) {
 		const auto interrupted_error = make_error_code(buffered_writer_errc::interrupted);
 

@@ -130,7 +130,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 		if (!res) {
 			auto size = proxy_settings(ns_state).multipart_content_length_threshold;
 
-			if (size != -1 && size < total_size) {
+			if (size != -1 && static_cast<size_t>(size) < total_size) {
 				MDS_LOG_INFO(
 						"client tries to upload multipart with total_size=%d"
 						", but multipart_content_length_threshold=%d"

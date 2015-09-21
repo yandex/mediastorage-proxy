@@ -123,8 +123,7 @@ private:
 	void start_writing();
 
 	void
-	on_writer_is_finished(const std::string &current_filename
-			, const std::error_code &error_code);
+	on_writer_is_finished(const std::error_code &error_code);
 
 	void
 	set_error(error_type_tag e);
