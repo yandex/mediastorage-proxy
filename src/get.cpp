@@ -28,6 +28,7 @@
 
 #include <swarm/url.hpp>
 
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <crypto++/md5.h>
 
 #include <boost/asio/buffer.hpp>
@@ -687,7 +688,7 @@ req_get::get_cached_groups() {
 std::string generate_etag(uint64_t timestamp, uint64_t size) {
 	using namespace CryptoPP;
 
-	MD5 hash;
+	Weak::MD5 hash;
 
 	hash.Update((const byte *)&timestamp, sizeof(uint64_t));
 	hash.Update((const byte *)&size, sizeof(uint64_t));
