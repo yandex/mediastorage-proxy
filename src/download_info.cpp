@@ -52,7 +52,7 @@ elliptics::download_info_t::on_request(const ioremap::thevoid::http_request &req
 
 		// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run
 		// in this moment. Hence session can be safely used without any check.
-		std::tie(session, key) = prepare_session(req.url().path(), ns_state);
+		std::tie(session, key) = prepare_session(ns_state);
 
 		if (proxy_settings(ns_state).check_for_update) {
 			session->set_cflags(session->get_cflags() | DNET_FLAGS_NOLOCK);
@@ -171,8 +171,7 @@ elliptics::download_info_t::check_query_args() {
 }
 
 std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
-elliptics::download_info_t::prepare_session(const std::string &url
-		, const mastermind::namespace_state_t &ns_state) {
+elliptics::download_info_t::prepare_session(const mastermind::namespace_state_t &ns_state) {
 	try {
 		auto prep_session = server()->prepare_session(request().url().path(), ns_state);
 
