@@ -1098,6 +1098,14 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 
 			settings->multipart_content_length_threshold
 				= multipart_features_config.at<int64_t>("content-length-threshold", 0);
+
+			// multipart_content_length_threshold is allowed to be
+			// either -1 or 0 or any positive number
+			if (settings->multipart_content_length_threshold < -1) {
+				throw std::runtime_error{"bad value of multipart_content_length_threshold: "
+					+ boost::lexical_cast<std::string>(
+							settings->multipart_content_length_threshold)};
+			}
 		}
 
 		settings->custom_expiration_time
