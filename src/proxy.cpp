@@ -79,7 +79,23 @@ ioremap::elliptics::session generate_session(const ioremap::elliptics::node &nod
 
 std::pair<std::string, std::string> get_filename(const ioremap::swarm::http_request &req) {
 	auto scriptname = req.url().path();
-	auto begin = scriptname.find('/', 1) + 1;
+
+	if (scriptname.empty()) {
+		throw std::runtime_error{"script name is empty"};
+	}
+
+	auto begin = scriptname.find('/', 1);
+
+	if (begin == std::string::npos) {
+		throw std::runtime_error{"filename is not found in script name"};
+	}
+
+	begin += 1;
+
+	if (begin == scriptname.size()) {
+		throw std::runtime_error{"filename is empty"};
+	}
+
 	auto filename = scriptname.substr(begin);
 
 	auto namespace_end = begin - 1;
