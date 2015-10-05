@@ -121,6 +121,13 @@ elliptics::writer_t::writer_t(ioremap::swarm::logger bh_logger_
 void
 elliptics::writer_t::write(const ioremap::elliptics::data_pointer &data_pointer
 		, callback_t next) {
+	// We need to prolong the lifetime of the shared state here to be sure it is alive
+	// till the end of the function.
+	// The reason of being uncertain is calling async_result.connect(next_) in this function below.
+	// In that call user's callback may be called in-place, and the only external shared pointer to
+	// the shared state may be destroyed there.
+	auto self = shared_from_this();
+
 	lock_guard_t lock_guard(state_mutex);
 	(void) lock_guard;
 
