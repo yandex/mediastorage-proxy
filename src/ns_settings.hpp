@@ -56,6 +56,7 @@ struct ns_settings_t
 
 	std::chrono::seconds redirect_expire_time;
 	int64_t redirect_content_length_threshold;
+	std::vector<std::string> redirect_query_args;
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
