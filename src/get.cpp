@@ -854,6 +854,23 @@ req_get::get_redirect_arg() {
 	return redirect_arg_tag::none;
 }
 
+std::vector<std::tuple<std::string, std::string>>
+req_get::get_redirect_query_args() {
+	std::vector<std::tuple<std::string, std::string>> result;
+
+	const auto &query = request().url().query();
+	const auto &redirect_query_args = ns_settings(ns_state).redirect_query_args;
+
+	for (auto it = redirect_query_args.begin(), end = redirect_query_args.end()
+			; it != end; ++it) {
+		if (auto arg = query.item_value(*it)) {
+			result.emplace_back(std::make_tuple(*it, *arg));
+		}
+	}
+
+	return result;
+}
+
 bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const size_t size) {
 
 	auto redirect_arg = get_redirect_arg();
