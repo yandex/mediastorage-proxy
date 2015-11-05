@@ -126,7 +126,7 @@ upload_simple_t::send_result() {
 		<< "\" size=\"" << result.total_size
 		<< "\" key=\"";
 
-	if (proxy_settings(ns_state).static_couple.empty()) {
+	if (ns_settings(ns_state).static_couple.empty()) {
 		oss << couple_info.id << '/';
 	}
 
@@ -243,7 +243,7 @@ elliptics::upload_simple_t::get_next_couple_info(
 			oss << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<post>\n";
 
 			oss << "<key>";
-			if (proxy_settings(ns_state).static_couple.empty()) {
+			if (ns_settings(ns_state).static_couple.empty()) {
 				oss << couple_info.id << '/';
 			}
 			oss << encode_for_xml(filename);
@@ -286,7 +286,7 @@ elliptics::upload_simple_t::make_writer(const groups_t &groups) {
 			copy_logger(logger())
 			, session, key
 			, *request().headers().content_length(), offset
-			, server()->timeout_coef.data_flow_rate , proxy_settings(ns_state).success_copies_num
+			, server()->timeout_coef.data_flow_rate , ns_settings(ns_state).success_copies_num
 			, server()->limit_of_middle_chunk_attempts
 			, server()->scale_retry_timeout
 			);

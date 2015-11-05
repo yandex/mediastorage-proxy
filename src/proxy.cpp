@@ -806,8 +806,8 @@ int proxy::die_limit() const {
 }
 
 std::vector<int> proxy::groups_for_upload(const mastermind::namespace_state_t &ns_state, uint64_t size) {
-	if (!proxy_settings(ns_state).static_couple.empty())
-		return proxy_settings(ns_state).static_couple;
+	if (!ns_settings(ns_state).static_couple.empty())
+		return ns_settings(ns_state).static_couple;
 	return ns_state.weights().groups(size);
 }
 
@@ -825,7 +825,7 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 	std::string filename;
 
 	if (session) {
-		if (proxy_settings(ns_state).static_couple.empty()) {
+		if (ns_settings(ns_state).static_couple.empty()) {
 			auto bg = url.find('/', 1) + 1;
 			auto eg = url.find('/', bg);
 			auto bf = eg + 1;
@@ -848,7 +848,7 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 			auto bf = url.find('/', 1) + 1;
 			auto ef = url.find('?', bf);
 			url.substr(bf, ef - bf).swap(filename);
-			groups = proxy_settings(ns_state).static_couple;
+			groups = ns_settings(ns_state).static_couple;
 		}
 
 		session->set_groups(groups);
@@ -928,7 +928,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 	, boost::optional<std::chrono::seconds> optional_expiration_time) {
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
-	if (proxy_settings(ns_state).sign_token.empty()) {
+	if (ns_settings(ns_state).sign_token.empty()) {
 		throw std::runtime_error(
 				"cannot generate signature for elliptics file without signature-token");
 	}
@@ -941,7 +941,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 			continue;
 		}
 
-		lookup_result entry(*it, proxy_settings(ns_state).sign_port);
+		lookup_result entry(*it, ns_settings(ns_state).sign_port);
 
 		std::string host;
 		std::string path = entry.path();
@@ -950,7 +950,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 		{
 			{
-				const auto &path_prefix = proxy_settings(ns_state).sign_path_prefix;
+				const auto &path_prefix = ns_settings(ns_state).sign_path_prefix;
 				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
 					std::ostringstream oss;
 					oss
@@ -973,7 +973,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 
 				auto now = system_clock::now().time_since_epoch();
 				auto expiration_time = optional_expiration_time.get_value_or(
-						proxy_settings(ns_state).redirect_expire_time);
+						ns_settings(ns_state).redirect_expire_time);
 
 				std::ostringstream ts_oss;
 				ts_oss
@@ -985,7 +985,7 @@ proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_look
 			{
 				std::ostringstream oss;
 				oss << host << path << '/' << ts;
-				sign = hmac(oss.str(), proxy_settings(ns_state).sign_token);
+				sign = hmac(oss.str(), ns_settings(ns_state).sign_token);
 			}
 		}
 
@@ -1042,7 +1042,7 @@ void proxy::cache_update_callback() {
 
 mastermind::namespace_state_t::user_settings_ptr_t
 proxy::settings_factory(const std::string &name, const kora::config_t &config) {
-	std::unique_ptr<settings_t> settings(new settings_t);
+	std::unique_ptr<ns_settings_t> settings(new ns_settings_t);
 
 	settings->name = name;
 

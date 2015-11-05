@@ -54,7 +54,7 @@ elliptics::download_info_t::on_request(const ioremap::thevoid::http_request &req
 		// in this moment. Hence session can be safely used without any check.
 		std::tie(session, key) = prepare_session(ns_state);
 
-		if (proxy_settings(ns_state).check_for_update) {
+		if (ns_settings(ns_state).check_for_update) {
 			session->set_cflags(session->get_cflags() | DNET_FLAGS_NOLOCK);
 		}
 
@@ -137,7 +137,7 @@ elliptics::download_info_t::get_namespace_state(const std::string &path
 
 void
 elliptics::download_info_t::check_signature() {
-	if (proxy_settings(ns_state).sign_token.empty()) {
+	if (ns_settings(ns_state).sign_token.empty()) {
 		throw http_error(403, "cannot generate downloadinfo xml without signature-token");
 	}
 }
@@ -155,7 +155,7 @@ elliptics::download_info_t::check_query_args() {
 	}
 
 	if (query.has_item("expiration-time")) {
-		if (!proxy_settings(ns_state).custom_expiration_time) {
+		if (!ns_settings(ns_state).custom_expiration_time) {
 			throw http_error(403, "using of expiration-time is prohibited");
 		}
 

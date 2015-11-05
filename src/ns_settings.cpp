@@ -19,8 +19,8 @@
 
 #include "ns_settings.hpp"
 
-const elliptics::settings_t &
-elliptics::proxy_settings(const mastermind::namespace_state_t &ns_state) {
-	return static_cast<const settings_t &>(ns_state.settings().user_settings());
+const elliptics::ns_settings_t &
+elliptics::ns_settings(const mastermind::namespace_state_t &ns_state) {
+	return static_cast<const ns_settings_t &>(ns_state.settings().user_settings());
 }
 

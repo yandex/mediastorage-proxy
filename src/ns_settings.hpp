@@ -30,10 +30,10 @@
 
 namespace elliptics {
 
-struct settings_t
+struct ns_settings_t
 	: public mastermind::namespace_state_t::user_settings_t {
 
-	settings_t()
+	ns_settings_t()
 		: redirect_content_length_threshold(-1)
 		, can_choose_couple_to_upload(false)
 		, multipart_content_length_threshold(0)
@@ -66,8 +66,8 @@ struct settings_t
 	bool check_for_update;
 };
 
-const settings_t &
-proxy_settings(const mastermind::namespace_state_t &ns_state);
+const ns_settings_t &
+ns_settings(const mastermind::namespace_state_t &ns_state);
 
 } // namespace elliptics
 

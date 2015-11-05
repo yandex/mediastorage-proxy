@@ -562,7 +562,7 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		m_session->set_trace_id(http_request.request_id());
 		m_session->set_timeout(server()->timeout.read);
 
-		if (proxy_settings(ns_state).check_for_update) {
+		if (ns_settings(ns_state).check_for_update) {
 			m_session->set_cflags(m_session->get_cflags() | DNET_FLAGS_NOLOCK);
 		}
 
@@ -588,7 +588,7 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 	}
 
 	if (request().url().query().has_item("expiration-time")) {
-		if (!proxy_settings(ns_state).custom_expiration_time) {
+		if (!ns_settings(ns_state).custom_expiration_time) {
 			MDS_LOG_ERROR("using of expiration-time is prohibited");
 			send_reply(403);
 			MDS_REQUEST_REPLY("get", 403, reinterpret_cast<uint64_t>(this->reply().get()));
@@ -608,7 +608,7 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		}
 	}
 
-	if (!server()->check_basic_auth(ns_state.name(), proxy_settings(ns_state).auth_key_for_read
+	if (!server()->check_basic_auth(ns_state.name(), ns_settings(ns_state).auth_key_for_read
 				, http_request.headers().get("Authorization"))) {
 		auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
 		MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
@@ -859,7 +859,7 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 	auto redirect_arg = get_redirect_arg();
 
 	if (redirect_arg != redirect_arg_tag::client_want_redirect) {
-		auto redirect_size = proxy_settings(ns_state).redirect_content_length_threshold;
+		auto redirect_size = ns_settings(ns_state).redirect_content_length_threshold;
 		if (redirect_size == -1) {
 			MDS_LOG_INFO("cannot redirect: redirect-content-length-threshold is infinity");
 			return false;
@@ -879,7 +879,7 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 	const auto &headers = request().headers();
 
 	try {
-		if (proxy_settings(ns_state).sign_token.empty()) {
+		if (ns_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot redirect without signature-token");
 
 			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
