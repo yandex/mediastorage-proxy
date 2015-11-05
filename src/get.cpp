@@ -889,14 +889,16 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 			return false;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr
-				, headers.get("X-Regional-Host").get_value_or(""), ns_state
-				, expiration_time);
+		auto x_regional_host = headers.get("X-Regional-Host").get_value_or("");
+		auto file_location = server()->get_file_location(slr, ns_state, x_regional_host);
+		auto ts = make_signature_ts(expiration_time, ns_state);
+
+		auto message = make_signature_message(file_location, ts);
+		auto sign = make_signature(message, ns_settings(ns_state).sign_token);
 
 		std::stringstream oss;
-		oss
-			<< "//" << std::get<0>(res) << std::get<1>(res) << "?ts="
-			<< std::get<2>(res) << "&sign=" << std::get<3>(res);
+		oss << "//" << file_location.host << file_location.path << "?ts=" << ts
+			<< "&sign=" << sign;
 
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
