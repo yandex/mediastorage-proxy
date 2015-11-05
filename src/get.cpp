@@ -909,13 +909,19 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 		auto x_regional_host = headers.get("X-Regional-Host").get_value_or("");
 		auto file_location = server()->get_file_location(slr, ns_state, x_regional_host);
 		auto ts = make_signature_ts(expiration_time, ns_state);
+		auto args = get_redirect_query_args();
 
-		auto message = make_signature_message(file_location, ts);
+		auto message = make_signature_message(file_location, ts, args);
 		auto sign = make_signature(message, ns_settings(ns_state).sign_token);
 
 		std::stringstream oss;
-		oss << "//" << file_location.host << file_location.path << "?ts=" << ts
-			<< "&sign=" << sign;
+		oss << "//" << file_location.host << file_location.path << "?ts=" << ts;
+
+		for (auto it = args.begin(), end = args.end(); it != end; ++it) {
+			oss << '&' << std::get<0>(*it) << '=' << std::get<1>(*it);
+		}
+
+		oss << "&sign=" << sign;
 
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);
