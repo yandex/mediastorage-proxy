@@ -916,84 +916,45 @@ proxy::hmac(const std::string &data, const std::string &token) {
 	return oss.str();
 }
 
+file_location_t
+proxy::get_file_location(const ioremap::elliptics::sync_lookup_result &slr
+		, const mastermind::namespace_state_t &ns_state
+		, const std::string &x_regional_host) {
+	auto file_location = make_file_location(slr, ns_state);
+
+	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+
+	if (use_regional_host) {
+		file_location.path = '/' + file_location.host + file_location.path;
+		file_location.host = x_regional_host;
+	}
+
+	return file_location;
+}
+
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state) {
+	, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state) {
 	return generate_signature_for_elliptics_file(slr, std::move(x_regional_host), ns_state
 			, boost::none);
 }
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-	, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+	, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state
 	, boost::optional<std::chrono::seconds> optional_expiration_time) {
 
-	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
 	if (ns_settings(ns_state).sign_token.empty()) {
 		throw std::runtime_error(
 				"cannot generate signature for elliptics file without signature-token");
 	}
 
-	std::string error_message;
+	auto file_location = get_file_location(slr, ns_state, x_regional_host);
+	auto ts = make_signature_ts(optional_expiration_time, ns_state);
 
-	for (auto it = slr.begin(); it != slr.end(); ++it) {
-		if (it->error()) {
-			error_message = it->error().message();
-			continue;
-		}
+	auto message = make_signature_message(file_location, ts);
+	auto sign = make_signature(message, ns_settings(ns_state).sign_token);
 
-		lookup_result entry(*it, ns_settings(ns_state).sign_port);
-
-		std::string host;
-		std::string path = entry.path();
-		std::string ts;
-		std::string sign;
-
-		{
-			{
-				const auto &path_prefix = ns_settings(ns_state).sign_path_prefix;
-				if (strncmp(path.c_str(), path_prefix.c_str(), path_prefix.size())) {
-					std::ostringstream oss;
-					oss
-						<< "path_prefix does not match: prefix=" << path_prefix << "path=" << path;
-					throw std::runtime_error(oss.str());
-				}
-
-				path = '/' + ns_state.name() + '/' + path.substr(path_prefix.size());
-
-				if (use_regional_host) {
-					host = x_regional_host;
-					path = '/' + entry.host() + path;
-				} else {
-					host = entry.host();
-				}
-			}
-
-			{
-				using namespace std::chrono;
-
-				auto now = system_clock::now().time_since_epoch();
-				auto expiration_time = optional_expiration_time.get_value_or(
-						ns_settings(ns_state).redirect_expire_time);
-
-				std::ostringstream ts_oss;
-				ts_oss
-					<< std::hex
-					<< duration_cast<microseconds>(now + expiration_time).count();
-				ts = ts_oss.str();
-			}
-
-			{
-				std::ostringstream oss;
-				oss << host << path << '/' << ts;
-				sign = hmac(oss.str(), ns_settings(ns_state).sign_token);
-			}
-		}
-
-		return std::make_tuple(host, path, ts, sign);
-	}
-
-	throw std::runtime_error("cannot make signature, there are no goot lookup result entry: "
-			+ error_message);
+	return std::make_tuple(file_location.host, file_location.path, ts, sign);
 }
 
 void

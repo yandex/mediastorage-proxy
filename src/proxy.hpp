@@ -157,13 +157,18 @@ public:
 	std::string
 	hmac(const std::string &data, const std::string &token);
 
-	std::tuple<std::string, std::string, std::string, std::string>
-	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state);
+	file_location_t
+	get_file_location(const ioremap::elliptics::sync_lookup_result &slr
+			, const mastermind::namespace_state_t &ns_state
+			, const std::string &x_regional_host);
 
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-		, std::string x_regional_host, const mastermind::namespace_state_t &ns_state
+		, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state);
+
+	std::tuple<std::string, std::string, std::string, std::string>
+	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
+		, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state
 		, boost::optional<std::chrono::seconds> optional_expiration_time);
 
 	void
