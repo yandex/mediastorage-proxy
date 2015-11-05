@@ -130,11 +130,6 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	return std::string(str);
 }
 
-const settings_t &
-proxy_settings(const mastermind::namespace_state_t &ns_state) {
-	return static_cast<const settings_t &>(ns_state.settings().user_settings());
-}
-
 ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));

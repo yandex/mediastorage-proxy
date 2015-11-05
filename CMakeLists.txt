@@ -45,6 +45,7 @@ set(SOURCE
 	${PROJECT_SOURCE_DIR}/src/cdn_cache.cpp
 	${PROJECT_SOURCE_DIR}/src/utils.cpp
 	${PROJECT_SOURCE_DIR}/src/loggers.cpp
+	${PROJECT_SOURCE_DIR}/src/ns_settings.cpp
 	)
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)

@@ -25,6 +25,7 @@
 #include "magic_provider.hpp"
 #include "utils.hpp"
 #include "cdn_cache.hpp"
+#include "ns_settings.hpp"
 
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
@@ -61,45 +62,6 @@ T get_arg(const ioremap::swarm::url_query &query_list, const std::string &name, 
 }
 
 std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::session sess);
-
-struct settings_t
-	: public mastermind::namespace_state_t::user_settings_t {
-
-	settings_t()
-		: redirect_content_length_threshold(-1)
-		, can_choose_couple_to_upload(false)
-		, multipart_content_length_threshold(0)
-		, custom_expiration_time(false)
-		, success_copies_num(-1)
-		, check_for_update(true)
-	{}
-
-	std::string name;
-	ioremap::elliptics::result_checker result_checker;
-
-	std::string auth_key_for_write;
-	std::string auth_key_for_read;
-
-	std::vector<int> static_couple;
-
-	std::string sign_token;
-	std::string sign_path_prefix;
-	std::string sign_port;
-
-	std::chrono::seconds redirect_expire_time;
-	int64_t redirect_content_length_threshold;
-
-	bool can_choose_couple_to_upload;
-	int64_t multipart_content_length_threshold;
-	bool custom_expiration_time;
-
-	int success_copies_num;
-
-	bool check_for_update;
-};
-
-const settings_t &
-proxy_settings(const mastermind::namespace_state_t &ns_state);
 
 class proxy : public ioremap::thevoid::server<proxy>
 {
