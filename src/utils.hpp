@@ -102,7 +102,9 @@ make_signature_ts(boost::optional<std::chrono::seconds> optional_expiration_time
 		, const mastermind::namespace_state_t &ns_state);
 
 std::string
-make_signature_message(const file_location_t &file_location, const std::string &ts);
+make_signature_message(const file_location_t &file_location, const std::string &ts
+		, const std::vector<std::tuple<std::string, std::string>> &args
+			= std::vector<std::tuple<std::string, std::string>>{});
 
 std::string
 make_signature(const std::string &message, const std::string &token);

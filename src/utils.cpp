@@ -108,10 +108,15 @@ elliptics::make_signature_ts(boost::optional<std::chrono::seconds> opt_expiratio
 }
 
 std::string
-elliptics::make_signature_message(const file_location_t &file_location, const std::string &ts) {
+elliptics::make_signature_message(const file_location_t &file_location, const std::string &ts
+		, const std::vector<std::tuple<std::string, std::string>> &args) {
 	std::ostringstream oss;
 
 	oss << file_location.host << file_location.path << '/' << ts;
+
+	for (auto it = args.begin(), end = args.end(); it != end; ++it) {
+		oss << '&' << std::get<0>(*it) << '=' << std::get<1>(*it);
+	}
 
 	return oss.str();
 }
