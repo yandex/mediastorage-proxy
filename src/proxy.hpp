@@ -36,9 +36,6 @@
 
 #include <swarm/url_query.hpp>
 
-#include <crypto++/hmac.h>
-#include <crypto++/sha.h>
-
 #include <memory>
 #include <utility>
 #include <map>
@@ -154,17 +151,10 @@ public:
 	std::string get_auth_token(const boost::optional<std::string> &auth_header);
 	bool check_basic_auth(const std::string &ns, const std::string &auth_key, const boost::optional<std::string> &auth_header);
 
-	std::string
-	hmac(const std::string &data, const std::string &token);
-
 	file_location_t
 	get_file_location(const ioremap::elliptics::sync_lookup_result &slr
 			, const mastermind::namespace_state_t &ns_state
 			, const std::string &x_regional_host);
-
-	std::tuple<std::string, std::string, std::string, std::string>
-	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-		, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state);
 
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
@@ -213,8 +203,6 @@ public:
 	struct {
 		int data_flow_rate;
 	} timeout_coef;
-
-	typedef CryptoPP::HMAC<CryptoPP::SHA512> hmac_type;
 
 	struct {
 		std::string name;

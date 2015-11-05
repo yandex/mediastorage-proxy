@@ -22,7 +22,6 @@
 
 
 #include "proxy.hpp"
-#include "lookup_result.hpp"
 #include "data_container.hpp"
 
 #include "upload.hpp"
@@ -899,23 +898,6 @@ bool proxy::check_basic_auth(const std::string &ns, const std::string &auth_key,
 	return !result;
 }
 
-std::string
-proxy::hmac(const std::string &data, const std::string &token) {
-	using namespace CryptoPP;
-
-	HMAC<SHA256> hmac((const byte *)token.data(), token.size());
-	hmac.Update((const byte *)data.data(), data.size());
-	std::vector<byte> res(hmac.DigestSize());
-	hmac.Final(res.data());
-
-	std::ostringstream oss;
-	oss << std::hex;
-	for (auto it = res.begin(), end = res.end(); it != end; ++it) {
-		oss << std::setfill('0') << std::setw(2) << static_cast<int>(*it);
-	}
-	return oss.str();
-}
-
 file_location_t
 proxy::get_file_location(const ioremap::elliptics::sync_lookup_result &slr
 		, const mastermind::namespace_state_t &ns_state
@@ -932,12 +914,6 @@ proxy::get_file_location(const ioremap::elliptics::sync_lookup_result &slr
 	return file_location;
 }
 
-std::tuple<std::string, std::string, std::string, std::string>
-proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
-	, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state) {
-	return generate_signature_for_elliptics_file(slr, std::move(x_regional_host), ns_state
-			, boost::none);
-}
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 	, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state
