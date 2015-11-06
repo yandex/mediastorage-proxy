@@ -25,6 +25,8 @@
 #include <thevoid/stream.hpp>
 #include <elliptics/session.hpp>
 
+#include <libmastermind/mastermind.hpp>
+
 #include <list>
 #include <vector>
 #include <mutex>
@@ -85,6 +87,25 @@ make_request_stream(Server *server
 
 std::string
 encode_for_xml(const std::string &string);
+
+struct file_location_t {
+	std::string host;
+	std::string path;
+};
+
+file_location_t
+make_file_location(const ioremap::elliptics::sync_lookup_result &slr
+		, const mastermind::namespace_state_t &ns_state);
+
+std::string
+make_signature_ts(boost::optional<std::chrono::seconds> optional_expiration_time
+		, const mastermind::namespace_state_t &ns_state);
+
+std::string
+make_signature_message(const file_location_t &file_location, const std::string &ts);
+
+std::string
+make_signature(const std::string &message, const std::string &token);
 
 } // namespace elliptics
 
