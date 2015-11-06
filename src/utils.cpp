@@ -18,6 +18,12 @@
 */
 
 #include "utils.hpp"
+#include "ns_settings.hpp"
+#include "lookup_result.hpp"
+#include "hex.hpp"
+
+#include <crypto++/hmac.h>
+#include <crypto++/sha.h>
 
 std::ostream &
 elliptics::operator << (std::ostream &stream, const ioremap::elliptics::error_info &error_info) {
@@ -56,5 +62,69 @@ elliptics::encode_for_xml(const std::string &string) {
 	} while (pos != std::string::npos && pos < string.size());
 
 	return oss.str();
+}
+
+elliptics::file_location_t
+elliptics::make_file_location(const ioremap::elliptics::sync_lookup_result &slr
+		, const mastermind::namespace_state_t &ns_state) {
+	const auto &path_prefix = ns_settings(ns_state).sign_path_prefix;
+
+	for (auto it = slr.begin(); it != slr.end(); ++it) {
+		if (it->error()) {
+			continue;
+		}
+
+		lookup_result entry(*it, ns_settings(ns_state).sign_port);
+
+		if (entry.path().substr(0, path_prefix.size()) != path_prefix) {
+			throw std::runtime_error{
+				"path_prefix does not match: prefix=" + path_prefix + "; path=" + entry.path()};
+		}
+
+		file_location_t file_location;
+
+		file_location.host = entry.host();
+		file_location.path = '/' + ns_state.name() + '/' + entry.path().substr(path_prefix.size());
+
+		return file_location;
+	}
+
+	throw std::runtime_error{
+			"cannot determine file location: there is no good lookup result entry"};
+}
+
+std::string
+elliptics::make_signature_ts(boost::optional<std::chrono::seconds> opt_expiration_time
+		, const mastermind::namespace_state_t &ns_state) {
+	using namespace std::chrono;
+
+	auto now = system_clock::now().time_since_epoch();
+	auto expiration_time = opt_expiration_time.get_value_or(
+			ns_settings(ns_state).redirect_expire_time);
+
+	auto ts = duration_cast<microseconds>(now + expiration_time).count();
+
+	return hex_one<std::string>(ts);
+}
+
+std::string
+elliptics::make_signature_message(const file_location_t &file_location, const std::string &ts) {
+	std::ostringstream oss;
+
+	oss << file_location.host << file_location.path << '/' << ts;
+
+	return oss.str();
+}
+
+std::string
+elliptics::make_signature(const std::string &message, const std::string &token) {
+	using namespace CryptoPP;
+
+	HMAC<SHA256> hmac((const byte *)token.data(), token.size());
+	hmac.Update((const byte *)message.data(), message.size());
+	std::vector<byte> res(hmac.DigestSize());
+	hmac.Final(res.data());
+
+	return hex<std::string>(res);
 }
 
