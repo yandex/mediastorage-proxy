@@ -854,6 +854,23 @@ req_get::get_redirect_arg() {
 	return redirect_arg_tag::none;
 }
 
+std::vector<std::tuple<std::string, std::string>>
+req_get::get_redirect_query_args() {
+	std::vector<std::tuple<std::string, std::string>> result;
+
+	const auto &query = request().url().query();
+	const auto &redirect_query_args = ns_settings(ns_state).redirect_query_args;
+
+	for (auto it = redirect_query_args.begin(), end = redirect_query_args.end()
+			; it != end; ++it) {
+		if (auto arg = query.item_value(*it)) {
+			result.emplace_back(std::make_tuple(*it, url_encode(*arg)));
+		}
+	}
+
+	return result;
+}
+
 bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const size_t size) {
 
 	auto redirect_arg = get_redirect_arg();
@@ -889,14 +906,22 @@ bool req_get::try_to_redirect_request(const ie::sync_lookup_result &slr, const s
 			return false;
 		}
 
-		auto res = server()->generate_signature_for_elliptics_file(slr
-				, headers.get("X-Regional-Host").get_value_or(""), ns_state
-				, expiration_time);
+		auto x_regional_host = headers.get("X-Regional-Host").get_value_or("");
+		auto file_location = server()->get_file_location(slr, ns_state, x_regional_host);
+		auto ts = make_signature_ts(expiration_time, ns_state);
+		auto args = get_redirect_query_args();
+
+		auto message = make_signature_message(file_location, ts, args);
+		auto sign = make_signature(message, ns_settings(ns_state).sign_token);
 
 		std::stringstream oss;
-		oss
-			<< "//" << std::get<0>(res) << std::get<1>(res) << "?ts="
-			<< std::get<2>(res) << "&sign=" << std::get<3>(res);
+		oss << "//" << file_location.host << file_location.path << "?ts=" << ts;
+
+		for (auto it = args.begin(), end = args.end(); it != end; ++it) {
+			oss << '&' << std::get<0>(*it) << '=' << std::get<1>(*it);
+		}
+
+		oss << "&sign=" << sign;
 
 		ioremap::thevoid::http_response http_response;
 		http_response.set_code(302);

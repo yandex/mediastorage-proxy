@@ -1041,6 +1041,17 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 				+ boost::lexical_cast<std::string>(
 						settings->redirect_content_length_threshold)};
 		}
+
+		if (redirect_config.has("query-args")) {
+			const auto &query_args_redirect_config
+				= redirect_config.at("query-args");
+
+			for (size_t index = 0, size = query_args_redirect_config.size();
+					index != size; ++index) {
+				settings->redirect_query_args.emplace_back(
+						query_args_redirect_config.at<std::string>(index));
+			}
+		}
 	}
 
 	if (config.has("features")) {
