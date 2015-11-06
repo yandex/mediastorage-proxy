@@ -1,3 +1,9 @@
+mediastorage-proxy (0.100.1) trusty; urgency=medium
+
+  * MDS-1459: add query-args feature for redirect location
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 06 Nov 2015 13:42:19 +0300
+
 mediastorage-proxy (0.99.1) trusty; urgency=medium
 
   * MDS-1597: Check the uploaded filename is not empty
