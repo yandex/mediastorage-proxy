@@ -88,6 +88,9 @@ make_request_stream(Server *server
 std::string
 encode_for_xml(const std::string &string);
 
+std::string
+url_encode(const std::string &string);
+
 struct file_location_t {
 	std::string host;
 	std::string path;

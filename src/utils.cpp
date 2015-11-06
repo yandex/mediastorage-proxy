@@ -25,6 +25,9 @@
 #include <crypto++/hmac.h>
 #include <crypto++/sha.h>
 
+#include <cctype>
+#include <iterator>
+
 std::ostream &
 elliptics::operator << (std::ostream &stream, const ioremap::elliptics::error_info &error_info) {
 	stream << "status=\"" << (error_info ? "bad" : "ok") << "\"; description=\"";
@@ -62,6 +65,34 @@ elliptics::encode_for_xml(const std::string &string) {
 	} while (pos != std::string::npos && pos < string.size());
 
 	return oss.str();
+}
+
+std::string
+elliptics::url_encode(const std::string &string) {
+	std::string result;
+	result.reserve(3 * string.size());
+	auto output = std::back_inserter(result);
+
+	for (auto it = string.begin(), end = string.end(); it != end; ++it) {
+		char symbol = *it;
+
+		if (isalnum(symbol)) {
+			*output++ = symbol;
+			continue;
+		}
+
+		switch (symbol) {
+			case '-': case '_': case '.': case '!': case '~':
+			case '*': case '(': case ')': case '\'':
+				*output++ = symbol;
+				break;
+			default:
+				*output++ = '%';
+				output = hex_one(symbol, output);
+		}
+	}
+
+	return result;
 }
 
 elliptics::file_location_t
