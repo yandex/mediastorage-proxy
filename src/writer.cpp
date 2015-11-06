@@ -503,7 +503,7 @@ elliptics::can_be_written(shared_logger_t shared_logger
 		MDS_LOG_INFO("%s", msg.c_str());
 	}
 
-	if (!proxy_settings(ns_state).check_for_update) {
+	if (!ns_settings(ns_state).check_for_update) {
 		MDS_LOG_INFO("check for update is disabled for the namespace");
 		next(true);
 		return;

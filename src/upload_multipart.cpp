@@ -359,7 +359,7 @@ upload_multipart_t::start_writing() {
 	// Hence write_session can be safely used without any check
 	buffered_writer->write(*server()->write_session(http_request, couple)
 			, server()->timeout_coef.data_flow_rate
-			, proxy_settings(ns_state).success_copies_num
+			, ns_settings(ns_state).success_copies_num
 			, server()->limit_of_middle_chunk_attempts
 			, server()->scale_retry_timeout
 			, std::move(next));
@@ -488,7 +488,7 @@ upload_multipart_t::send_result() {
 			<< "\" size=\"" << it->second.total_size
 			<< "\" key=\"";
 
-		if (proxy_settings(ns_state).static_couple.empty()) {
+		if (ns_settings(ns_state).static_couple.empty()) {
 			oss << couple_id << '/';
 		}
 

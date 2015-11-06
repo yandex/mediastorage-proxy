@@ -99,7 +99,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 
 	{
 		if (!server()->check_basic_auth(ns_state.name()
-					, proxy_settings(ns_state).auth_key_for_write
+					, ns_settings(ns_state).auth_key_for_write
 					, http_request.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(http_request.headers().get("Authorization"));
 			MDS_LOG_INFO("invalid token \"%s\"", token.empty() ? "<none>" : token.c_str());
@@ -128,7 +128,7 @@ upload_t::on_headers(ioremap::thevoid::http_request &&http_request) {
 				, "multipart/form-data;");
 
 		if (!res) {
-			auto size = proxy_settings(ns_state).multipart_content_length_threshold;
+			auto size = ns_settings(ns_state).multipart_content_length_threshold;
 
 			if (size != -1 && static_cast<size_t>(size) < total_size) {
 				MDS_LOG_INFO(
@@ -169,7 +169,7 @@ boost::optional<elliptics::couple_iterator_t>
 elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request &http_request
 		, const mastermind::namespace_state_t &ns_state, size_t total_size) {
 	if (auto arg = http_request.url().query().item_value("couple_id")) {
-		if (!proxy_settings(ns_state).can_choose_couple_to_upload) {
+		if (!ns_settings(ns_state).can_choose_couple_to_upload) {
 			MDS_LOG_INFO("client wants to choose couple by himself, but you forbade that");
 			reply()->send_error(ioremap::swarm::http_response::forbidden);
 			return boost::none;
@@ -217,8 +217,8 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 		return couple_iterator_t(couple);
 	} else {
 		try {
-			if (!proxy_settings(ns_state).static_couple.empty()) {
-				return couple_iterator_t(proxy_settings(ns_state).static_couple);
+			if (!ns_settings(ns_state).static_couple.empty()) {
+				return couple_iterator_t(ns_settings(ns_state).static_couple);
 			}
 
 			return couple_iterator_t(ns_state.weights().couple_sequence(total_size));

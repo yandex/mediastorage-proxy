@@ -46,7 +46,7 @@ void req_delete::on_request(const ioremap::thevoid::http_request &req, const boo
 		}
 
 		if (!server()->check_basic_auth(ns_state.name()
-					, proxy_settings(ns_state).auth_key_for_write
+					, ns_settings(ns_state).auth_key_for_write
 					, req.headers().get("Authorization"))) {
 			auto token = server()->get_auth_token(req.headers().get("Authorization"));
 			MDS_LOG_INFO("%s: invalid token \"%s\"", url_str.c_str()
@@ -69,7 +69,7 @@ void req_delete::on_request(const ioremap::thevoid::http_request &req, const boo
 		session->set_timeout(server()->timeout.lookup);
 		session->set_filter(ioremap::elliptics::filters::positive);
 
-		if (proxy_settings(ns_state).check_for_update) {
+		if (ns_settings(ns_state).check_for_update) {
 			session->set_cflags(session->get_cflags() | DNET_FLAGS_NOLOCK);
 		}
 
