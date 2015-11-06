@@ -864,7 +864,7 @@ req_get::get_redirect_query_args() {
 	for (auto it = redirect_query_args.begin(), end = redirect_query_args.end()
 			; it != end; ++it) {
 		if (auto arg = query.item_value(*it)) {
-			result.emplace_back(std::make_tuple(*it, *arg));
+			result.emplace_back(std::make_tuple(*it, url_encode(*arg)));
 		}
 	}
 
