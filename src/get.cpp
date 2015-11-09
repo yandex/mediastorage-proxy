@@ -248,6 +248,15 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 			return;
 		}
 
+		if (request().method() == "HEAD") {
+			prospect_http_response.headers().set_content_length(total_size());
+			send_reply(std::move(prospect_http_response));
+			MDS_REQUEST_REPLY("get", 200, reinterpret_cast<uint64_t>(this->reply().get()));
+			MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
+			return;
+		}
+
+
 		start_reading(total_size(), std::get<1>(res));
 	} catch (const http_error &ex) {
 		MDS_LOG_INFO("http_error: status=\"%s\"; description=\"%s\"", ex.http_status(), ex.what());
@@ -825,14 +834,6 @@ std::tuple<bool, bool> req_get::process_precondition_headers(const time_t timest
 	prospect_http_response.headers().set_last_modified(timestamp);
 	prospect_http_response.headers().set("ETag", etag);
 	prospect_http_response.headers().set("Accept-Ranges", "bytes");
-
-	if (request().method() == "HEAD") {
-		prospect_http_response.headers().set_content_length(size);
-		send_reply(std::move(prospect_http_response));
-		MDS_REQUEST_REPLY("get", 200, reinterpret_cast<uint64_t>(this->reply().get()));
-		MDS_REQUEST_STOP("get", reinterpret_cast<uint64_t>(this->reply().get()));
-		return std::make_tuple(true, false);
-	}
 
 	return std::make_tuple(false, send_whole_file);
 }
