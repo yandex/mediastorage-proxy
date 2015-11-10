@@ -1,3 +1,9 @@
+mediastorage-proxy (0.101.1) trusty; urgency=medium
+
+  * MDS-1405: Get handler can redirect for HEAD as well as for GET.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 10 Nov 2015 12:42:24 +0300
+
 mediastorage-proxy (0.100.1) trusty; urgency=medium
 
   * MDS-1459: add query-args feature for redirect location
