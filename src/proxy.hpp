@@ -141,6 +141,9 @@ public:
 	std::tuple<std::string, mastermind::namespace_state_t>
 	get_file_info(const ioremap::thevoid::http_request &req);
 
+	std::vector<int>
+	get_groups(const mastermind::namespace_state_t &ns_state, int group);
+
 	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
 	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
 

@@ -816,6 +816,25 @@ proxy::get_file_info(const ioremap::thevoid::http_request &req) {
 	return std::make_tuple(p.first, get_namespace_state(p.second));
 }
 
+std::vector<int>
+proxy::get_groups(const mastermind::namespace_state_t &ns_state, int group) {
+	auto groups = ns_state.couples().get_couple_groups(group);
+
+	if (groups.empty()) {
+		MDS_LOG_WARNING("the unknown group is used: group=%s", group);
+		return {group};
+	}
+
+	if (*std::min_element(groups.begin(), groups.end()) != group) {
+		std::ostringstream oss;
+		oss << "the used group is not the minimal group in couple: group=" << group
+			<< "; couple=" << groups;
+		MDS_LOG_WARNING("%s", oss.str());
+	}
+
+	return groups;
+}
+
 std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
 proxy::prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state) {
 	auto session = get_session();
@@ -839,7 +858,7 @@ proxy::prepare_session(const std::string &url, const mastermind::namespace_state
 					throw std::runtime_error("group must be greater than zero");
 				}
 
-				groups = ns_state.couples().get_groups(group);
+				groups = get_groups(ns_state, group);
 			} catch (...) {
 				throw std::runtime_error("Cannot to determine groups");
 			}
