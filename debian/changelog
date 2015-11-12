@@ -1,3 +1,9 @@
+mediastorage-proxy (0.101.2) trusty; urgency=medium
+
+  * MDS-1774: Add log for getting a couple by a group
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Thu, 12 Nov 2015 16:11:54 +0300
+
 mediastorage-proxy (0.101.1) trusty; urgency=medium
 
   * MDS-1405: Get handler can redirect for HEAD as well as for GET.
