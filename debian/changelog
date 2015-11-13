@@ -1,3 +1,9 @@
+mediastorage-proxy (0.101.3) trusty; urgency=medium
+
+  * Fix a log string according to MDS-1851
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 13 Nov 2015 13:54:37 +0300
+
 mediastorage-proxy (0.101.2) trusty; urgency=medium
 
   * MDS-1774: Add log for getting a couple by a group
