@@ -199,7 +199,8 @@ elliptics::upload_t::create_couple_iterator(const ioremap::thevoid::http_request
 			return boost::none;
 		}
 
-		auto space = ns_state.couples().free_effective_space(couple_id);
+		auto space = ns_state.couples().free_effective_space(couple_id)
+			+ ns_state.couples().free_reserved_space(couple_id);
 
 		if (space < total_size) {
 			MDS_LOG_ERROR("client chose a couple with not enough space: couple_id=%d", couple_id);
