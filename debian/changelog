@@ -1,3 +1,11 @@
+mediastorage-proxy (0.101.4) trusty; urgency=medium
+
+  * MDS-1857: Use free_reserved_space in additional to free_effective_space
+    The sum of free_effective_space and free_reserved_space is used to check
+    whether there is enough space in the couple to write a file.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Fri, 13 Nov 2015 14:38:14 +0300
+
 mediastorage-proxy (0.101.3) trusty; urgency=medium
 
   * Fix a log string according to MDS-1851
