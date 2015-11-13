@@ -827,7 +827,7 @@ proxy::get_groups(const mastermind::namespace_state_t &ns_state, int group) {
 
 	if (*std::min_element(groups.begin(), groups.end()) != group) {
 		std::ostringstream oss;
-		oss << "the used group is not the minimal group in couple: group=" << group
+		oss << "the used group is not the canonical group in couple: group=" << group
 			<< "; couple=" << groups;
 		MDS_LOG_WARNING("%s", oss.str());
 	}
