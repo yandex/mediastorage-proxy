@@ -34,6 +34,8 @@
 
 #include <glib.h>
 
+#include <mds/read_controller_builder.h>
+
 #include <stdexcept>
 #include <iterator>
 #include <algorithm>
@@ -256,6 +258,12 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	return result;
 }
 
+mds::ExecutorPtr
+proxy::generate_executor(const rapidjson::Value &config) {
+	auto threads_num = get_int(config, "executor-threads", 1);
+	return mds::MakeMultiThreadExecutor(threads_num);
+}
+
 std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
 	cdn_cache_t::config_t cdn_config;
 
@@ -314,6 +322,10 @@ bool proxy::initialize(const rapidjson::Value &config) {
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics node");
 		m_elliptics_node = generate_node(config, timeout.def);
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
+
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize mds executor");
+		executor = generate_executor(config);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
@@ -768,6 +780,73 @@ proxy::setup_session(ioremap::elliptics::session session
 	return session;
 }
 
+mds::ReadControllerPtr
+proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
+		, const ioremap::thevoid::http_request &http_request) {
+	mds::ReadControllerBuilder builder;
+
+	{
+		auto parsed = parse_path(http_request.url().path(), ns_state);
+
+		auto &groups = std::get<0>(parsed);
+		auto &key = std::get<1>(parsed);
+
+		if (groups.empty()) {
+			throw http_error{404, "cannot find groups for the request"};
+		}
+
+		auto cached_groups = [&]() {
+			auto ell_key = ioremap::elliptics::key{key};
+			m_elliptics_session->transform(ell_key);
+			auto str_ell_id = std::string{dnet_dump_id_str_full(ell_key.id().id)};
+			auto couple_id = *std::min_element(groups.begin(), groups.end());
+
+			std::vector<int> result;
+
+			try {
+				result = mastermind()->get_cached_groups(str_ell_id, couple_id);
+
+				if (!result.empty()) {
+					MDS_LOG_INFO("use cached groups for request: %s", to_string(result));
+				} else {
+					MDS_LOG_INFO("there is no cached groups for request");
+				}
+			} catch (const std::exception &ex) {
+				MDS_LOG_ERROR("cannot get cached groups: %s", ex.what());
+			}
+
+			return result;
+		}();
+
+
+		builder.Groups(std::move(groups));
+		builder.CachedGroups(std::move(cached_groups));
+		builder.Key(std::move(key));
+	}
+
+	builder.LookupTimeout(timeout.lookup);
+	builder.ChunkTimeout(timeout.read);
+	builder.ChecksumRate(timeout_coef.data_flow_rate);
+	builder.ChunkSize(m_read_chunk_size);
+
+	if (ns_settings(ns_state).check_for_update) {
+		builder.OperationLock(false);
+	}
+
+	builder.Executor(executor.get());
+
+	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+	// Hence m_elliptics_node can be safely used without any check
+	builder.EllipticsNode(m_elliptics_node);
+
+	builder.Logger(mds::Logger{logger(), {blackhole::attribute::make("component", "libmds")}});
+
+	builder.RequestId(http_request.request_id());
+	builder.DebugMode(http_request.trace_bit());
+
+	return builder.Build();
+}
+
 mastermind::namespace_state_t
 proxy::get_namespace_state(const std::string &script, const std::string &handler) {
 	if (strncmp(script.c_str(), handler.c_str(), handler.size())) {
@@ -834,6 +913,42 @@ proxy::get_groups(const mastermind::namespace_state_t &ns_state, int group) {
 	}
 
 	return groups;
+}
+
+std::tuple<std::vector<int>, std::string>
+proxy::parse_path(const std::string &path, const mastermind::namespace_state_t &ns_state) {
+	std::vector<int> groups;
+	std::string filename;
+
+	if (ns_settings(ns_state).static_couple.empty()) {
+		auto bg = path.find('/', 1) + 1;
+		auto eg = path.find('/', bg);
+		auto bf = eg + 1;
+		auto ef = path.find('?', bf);
+		auto g = path.substr(bg, eg - bg);
+		path.substr(bf, ef - bf).swap(filename);
+
+		try {
+			auto group = boost::lexical_cast<int>(g);
+
+			if (group <= 0) {
+				throw std::runtime_error("group must be greater than zero");
+			}
+
+			groups = get_groups(ns_state, group);
+		} catch (...) {
+			throw std::runtime_error("Cannot to determine groups");
+		}
+	} else {
+		auto bf = path.find('/', 1) + 1;
+		auto ef = path.find('?', bf);
+		path.substr(bf, ef - bf).swap(filename);
+		groups = ns_settings(ns_state).static_couple;
+	}
+
+	filename = ns_state.name() + '.' + filename;
+
+	return std::make_tuple(std::move(groups), std::move(filename));
 }
 
 std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
