@@ -107,7 +107,9 @@ public:
 	template <typename T>
 	void register_handler(const std::string &name, bool exact_match);
 
-	ioremap::elliptics::node generate_node(const rapidjson::Value &config, int &timeout_def);
+	std::shared_ptr<ioremap::elliptics::node>
+	generate_node(const rapidjson::Value &config, int &timeout_def);
+
 	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
 	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
@@ -176,7 +178,7 @@ private:
 public:
 	std::mutex elliptics_node_mutex;
 	std::mutex elliptics_session_mutex;
-	boost::optional<ioremap::elliptics::node> m_elliptics_node;
+	std::shared_ptr<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
 
 	boost::optional<ioremap::elliptics::session> elliptics_read_session;

@@ -129,7 +129,8 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	return std::string(str);
 }
 
-ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
+std::shared_ptr<ioremap::elliptics::node>
+proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -159,7 +160,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 
 	ioremap::swarm::logger elliptics_logger = ioremap::swarm::logger(logger(),
 			blackhole::log::attributes_t({blackhole::attribute::make("component", "elliptics")}));
-	ioremap::elliptics::node node(std::move(elliptics_logger), dnet_conf);
+	auto node = std::make_shared<ioremap::elliptics::node>(std::move(elliptics_logger), dnet_conf);
 
 	{
 		const auto &remotes = mastermind()->get_elliptics_remotes();
@@ -182,7 +183,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 				}
 
 				if (!addresses.empty()) {
-					node.add_remote(addresses);
+					node->add_remote(addresses);
 				}
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
@@ -312,7 +313,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics node");
-		m_elliptics_node.reset(generate_node(config, timeout.def));
+		m_elliptics_node = generate_node(config, timeout.def);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
