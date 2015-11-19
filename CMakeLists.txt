@@ -9,6 +9,8 @@ find_path(GLIB_INCLUDE_DIR glib.h HINTS ${glib-2.0_INCLUDE_DIRS})
 find_path(GLIBCONFIG_INCLUDE_DIR glibconfig.h HINTS ${glib-2.0_INCLUDE_DIRS})
 find_library(GLIB_LIBRARY glib-2.0 HINTS ${glib-2.0_INCLUDE_DIRS})
 
+find_package(MDS 0.0)
+
 set(REQUIRED_LIBRARIES
 	thevoid
 	elliptics_cpp
@@ -24,6 +26,7 @@ set(REQUIRED_LIBRARIES
 	curl
 	handystats
 	kora-util
+	${MDS_LIBRARIES}
 	)
 
 set(SOURCE
@@ -51,6 +54,7 @@ set(SOURCE
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
 include_directories(BEFORE ${GLIB_INCLUDE_DIR})
 include_directories(BEFORE ${GLIBCONFIG_INCLUDE_DIR})
+include_directories(BEFORE ${MDS_INCLUDE_DIRS})
 
 add_executable(${TARGET} ${SOURCE})
 
