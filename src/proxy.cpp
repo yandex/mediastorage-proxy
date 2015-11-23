@@ -1049,6 +1049,22 @@ proxy::get_file_location(const ioremap::elliptics::sync_lookup_result &slr
 	return file_location;
 }
 
+file_location_t
+proxy::get_file_location(const mds::FileInfoPtr &file_info
+		, const mastermind::namespace_state_t &ns_state
+		, const std::string &x_regional_host) {
+	auto file_location = make_file_location(file_info, ns_state);
+
+	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+
+	if (use_regional_host) {
+		file_location.path = '/' + file_location.host + file_location.path;
+		file_location.host = x_regional_host;
+	}
+
+	return file_location;
+}
+
 std::tuple<std::string, std::string, std::string, std::string>
 proxy::generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 	, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state
