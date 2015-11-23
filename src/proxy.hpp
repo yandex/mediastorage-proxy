@@ -174,6 +174,11 @@ public:
 			, const mastermind::namespace_state_t &ns_state
 			, const std::string &x_regional_host);
 
+	file_location_t
+	get_file_location(const mds::FileInfoPtr &file_info
+			, const mastermind::namespace_state_t &ns_state
+			, const std::string &x_regional_host);
+
 	std::tuple<std::string, std::string, std::string, std::string>
 	generate_signature_for_elliptics_file(const ioremap::elliptics::sync_lookup_result &slr
 		, const std::string &x_regional_host, const mastermind::namespace_state_t &ns_state

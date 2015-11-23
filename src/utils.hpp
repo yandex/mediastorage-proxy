@@ -27,6 +27,8 @@
 
 #include <libmastermind/mastermind.hpp>
 
+#include <mds/read_controller.h>
+
 #include <list>
 #include <vector>
 #include <mutex>
@@ -106,6 +108,10 @@ struct file_location_t {
 
 file_location_t
 make_file_location(const ioremap::elliptics::sync_lookup_result &slr
+		, const mastermind::namespace_state_t &ns_state);
+
+file_location_t
+make_file_location(const mds::FileInfoPtr &file_info
 		, const mastermind::namespace_state_t &ns_state);
 
 std::string
