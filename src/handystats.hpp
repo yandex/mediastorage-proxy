@@ -77,6 +77,16 @@ inline void MDS_REQUEST_REPLY(const std::string& method, const int& code, const 
 	}
 }
 
+inline void MDS_REQUEST_SEND_HEADERS(const std::string& method, const int& code, const uint64_t& instance_id) {
+	HANDY_COUNTER_INCREMENT(("mds.%s.reply.%d", method.c_str(), code));
+	HANDY_COUNTER_INCREMENT(("mds.%s.reply.%dxx", method.c_str(), code / 100));
+	HANDY_TIMER_STOP(("mds.%s.reply.time", method.c_str()), instance_id);
+}
+
+inline void MDS_REQUEST_CLOSE(const std::string& method, const uint64_t& instance_id) {
+	HANDY_TIMER_STOP(("mds.%s.time", method.c_str()), instance_id);
+}
+
 } // namespace elliptics
 
 #endif // SRC__HANDYSTATS_HPP
