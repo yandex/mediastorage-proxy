@@ -39,7 +39,7 @@ public:
 	}
 
 public:
-	std::string type(const char *data, const size_t size) {
+	std::string type(const void *data, const size_t size) {
 		const char *result(magic_buffer(magic_, data, size));
 
 		if (result) {
