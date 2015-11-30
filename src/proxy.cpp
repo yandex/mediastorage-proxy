@@ -1071,6 +1071,9 @@ proxy::settings_factory(const std::string &name, const kora::config_t &config) {
 						query_args_redirect_config.at<std::string>(index));
 			}
 		}
+
+		settings->add_orig_path_query_arg = redirect_config.at<bool>("add-orig-path-query-arg"
+				, false);
 	}
 
 	if (config.has("features")) {
