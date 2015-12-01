@@ -859,6 +859,11 @@ std::vector<std::tuple<std::string, std::string>>
 req_get::get_redirect_query_args() {
 	std::vector<std::tuple<std::string, std::string>> result;
 
+	if (ns_settings(ns_state).add_orig_path_query_arg) {
+		result.emplace_back(std::make_tuple("orig_path"
+					, url_encode(request().url().path())));
+	}
+
 	const auto &query = request().url().query();
 	const auto &redirect_query_args = ns_settings(ns_state).redirect_query_args;
 

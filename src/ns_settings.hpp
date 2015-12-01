@@ -35,6 +35,7 @@ struct ns_settings_t
 
 	ns_settings_t()
 		: redirect_content_length_threshold(-1)
+		, add_orig_path_query_arg(false)
 		, can_choose_couple_to_upload(false)
 		, multipart_content_length_threshold(0)
 		, custom_expiration_time(false)
@@ -57,6 +58,7 @@ struct ns_settings_t
 	std::chrono::seconds redirect_expire_time;
 	int64_t redirect_content_length_threshold;
 	std::vector<std::string> redirect_query_args;
+	bool add_orig_path_query_arg;
 
 	bool can_choose_couple_to_upload;
 	int64_t multipart_content_length_threshold;
