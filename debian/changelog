@@ -1,3 +1,11 @@
+mediastorage-proxy (0.102.1) trusty; urgency=medium
+
+  * Add namespace option add-orig-path-query-arg
+    If the option is set, a redirect location will contain query argument
+    'orig-path' with the original request path as a value.
+
+ -- Artem Sokolov <derikon@yandex-team.ru>  Tue, 01 Dec 2015 16:57:44 +0300
+
 mediastorage-proxy (0.101.4) trusty; urgency=medium
 
   * MDS-1857: Use free_reserved_space in additional to free_effective_space
