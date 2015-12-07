@@ -22,6 +22,8 @@
 
 #include "loggers.hpp"
 
+#include <boost/system/error_code.hpp>
+
 #include <stdexcept>
 
 namespace elliptics {
@@ -32,6 +34,23 @@ public:
 	proxy_error(const std::string &message)
 		: std::runtime_error(message)
 	{}
+};
+
+class thevoid_error : public proxy_error
+{
+public:
+	thevoid_error(const boost::system::error_code &error_code_)
+		: proxy_error("error during process thevoid")
+		, m_error_code(error_code_)
+	{}
+
+	const boost::system::error_code &
+	error_code() const {
+		return m_error_code;
+	}
+
+private:
+	boost::system::error_code m_error_code;
 };
 
 class http_error : public proxy_error

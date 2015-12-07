@@ -27,6 +27,8 @@
 
 #include <libmastermind/mastermind.hpp>
 
+#include <mds/read_controller.h>
+
 #include <list>
 #include <vector>
 #include <mutex>
@@ -74,6 +76,14 @@ operator << (std::ostream &stream, const std::vector<T> &vector) {
 std::ostream &
 operator << (std::ostream &stream, const ioremap::elliptics::error_info &error_info);
 
+template <typename T>
+std::string
+to_string(const std::vector<T> &vector) {
+	std::ostringstream oss;
+	oss << vector;
+	return oss.str();
+}
+
 template <typename T, typename Server, typename... Args>
 std::shared_ptr<ioremap::thevoid::base_request_stream>
 make_request_stream(Server *server
@@ -98,6 +108,10 @@ struct file_location_t {
 
 file_location_t
 make_file_location(const ioremap::elliptics::sync_lookup_result &slr
+		, const mastermind::namespace_state_t &ns_state);
+
+file_location_t
+make_file_location(const mds::FileInfoPtr &file_info
 		, const mastermind::namespace_state_t &ns_state);
 
 std::string

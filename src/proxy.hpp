@@ -30,6 +30,8 @@
 #include <elliptics/session.hpp>
 #include <libmastermind/mastermind.hpp>
 #include <thevoid/server.hpp>
+#include <mds/executor.h>
+#include <mds/read_controller.h>
 
 #include <boost/optional.hpp>
 #include <boost/thread/tss.hpp>
@@ -107,8 +109,14 @@ public:
 	template <typename T>
 	void register_handler(const std::string &name, bool exact_match);
 
-	ioremap::elliptics::node generate_node(const rapidjson::Value &config, int &timeout_def);
+	std::shared_ptr<ioremap::elliptics::node>
+	generate_node(const rapidjson::Value &config, int &timeout_def);
+
 	std::shared_ptr<mastermind::mastermind_t> generate_mastermind(const rapidjson::Value &config);
+
+	mds::ExecutorPtr
+	generate_executor(const rapidjson::Value &config);
+
 	std::shared_ptr<cdn_cache_t> generate_cdn_cache(const rapidjson::Value &config);
 
 	boost::optional<ioremap::elliptics::session>
@@ -130,6 +138,10 @@ public:
 	setup_session(ioremap::elliptics::session session
 			, const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
+	mds::ReadControllerPtr
+	make_read_controller(const mastermind::namespace_state_t &ns_state
+			, const ioremap::thevoid::http_request &http_request);
+
 	mastermind::namespace_state_t
 	get_namespace_state(const std::string &script, const std::string &handler);
 
@@ -144,6 +156,9 @@ public:
 	std::vector<int>
 	get_groups(const mastermind::namespace_state_t &ns_state, int group);
 
+	std::tuple<std::vector<int>, std::string>
+	parse_path(const std::string &path, const mastermind::namespace_state_t &ns_state);
+
 	std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
 	prepare_session(const std::string &url, const mastermind::namespace_state_t &ns_state);
 
@@ -156,6 +171,11 @@ public:
 
 	file_location_t
 	get_file_location(const ioremap::elliptics::sync_lookup_result &slr
+			, const mastermind::namespace_state_t &ns_state
+			, const std::string &x_regional_host);
+
+	file_location_t
+	get_file_location(const mds::FileInfoPtr &file_info
 			, const mastermind::namespace_state_t &ns_state
 			, const std::string &x_regional_host);
 
@@ -176,7 +196,7 @@ private:
 public:
 	std::mutex elliptics_node_mutex;
 	std::mutex elliptics_session_mutex;
-	boost::optional<ioremap::elliptics::node> m_elliptics_node;
+	std::shared_ptr<ioremap::elliptics::node> m_elliptics_node;
 	boost::optional<ioremap::elliptics::session> m_elliptics_session;
 
 	boost::optional<ioremap::elliptics::session> elliptics_read_session;
@@ -190,6 +210,7 @@ public:
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
+	mds::ExecutorPtr executor;
 
 	// write retries
 	size_t limit_of_middle_chunk_attempts;
