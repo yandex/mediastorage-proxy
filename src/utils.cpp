@@ -132,8 +132,27 @@ dns_lookup(const sockaddr_storage &addr) {
 
 	auto addr_len = addr.ss_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
 
-	if (getnameinfo((const sockaddr*)&addr, addr_len, hbuf, sizeof(hbuf), NULL, 0, 0) != 0) {
-		throw std::runtime_error("can not make dns lookup");
+	if (auto err = getnameinfo((const sockaddr*)&addr, addr_len, hbuf, sizeof(hbuf), NULL, 0, 0)) {
+		auto addr_str = [&]() -> std::string {
+			const size_t buf_size = INET6_ADDRSTRLEN + 1;
+			char buf[buf_size] = {0};
+
+			if (inet_ntop(addr.ss_family, &addr, buf, buf_size)) {
+				return {"<cannot dump addr>"};
+			}
+
+			return {buf};
+		}();
+
+		auto reason_str = [&]() -> std::string {
+			if (const auto *res = gai_strerror(err)) {
+				return {res};
+			}
+
+			return {"<cannot dump reason>"};
+		}();
+
+		throw std::runtime_error{"can not make dns lookup: " + reason_str + "; addr=" + addr_str};
 	}
 
 	return {hbuf};
