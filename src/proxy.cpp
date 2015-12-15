@@ -805,14 +805,14 @@ proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
 
 			try {
 				result = mastermind()->get_cached_groups(str_ell_id, couple_id);
-
-				if (!result.empty()) {
-					MDS_LOG_INFO("use cached groups for request: %s", to_string(result));
-				} else {
-					MDS_LOG_INFO("there is no cached groups for request");
-				}
 			} catch (const std::exception &ex) {
 				MDS_LOG_ERROR("cannot get cached groups: %s", ex.what());
+			}
+
+			if (!result.empty()) {
+				MDS_LOG_INFO("use cached groups for request: %s", to_string(result));
+			} else {
+				MDS_LOG_INFO("there is no cached groups for request");
 			}
 
 			return result;
@@ -829,9 +829,7 @@ proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
 	builder.ChecksumRate(timeout_coef.data_flow_rate);
 	builder.ChunkSize(m_read_chunk_size);
 
-	if (ns_settings(ns_state).check_for_update) {
-		builder.OperationLock(false);
-	}
+	builder.OperationLock(!ns_settings(ns_state).check_for_update);
 
 	builder.Executor(executor.get());
 
@@ -936,8 +934,8 @@ proxy::parse_path(const std::string &path, const mastermind::namespace_state_t &
 			}
 
 			groups = get_groups(ns_state, group);
-		} catch (...) {
-			throw std::runtime_error("Cannot to determine groups");
+		} catch (const std::exception &ex) {
+			throw std::runtime_error{std::string{"cannot determine groups: "} + ex.what()};
 		}
 	} else {
 		auto bf = path.find('/', 1) + 1;
