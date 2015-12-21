@@ -36,7 +36,7 @@ public:
 	folly::Future<folly::Unit>
 	send_headers(ioremap::thevoid::http_response http_response) {
 		auto promise_ptr = std::make_shared<folly::Promise<folly::Unit>>();
-		auto future_result = promise_ptr->getFuture();
+		auto future_result = promise_ptr->getFuture().via(stream_type::server()->executor());
 		auto self = self_type::shared_from_this();
 
 		auto next = [this, self, promise_ptr](const boost::system::error_code &error_code) {
@@ -62,7 +62,7 @@ public:
 	folly::Future<folly::Unit>
 	send_data(std::string data) {
 		auto promise_ptr = std::make_shared<folly::Promise<folly::Unit>>();
-		auto future_result = promise_ptr->getFuture();
+		auto future_result = promise_ptr->getFuture().via(stream_type::server()->executor());
 		auto self = self_type::shared_from_this();
 
 		auto next = [this, self, promise_ptr](const boost::system::error_code &error_code) {
@@ -132,7 +132,7 @@ private:
 
 	uint64_t
 	instance_id() {
-		return reinterpret_cast<uint64_t>(self_type::reply().get());
+		return reinterpret_cast<uint64_t>(stream_type::reply().get());
 	}
 
 	std::string handler_name;
