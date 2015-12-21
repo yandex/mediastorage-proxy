@@ -325,7 +325,7 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize mds executor");
-		executor = generate_executor(config);
+		m_executor = generate_executor(config);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
@@ -780,6 +780,11 @@ proxy::setup_session(ioremap::elliptics::session session
 	return session;
 }
 
+folly::Executor *
+proxy::executor() {
+	return m_executor.get();
+}
+
 mds::ReadControllerPtr
 proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
 		, const ioremap::thevoid::http_request &http_request) {
@@ -831,7 +836,7 @@ proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
 
 	builder.OperationLock(!ns_settings(ns_state).check_for_update);
 
-	builder.Executor(executor.get());
+	builder.Executor(executor());
 
 	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
 	// Hence m_elliptics_node can be safely used without any check

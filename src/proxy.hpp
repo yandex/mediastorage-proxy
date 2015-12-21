@@ -138,6 +138,9 @@ public:
 	setup_session(ioremap::elliptics::session session
 			, const ioremap::thevoid::http_request &http_request, const couple_t &couple);
 
+	folly::Executor *
+	executor();
+
 	mds::ReadControllerPtr
 	make_read_controller(const mastermind::namespace_state_t &ns_state
 			, const ioremap::thevoid::http_request &http_request);
@@ -210,7 +213,7 @@ public:
 	std::shared_ptr<mastermind::mastermind_t> m_mastermind;
 	std::shared_ptr<cdn_cache_t> cdn_cache;
 	boost::thread_specific_ptr<magic_provider> m_magic;
-	mds::ExecutorPtr executor;
+	mds::ExecutorPtr m_executor;
 
 	// write retries
 	size_t limit_of_middle_chunk_attempts;
