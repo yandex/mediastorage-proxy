@@ -104,11 +104,14 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 		return;
 	}
 
+	mds::ReadControllerPtr read_controller;
+
 	try {
 		read_controller = server()->make_read_controller(ns_state, http_request);
 	} catch (const http_error &ex) {
 		MDS_LOG_ERROR("cannot make read controller: %s", ex.what());
 		send_reply(ex.http_status());
+		return;
 	} catch (const std::exception &ex) {
 		MDS_LOG_ERROR("cannot make read controller: %s", ex.what());
 		send_reply(400);
@@ -153,16 +156,16 @@ req_get::on_request(const ioremap::thevoid::http_request &http_request
 
 	auto self = shared_from_this();
 
-	auto on_get_file_info = [this, self] (mds::FileInfoPtr file_info) {
+	auto on_get_file_info = [this, self, read_controller] (mds::FileInfoPtr file_info) {
 		return process_request(read_controller, std::move(file_info));
 	};
 
-	auto on_processed_request = [this, self] () {
+	auto on_processed_request = [this, self, read_controller] () {
 		read_controller->Close();
 		close();
 	};
 
-	auto send_error = [this] (int code, const std::string &reason) {
+	auto send_error = [this, read_controller] (int code, const std::string &reason) {
 		MDS_LOG_ERROR("cannot process request: %s", reason);
 
 		read_controller->Close();
@@ -225,19 +228,19 @@ req_get::process_request(mds::ReadControllerPtr read_controller
 		}
 	}
 
-	ioremap::thevoid::http_response http_response;
+	ioremap::swarm::http_headers http_headers;
 
-	http_response.set_code(200);
-	http_response.headers().set_last_modified(timestamp);
-	http_response.headers().set("ETag", etag);
-	http_response.headers().set("Accept-Ranges", "bytes");
+	http_headers.set_last_modified(timestamp);
+	http_headers.set("ETag", etag);
+	http_headers.set("Accept-Ranges", "bytes");
+
 
 	if (request().method() == "HEAD") {
-		http_response.headers().set_content_length(size);
-		return send_headers(std::move(http_response));
+		http_headers.set_content_length(size);
+		return send_headers(200, std::move(http_headers));
 	}
 
-	return process_streaming(std::move(read_controller), std::move(http_response)
+	return process_streaming(std::move(read_controller), std::move(http_headers)
 			, size, send_whole_file);
 }
 
@@ -404,7 +407,7 @@ req_get::try_to_redirect_request(const mds::FileInfoPtr &file_info) {
 
 		if (static_cast<size_t>(redirect_size) > file_info->Size()) {
 			std::ostringstream oss;
-			oss << "cannot redirect: file is to small;"
+			oss << "cannot redirect: file is too small;"
 				<< " file-size=" << file_info->Size() << ";"
 				<< " redirect-content-length-threshold=" << redirect_size;
 			auto str = oss.str();
@@ -418,11 +421,6 @@ req_get::try_to_redirect_request(const mds::FileInfoPtr &file_info) {
 	try {
 		if (ns_settings(ns_state).sign_token.empty()) {
 			MDS_LOG_INFO("cannot redirect without signature-token");
-
-			if (redirect_arg == redirect_arg_tag::client_want_redirect) {
-				throw http_error(403, "redirect=yes is not allowed for this namespace");
-			}
-
 			return boost::none;
 		}
 
@@ -460,30 +458,28 @@ req_get::try_to_redirect_request(const mds::FileInfoPtr &file_info) {
 
 folly::Future<folly::Unit>
 req_get::process_streaming(mds::ReadControllerPtr read_controller
-		, ioremap::thevoid::http_response http_response
+		, ioremap::swarm::http_headers http_headers
 		, size_t size, bool send_whole_file) {
 	const auto &headers = request().headers();
 	auto range_header = headers.get("Range");
 
 	if (send_whole_file || !range_header) {
 		MDS_LOG_INFO("send whole file");
-		http_response.headers().set_content_length(size);
-		return process_whole_file(std::move(read_controller), std::move(http_response));
+		http_headers.set_content_length(size);
+		return process_whole_file(std::move(read_controller), std::move(http_headers));
 	}
 
 	if (auto ranges = parse_range_header(*range_header, size)) {
-		http_response.set_code(206);
-
 		if (ranges->size() == 1) {
 			MDS_LOG_INFO("send a range of file");
 			const auto &range = ranges->front();
 
-			http_response.headers().set_content_type("application/octet-stream");
-			http_response.headers().set_content_length(range.size);
-			http_response.headers().set("Content-Range"
+			http_headers.set_content_type("application/octet-stream");
+			http_headers.set_content_length(range.size);
+			http_headers.set("Content-Range"
 					, make_content_range_header(range.offset, range.size, size));
 
-			return process_range(std::move(read_controller), std::move(http_response)
+			return process_range(std::move(read_controller), std::move(http_headers)
 					, range.offset, range.size);
 		}
 
@@ -491,8 +487,7 @@ req_get::process_streaming(mds::ReadControllerPtr read_controller
 
 		auto boundary = make_boundary();
 
-		http_response.headers().set_content_type(
-				"multipart/byteranges; boundary=" + boundary);
+		http_headers.set_content_type("multipart/byteranges; boundary=" + boundary);
 
 		size_t content_length = 0;
 		std::list<std::string> ranges_headers;
@@ -528,30 +523,27 @@ req_get::process_streaming(mds::ReadControllerPtr read_controller
 			}
 		}
 
-		http_response.headers().set_content_length(content_length);
+		http_headers.set_content_length(content_length);
 
-		return process_ranges(std::move(read_controller), std::move(http_response)
+		return process_ranges(std::move(read_controller), std::move(http_headers)
 				, std::move(*ranges), std::move(ranges_headers));
 	}
 
-	http_response.set_code(416);
-	http_response.headers().set_content_length(0);
-	http_response.headers().set("Content-Range"
-			, "bytes */" + boost::lexical_cast<std::string>(size));
+	http_headers.set_content_length(0);
+	http_headers.set("Content-Range", "bytes */" + boost::lexical_cast<std::string>(size));
 
-	MDS_REQUEST_REPLY("get", http_response.code(), reinterpret_cast<uint64_t>(this->reply().get()));
-	return send_headers(std::move(http_response));
+	return send_headers(416, std::move(http_headers));
 }
 
 folly::Future<folly::Unit>
 req_get::process_whole_file(mds::ReadControllerPtr read_controller
-		, ioremap::thevoid::http_response http_response) {
+		, ioremap::swarm::http_headers http_headers) {
 	auto self = shared_from_this();
 
-	auto on_get_read_stream = [this, self, read_controller, http_response]
+	auto on_get_read_stream = [this, self, read_controller, http_headers]
 		(mds::ReadStreamPtr read_stream) {
 			read_stream->Start();
-			return process_whole_file(std::move(read_stream), std::move(http_response));
+			return process_whole_file(std::move(read_stream), std::move(http_headers));
 		};
 
 
@@ -561,17 +553,18 @@ req_get::process_whole_file(mds::ReadControllerPtr read_controller
 
 folly::Future<folly::Unit>
 req_get::process_whole_file(mds::ReadStreamPtr read_stream
-		, ioremap::thevoid::http_response http_response) {
+		, ioremap::swarm::http_headers http_headers) {
 	auto self = shared_from_this();
 
-	auto on_read_chunk = [this, self, http_response] (mds::ReadStreamResult result) mutable {
-		http_response.headers().set_content_type(detect_content_type(result));
+	auto on_read_chunk = [this, self, http_headers] (mds::ReadStreamResult result) mutable {
+		http_headers.set_content_type(detect_content_type(result));
 
 		auto on_sent_headers = [this, self, result]() mutable {
 			return send_data(std::move(result.Data()));
 		};
 
-		return send_headers(std::move(http_response)).then(std::move(on_sent_headers));
+		return send_headers(200, std::move(http_headers))
+			.then(std::move(on_sent_headers));
 	};
 
 	auto on_sent_chunk = [this, self, read_stream]() {
@@ -605,20 +598,20 @@ req_get::detect_content_type(const mds::ReadStreamResult &result) {
 
 folly::Future<folly::Unit>
 req_get::process_range(mds::ReadControllerPtr read_controller
-		, ioremap::thevoid::http_response http_response, size_t offset, size_t size) {
+		, ioremap::swarm::http_headers http_headers, size_t offset, size_t size) {
 	auto self = shared_from_this();
 
 	auto on_sent_headers = [this, self, read_controller, offset, size]() {
 		return stream_range(std::move(read_controller), offset, size);
 	};
 
-	return send_headers(std::move(http_response))
+	return send_headers(206, std::move(http_headers))
 		.then(std::move(on_sent_headers));
 }
 
 folly::Future<folly::Unit>
 req_get::process_ranges(mds::ReadControllerPtr read_controller
-		, ioremap::thevoid::http_response http_response
+		, ioremap::swarm::http_headers http_headers
 		, ranges_t ranges, std::list<std::string> boundaries) {
 	auto self = shared_from_this();
 
@@ -626,7 +619,7 @@ req_get::process_ranges(mds::ReadControllerPtr read_controller
 		return stream_ranges(std::move(read_controller), std::move(ranges), std::move(boundaries));
 	};
 
-	return send_headers(std::move(http_response))
+	return send_headers(206, std::move(http_headers))
 		.then(std::move(on_sent_headers));
 }
 
@@ -674,7 +667,7 @@ req_get::stream_range(mds::ReadStreamPtr read_stream) {
 	if (!read_stream->CanRead()) {
 		read_stream->Close();
 		// TODO: return WaitForCleanup
-		return folly::makeFuture();
+		return folly::makeFuture().via(server()->executor());
 	}
 
 	auto self = shared_from_this();

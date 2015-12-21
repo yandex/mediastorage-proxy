@@ -64,27 +64,27 @@ private:
 
 	folly::Future<folly::Unit>
 	process_streaming(mds::ReadControllerPtr read_controller
-			, ioremap::thevoid::http_response http_response
+			, ioremap::swarm::http_headers http_headers
 			, size_t size, bool send_whole_file);
 
 	folly::Future<folly::Unit>
 	process_whole_file(mds::ReadControllerPtr read_controller
-			, ioremap::thevoid::http_response http_response);
+			, ioremap::swarm::http_headers http_headers);
 
 	folly::Future<folly::Unit>
 	process_whole_file(mds::ReadStreamPtr read_stream
-			, ioremap::thevoid::http_response http_response);
+			, ioremap::swarm::http_headers http_headers);
 
 	std::string
 	detect_content_type(const mds::ReadStreamResult &result);
 
 	folly::Future<folly::Unit>
 	process_range(mds::ReadControllerPtr read_controller
-			, ioremap::thevoid::http_response http_response, size_t offset, size_t size);
+			, ioremap::swarm::http_headers http_headers, size_t offset, size_t size);
 
 	folly::Future<folly::Unit>
 	process_ranges(mds::ReadControllerPtr read_controller
-			, ioremap::thevoid::http_response http_response
+			, ioremap::swarm::http_headers http_headers
 			, ranges_t ranges, std::list<std::string> boundaries);
 
 	folly::Future<folly::Unit>
@@ -98,7 +98,6 @@ private:
 	stream_range(mds::ReadStreamPtr read_stream);
 
 
-	mds::ReadControllerPtr read_controller;
 	mastermind::namespace_state_t ns_state;
 	boost::optional<std::chrono::seconds> expiration_time;
 };

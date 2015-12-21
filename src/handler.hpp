@@ -5,6 +5,8 @@
 #include "handystats.hpp"
 #include "proxy.hpp"
 
+#include <thevoid/http_response.hpp>
+
 #include <folly/futures/Future.h>
 
 #include <memory>
@@ -53,6 +55,11 @@ public:
 	}
 
 	folly::Future<folly::Unit>
+	send_headers(int code, ioremap::swarm::http_headers http_headers) {
+		return send_headers(make_http_response(code, std::move(http_headers)));
+	}
+
+	folly::Future<folly::Unit>
 	send_data(std::string data) {
 		auto promise_ptr = std::make_shared<folly::Promise<folly::Unit>>();
 		auto future_result = promise_ptr->getFuture();
@@ -95,12 +102,15 @@ public:
 	}
 
 	void
-	send_reply(int code) {
-		ioremap::thevoid::http_response http_response;
-		http_response.set_code(code);
-		http_response.headers().set_content_length(0);
+	send_reply(int code, ioremap::swarm::http_headers http_headers) {
+		send_reply(make_http_response(code, std::move(http_headers)));
+	}
 
-		send_reply(std::move(http_response));
+	void
+	send_reply(int code) {
+		ioremap::swarm::http_headers http_headers;
+		http_headers.set_content_length(0);
+		send_reply(code, std::move(http_headers));
 	}
 
 	bool
@@ -109,6 +119,17 @@ public:
 	}
 
 private:
+	static
+	ioremap::thevoid::http_response
+	make_http_response(int code, ioremap::swarm::http_headers http_headers) {
+		ioremap::thevoid::http_response http_response;
+
+		http_response.set_code(code);
+		http_response.set_headers(std::move(http_headers));
+
+		return http_response;
+	}
+
 	uint64_t
 	instance_id() {
 		return reinterpret_cast<uint64_t>(self_type::reply().get());
