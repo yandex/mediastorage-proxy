@@ -124,6 +124,71 @@ elliptics::make_file_location(const ioremap::elliptics::sync_lookup_result &slr
 			"cannot determine file location: there is no good lookup result entry"};
 }
 
+namespace {
+
+std::string
+dns_lookup(const sockaddr_storage &addr) {
+	char hbuf[NI_MAXHOST] = {0};
+
+	auto addr_len = addr.ss_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
+
+	if (auto err = getnameinfo((const sockaddr*)&addr, addr_len, hbuf, sizeof(hbuf), NULL, 0, 0)) {
+		auto addr_str = [&]() -> std::string {
+			const size_t buf_size = INET6_ADDRSTRLEN + 1;
+			char buf[buf_size] = {0};
+
+			if (inet_ntop(addr.ss_family, &addr, buf, buf_size)) {
+				return {"<cannot dump addr>"};
+			}
+
+			return {buf};
+		}();
+
+		auto reason_str = [&]() -> std::string {
+			if (const auto *res = gai_strerror(err)) {
+				return {res};
+			}
+
+			return {"<cannot dump reason>"};
+		}();
+
+		throw std::runtime_error{"cannot make dns lookup: " + reason_str + "; addr=" + addr_str};
+	}
+
+	return {hbuf};
+}
+
+} // namespace
+
+elliptics::file_location_t
+elliptics::make_file_location(const mds::FileInfoPtr &file_info
+		, const mastermind::namespace_state_t &ns_state) {
+	const auto &path_prefix = ns_settings(ns_state).sign_path_prefix;
+
+	auto path = file_info->StoragePath();
+	auto host = dns_lookup(file_info->StorageAddress());
+
+	if (path.substr(0, path_prefix.size()) != path_prefix) {
+		throw std::runtime_error{
+			"path_prefix does not match: prefix=" + path_prefix + "; path=" + path};
+	}
+
+	{
+		auto &str_port = ns_settings(ns_state).sign_port;
+
+		if (!str_port.empty()) {
+			host += ':' + str_port;
+		}
+	}
+
+	file_location_t file_location;
+
+	file_location.host = std::move(host);
+	file_location.path = '/' + ns_state.name() + '/' + path.substr(path_prefix.size());
+
+	return file_location;
+}
+
 std::string
 elliptics::make_signature_ts(boost::optional<std::chrono::seconds> opt_expiration_time
 		, const mastermind::namespace_state_t &ns_state) {

@@ -24,6 +24,7 @@ Build-Depends: debhelper (>=5),
  libcurl4-openssl-dev,
  handystats (>= 1.11),
  libssl-dev,
+ libmds0-dev,
 Standards-Version: 3.9.1
 
 Package: mediastorage-proxy

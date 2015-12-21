@@ -34,6 +34,8 @@
 
 #include <glib.h>
 
+#include <mds/read_controller_builder.h>
+
 #include <stdexcept>
 #include <iterator>
 #include <algorithm>
@@ -129,7 +131,8 @@ std::string id_str(const ioremap::elliptics::key &key, ioremap::elliptics::sessi
 	return std::string(str);
 }
 
-ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
+std::shared_ptr<ioremap::elliptics::node>
+proxy::generate_node(const rapidjson::Value &config, int &timeout_def) {
 	struct dnet_config dnet_conf;
 	memset(&dnet_conf, 0, sizeof(dnet_conf));
 
@@ -159,7 +162,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 
 	ioremap::swarm::logger elliptics_logger = ioremap::swarm::logger(logger(),
 			blackhole::log::attributes_t({blackhole::attribute::make("component", "elliptics")}));
-	ioremap::elliptics::node node(std::move(elliptics_logger), dnet_conf);
+	auto node = std::make_shared<ioremap::elliptics::node>(std::move(elliptics_logger), dnet_conf);
 
 	{
 		const auto &remotes = mastermind()->get_elliptics_remotes();
@@ -182,7 +185,7 @@ ioremap::elliptics::node proxy::generate_node(const rapidjson::Value &config, in
 				}
 
 				if (!addresses.empty()) {
-					node.add_remote(addresses);
+					node->add_remote(addresses);
 				}
 			} catch (const std::exception &ex) {
 				std::ostringstream oss;
@@ -255,6 +258,12 @@ std::shared_ptr<mastermind::mastermind_t> proxy::generate_mastermind(const rapid
 	return result;
 }
 
+mds::ExecutorPtr
+proxy::generate_executor(const rapidjson::Value &config) {
+	auto threads_num = get_int(config, "executor-threads", 1);
+	return mds::MakeMultiThreadExecutor(threads_num);
+}
+
 std::shared_ptr<cdn_cache_t> proxy::generate_cdn_cache(const rapidjson::Value &config) {
 	cdn_cache_t::config_t cdn_config;
 
@@ -312,7 +321,11 @@ bool proxy::initialize(const rapidjson::Value &config) {
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		MDS_LOG_INFO("Mediastorage-proxy starts: initialize elliptics node");
-		m_elliptics_node.reset(generate_node(config, timeout.def));
+		m_elliptics_node = generate_node(config, timeout.def);
+		MDS_LOG_INFO("Mediastorage-proxy starts: done");
+
+		MDS_LOG_INFO("Mediastorage-proxy starts: initialize mds executor");
+		m_executor = generate_executor(config);
 		MDS_LOG_INFO("Mediastorage-proxy starts: done");
 
 		if (timeout.def == 0) {
@@ -767,6 +780,76 @@ proxy::setup_session(ioremap::elliptics::session session
 	return session;
 }
 
+folly::Executor *
+proxy::executor() {
+	return m_executor.get();
+}
+
+mds::ReadControllerPtr
+proxy::make_read_controller(const mastermind::namespace_state_t &ns_state
+		, const ioremap::thevoid::http_request &http_request) {
+	mds::ReadControllerBuilder builder;
+
+	{
+		auto parsed = parse_path(http_request.url().path(), ns_state);
+
+		auto &groups = std::get<0>(parsed);
+		auto &key = std::get<1>(parsed);
+
+		if (groups.empty()) {
+			throw http_error{404, "cannot find groups for the request"};
+		}
+
+		auto cached_groups = [&]() {
+			auto ell_key = ioremap::elliptics::key{key};
+			m_elliptics_session->transform(ell_key);
+			auto str_ell_id = std::string{dnet_dump_id_str_full(ell_key.id().id)};
+			auto couple_id = *std::min_element(groups.begin(), groups.end());
+
+			std::vector<int> result;
+
+			try {
+				result = mastermind()->get_cached_groups(str_ell_id, couple_id);
+			} catch (const std::exception &ex) {
+				MDS_LOG_ERROR("cannot get cached groups: %s", ex.what());
+			}
+
+			if (!result.empty()) {
+				MDS_LOG_INFO("use cached groups for request: %s", to_string(result));
+			} else {
+				MDS_LOG_INFO("there is no cached groups for request");
+			}
+
+			return result;
+		}();
+
+
+		builder.Groups(std::move(groups));
+		builder.CachedGroups(std::move(cached_groups));
+		builder.Key(std::move(key));
+	}
+
+	builder.LookupTimeout(timeout.lookup);
+	builder.ChunkTimeout(timeout.read);
+	builder.ChecksumRate(timeout_coef.data_flow_rate);
+	builder.ChunkSize(m_read_chunk_size);
+
+	builder.OperationLock(!ns_settings(ns_state).check_for_update);
+
+	builder.Executor(executor());
+
+	// The method runs in thevoid's io-loop, therefore proxy's dtor cannot run in this moment
+	// Hence m_elliptics_node can be safely used without any check
+	builder.EllipticsNode(m_elliptics_node);
+
+	builder.Logger(mds::Logger{logger(), {blackhole::attribute::make("component", "libmds")}});
+
+	builder.RequestId(http_request.request_id());
+	builder.DebugMode(http_request.trace_bit());
+
+	return builder.Build();
+}
+
 mastermind::namespace_state_t
 proxy::get_namespace_state(const std::string &script, const std::string &handler) {
 	if (strncmp(script.c_str(), handler.c_str(), handler.size())) {
@@ -833,6 +916,42 @@ proxy::get_groups(const mastermind::namespace_state_t &ns_state, int group) {
 	}
 
 	return groups;
+}
+
+std::tuple<std::vector<int>, std::string>
+proxy::parse_path(const std::string &path, const mastermind::namespace_state_t &ns_state) {
+	std::vector<int> groups;
+	std::string filename;
+
+	if (ns_settings(ns_state).static_couple.empty()) {
+		auto bg = path.find('/', 1) + 1;
+		auto eg = path.find('/', bg);
+		auto bf = eg + 1;
+		auto ef = path.find('?', bf);
+		auto g = path.substr(bg, eg - bg);
+		path.substr(bf, ef - bf).swap(filename);
+
+		try {
+			auto group = boost::lexical_cast<int>(g);
+
+			if (group <= 0) {
+				throw std::runtime_error("group must be greater than zero");
+			}
+
+			groups = get_groups(ns_state, group);
+		} catch (const std::exception &ex) {
+			throw std::runtime_error{std::string{"cannot determine groups: "} + ex.what()};
+		}
+	} else {
+		auto bf = path.find('/', 1) + 1;
+		auto ef = path.find('?', bf);
+		path.substr(bf, ef - bf).swap(filename);
+		groups = ns_settings(ns_state).static_couple;
+	}
+
+	filename = ns_state.name() + '.' + filename;
+
+	return std::make_tuple(std::move(groups), std::move(filename));
 }
 
 std::tuple<boost::optional<ioremap::elliptics::session>, ioremap::elliptics::key>
@@ -922,6 +1041,22 @@ proxy::get_file_location(const ioremap::elliptics::sync_lookup_result &slr
 		, const mastermind::namespace_state_t &ns_state
 		, const std::string &x_regional_host) {
 	auto file_location = make_file_location(slr, ns_state);
+
+	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
+
+	if (use_regional_host) {
+		file_location.path = '/' + file_location.host + file_location.path;
+		file_location.host = x_regional_host;
+	}
+
+	return file_location;
+}
+
+file_location_t
+proxy::get_file_location(const mds::FileInfoPtr &file_info
+		, const mastermind::namespace_state_t &ns_state
+		, const std::string &x_regional_host) {
+	auto file_location = make_file_location(file_info, ns_state);
 
 	bool use_regional_host = !x_regional_host.empty() && cdn_cache->check_host(x_regional_host);
 
