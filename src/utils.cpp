@@ -152,7 +152,7 @@ dns_lookup(const sockaddr_storage &addr) {
 			return {"<cannot dump reason>"};
 		}();
 
-		throw std::runtime_error{"can not make dns lookup: " + reason_str + "; addr=" + addr_str};
+		throw std::runtime_error{"cannot make dns lookup: " + reason_str + "; addr=" + addr_str};
 	}
 
 	return {hbuf};
