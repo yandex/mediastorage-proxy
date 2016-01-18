@@ -237,14 +237,19 @@ elliptics::req_get::process_group_info(const ie::lookup_result_entry &entry) {
 
 		uint64_t tsec = entry.file_info()->mtime.tsec;
 
-		auto res = process_precondition_headers(tsec, total_size());
-
-		if (std::get<0>(res)) {
+		// TODO: change declaration of try_to_redirect_request
+		// NOTE: RFC 7232, Section 5. Evaluation:
+		// A server MUST ignore all received preconditions if its response to the same request
+		// without those conditions would have been a status code other than a 2xx (Successful)
+		// or 412 (Precondition Failed). In other words, redirects and failures take precedence
+		// over the evaluation of preconditions in conditional requests.
+		if (try_to_redirect_request({entry}, total_size())) {
 			return;
 		}
 
-		// TODO: change declaration of try_to_redirect_request
-		if (try_to_redirect_request({entry}, total_size())) {
+		auto res = process_precondition_headers(tsec, total_size());
+
+		if (std::get<0>(res)) {
 			return;
 		}
 
