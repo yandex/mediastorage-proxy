@@ -668,7 +668,7 @@ void proxy::req_statistics::on_request(const ioremap::thevoid::http_request &req
 
 		reply.set_code(200);
 		headers.set_content_length(json.size());
-		headers.set_content_type("text/json");
+		headers.set_content_type("application/json");
 		reply.set_headers(headers);
 
 		send_reply(std::move(reply), std::move(json));

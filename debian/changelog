@@ -1,3 +1,9 @@
+mediastorage-proxy (0.102.3) trusty; urgency=medium
+
+  * Fix content-type in statistics response
+
+ -- Danil Osherov <shindo@yandex-team.ru>  Tue, 26 Jan 2016 17:00:00 +0400
+
 mediastorage-proxy (0.102.2) trusty; urgency=medium
 
   * Try to redirect GET request before preconditions evaluation
